@@ -1,0 +1,61 @@
+﻿@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<div class="cm-editor-container" @ref="EditorElement" style="height: 100%; font-size: 1.1em;"></div>
+
+@code {
+    [Parameter]
+    public string Content { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> ContentChanged { get; set; }
+
+    private ElementReference EditorElement;
+    private DotNetObjectReference<MarkdownEditor>? _dotNetHelper;
+    private bool _isInitialized = false;
+    private string _lastRenderedContent = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetHelper = DotNetObjectReference.Create(this);
+            _lastRenderedContent = Content;
+            // 调用 JS 初始化 CodeMirror
+            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.init", EditorElement, _dotNetHelper, Content);
+            _isInitialized = true;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // 如果外部传入的 Content 发生了变化（比如用户点击了左侧列表的另一篇笔记），通知 JS 更新内容
+        if (_isInitialized && Content != _lastRenderedContent)
+        {
+            _lastRenderedContent = Content;
+            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.setContent", EditorElement, Content);
+        }
+    }
+
+    // 提供给 JS 调用的回调方法
+    [JSInvokable]
+    public async Task UpdateContent(string newContent)
+    {
+        if (Content != newContent)
+        {
+            Content = newContent;
+            _lastRenderedContent = newContent;
+            // 触发事件，将新内容传回给父组件
+            await ContentChanged.InvokeAsync(newContent);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_dotNetHelper != null)
+        {
+            _dotNetHelper.Dispose();
+        }
+    }
+}

@@ -58,9 +58,12 @@
             </div>
 
             <div class="editor-body">
-                <h1 class="document-title">@SelectedNote.Title</h1>
-                <div class="document-content">
-                    @((MarkupString)SelectedNote.Content.Replace("\n", "<br/>"))
+                <h1 class="document-title">
+                    <input @bind="SelectedNote.Title" @bind:event="oninput" style="border:none; outline:none; font-size:inherit; font-weight:inherit; width:100%;" />
+                </h1>
+
+                <div class="document-content" style="height: calc(100% - 60px);">
+                    <MarkdownEditor @bind-Content="SelectedNote.Content" />
                 </div>
             </div>
         }
