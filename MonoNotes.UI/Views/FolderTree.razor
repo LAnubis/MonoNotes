@@ -1,0 +1,117 @@
+﻿<div class="folder-tree">
+    @foreach (var node in Nodes)
+    {
+        <div class="folder-item">
+            <div class="folder-header @(node.FullPath == SelectedFolder ? "selected" : "")"
+                 @onclick="() => OnFolderClick(node)">
+
+                <div class="toggle-wrapper" @onclick:stopPropagation="true" @onclick="() => ToggleNode(node)">
+                    @if (node.Children.Any())
+                    {
+                        <span class="toggle-icon @(node.IsExpanded ? "expanded" : "")">▸</span>
+                    }
+                </div>
+
+                <span class="folder-icon">📁</span>
+                <span class="folder-name">@node.Name</span>
+            </div>
+
+            @if (node.IsExpanded && node.Children.Any())
+            {
+                <div class="folder-children">
+                    <FolderTree Nodes="node.Children"
+                                SelectedFolder="@SelectedFolder"
+                                OnFolderSelected="OnFolderSelected" />
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IEnumerable<FolderNode> Nodes { get; set; } = new List<FolderNode>();
+    [Parameter] public string SelectedFolder { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> OnFolderSelected { get; set; }
+
+    private void ToggleNode(FolderNode node)
+    {
+        if (node.Children.Any())
+        {
+            node.IsExpanded = !node.IsExpanded;
+        }
+    }
+
+    private async Task OnFolderClick(FolderNode node)
+    {
+        // 如果点击的是没有子文件夹的节点，或者点击节点本体，触发选中事件
+        await OnFolderSelected.InvokeAsync(node.FullPath);
+
+        // 可选体验优化：点击文件夹本体时，也顺便展开它
+        if (node.Children.Any() && !node.IsExpanded)
+        {
+            node.IsExpanded = true;
+        }
+    }
+
+    // 内部使用的数据结构
+    public class FolderNode
+    {
+        public string Name { get; set; } = string.Empty;
+        public string FullPath { get; set; } = string.Empty;
+        public bool IsExpanded { get; set; } = false;
+        public List<FolderNode> Children { get; set; } = new();
+    }
+}
+
+<style>
+    /* 极致 Notion 风格的文件夹样式 */
+    .folder-tree {
+        display: flex;
+        flex-direction: column;
+    }
+    .folder-header {
+        display: flex;
+        align-items: center;
+        padding: 4px 8px;
+        margin: 1px 0;
+        border-radius: 4px;
+        cursor: pointer;
+        color: var(--nt-text-gray);
+        font-size: 13px;
+        user-select: none;
+    }
+    .folder-header:hover { background: var(--nt-hover); }
+    .folder-header.selected { background: var(--nt-hover); color: var(--nt-text-main); font-weight: 500; }
+
+    .toggle-wrapper {
+        width: 16px;
+        height: 16px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-right: 4px;
+        border-radius: 3px;
+    }
+    .toggle-wrapper:hover { background: rgba(55, 53, 47, 0.08); }
+
+    .toggle-icon {
+        font-size: 10px;
+        transition: transform 0.15s ease-out;
+    }
+    .toggle-icon.expanded { transform: rotate(90deg); }
+
+    .folder-icon { font-size: 14px; margin-right: 6px; opacity: 0.8; }
+
+    .folder-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* 子文件夹左侧内边距缩进 */
+    .folder-children {
+        padding-left: 12px;
+        margin-left: 10px;
+        border-left: 1px solid var(--nt-border); /* 细细的辅助线 */
+    }
+</style>

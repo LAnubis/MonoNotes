@@ -2,16 +2,46 @@
 @inject IJSRuntime JSRuntime
 @implements IAsyncDisposable
 
-<div class="cm-editor-container" @ref="EditorElement" style="height: 100%; font-size: 1.1em;"></div>
+<div id="@_editorId" class="tui-editor-container" style="height: 100%;"></div>
+
+<style>
+    /* 1. 隐藏编辑器外层丑陋的边框 */
+    .tui-editor-container .toastui-editor-defaultUI {
+        border: none !important;
+    }
+
+    /* 2. 【核心修复】将菜单栏高度大幅压缩，融入背景 */
+    .tui-editor-container .toastui-editor-defaultUI-toolbar {
+        height: 40px !important; /* 原本大概是60px，直接压低 */
+        padding: 0 10px !important;
+        border-bottom: 1px solid rgba(55, 53, 47, 0.09) !important;
+        background: transparent !important;
+    }
+
+    /* 3. 让菜单里的按钮容器贴合高度 */
+    .tui-editor-container .toastui-editor-toolbar-group {
+        height: 40px !important;
+    }
+
+    /* 4. （可选）把里面的工具图标稍微缩小一点，更显精致 */
+    .tui-editor-container .toastui-editor-defaultUI-toolbar button {
+        width: 28px !important;
+        height: 28px !important;
+        margin: 0 2px !important;
+    }
+
+    /* 5. 调整编辑器主体区顶部的间距 */
+    .tui-editor-container .toastui-editor-main {
+        margin-top: 5px !important;
+    }
+</style>
 
 @code {
-    [Parameter]
-    public string Content { get; set; } = string.Empty;
+    [Parameter] public string Content { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ContentChanged { get; set; }
 
-    [Parameter]
-    public EventCallback<string> ContentChanged { get; set; }
-
-    private ElementReference EditorElement;
+    // 为每个编辑器实例生成唯一 ID
+    private readonly string _editorId = "editor-" + Guid.NewGuid().ToString("N");
     private DotNetObjectReference<MarkdownEditor>? _dotNetHelper;
     private bool _isInitialized = false;
     private string _lastRenderedContent = string.Empty;
@@ -22,23 +52,21 @@
         {
             _dotNetHelper = DotNetObjectReference.Create(this);
             _lastRenderedContent = Content;
-            // 调用 JS 初始化 CodeMirror
-            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.init", EditorElement, _dotNetHelper, Content);
+            // 将唯一的 ID 传给 JS
+            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.init", _editorId, _dotNetHelper, Content);
             _isInitialized = true;
         }
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        // 如果外部传入的 Content 发生了变化（比如用户点击了左侧列表的另一篇笔记），通知 JS 更新内容
         if (_isInitialized && Content != _lastRenderedContent)
         {
             _lastRenderedContent = Content;
-            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.setContent", EditorElement, Content);
+            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.setContent", _editorId, Content);
         }
     }
 
-    // 提供给 JS 调用的回调方法
     [JSInvokable]
     public async Task UpdateContent(string newContent)
     {
@@ -46,16 +74,12 @@
         {
             Content = newContent;
             _lastRenderedContent = newContent;
-            // 触发事件，将新内容传回给父组件
             await ContentChanged.InvokeAsync(newContent);
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_dotNetHelper != null)
-        {
-            _dotNetHelper.Dispose();
-        }
+        _dotNetHelper?.Dispose();
     }
 }

@@ -1,43 +1,34 @@
-﻿import { basicSetup } from "codemirror";
-import { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
-import { markdown } from "@codemirror/lang-markdown";
+﻿// 引入 Toast UI Editor 核心引擎和原生样式
+import Editor from '@toast-ui/editor';
+import '@toast-ui/editor/dist/toastui-editor.css';
 
 window.MonoNotesEditor = {
-    init: function (element, dotNetHelper, initialText) {
-        let updateListener = EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
-                dotNetHelper.invokeMethodAsync('UpdateContent', update.state.doc.toString());
+    instances: {}, // 支持多实例缓存
+
+    init: function (elementId, dotNetHelper, initialText) {
+        const editor = new Editor({
+            el: document.getElementById(elementId),
+            initialValue: initialText,
+            initialEditType: 'wysiwyg', // 默认进入“所见即所得”富文本模式！
+            previewStyle: 'vertical',
+            height: '100%',
+            hideModeSwitch: true, // 隐藏底部的模式切换，让界面更像 Notion
+            events: {
+                change: () => {
+                    // 当内容发生改变时，将 Markdown 源码传回给 C#
+                    dotNetHelper.invokeMethodAsync('UpdateContent', editor.getMarkdown());
+                }
             }
         });
 
-        let state = EditorState.create({
-            doc: initialText,
-            extensions: [
-                basicSetup,
-                markdown(),
-                updateListener,
-                EditorView.lineWrapping
-            ]
-        });
-
-        let view = new EditorView({
-            state,
-            parent: element
-        });
-
-        element.cmView = view;
+        this.instances[elementId] = editor;
     },
 
-    setContent: function (element, newText) {
-        if (element.cmView) {
-            const view = element.cmView;
-            const currentText = view.state.doc.toString();
-            if (currentText !== newText) {
-                view.dispatch({
-                    changes: { from: 0, to: currentText.length, insert: newText }
-                });
-            }
+    setContent: function (elementId, newText) {
+        const editor = this.instances[elementId];
+        // 只有当传入的新文本和当前编辑器里的不同时，才重新赋值，防止光标乱跳
+        if (editor && editor.getMarkdown() !== newText) {
+            editor.setMarkdown(newText);
         }
     }
 };

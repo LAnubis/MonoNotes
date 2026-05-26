@@ -5,25 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>MonoNotes</title>
     <base href="/" />
+    
+    <link rel="icon" href="data:," />
+
     <link rel="stylesheet" href="MonoNotes.App.styles.css" />
+    <link rel="stylesheet" href="js/editor.bundle.css" />
 </head>
 
 <body>
     <div id="app">
-        <div style="display:flex; height:100vh; justify-content:center; align-items:center; color:#999;">
+        <div style="display:flex; height:100vh; justify-content:center; align-items:center; color:#999; font-family: sans-serif;">
             正在加载 MonoNotes...
         </div>
     </div>
 
-    <div id="blazor-error-ui">
+    <!--<div id="blazor-error-ui">
         发生了一个未处理的错误。
         <a href="" class="reload">重新加载</a>
         <a class="dismiss">🗙</a>
-    </div>
+    </div>-->
 
     <script src="_framework/blazor.webview.js"></script>
 
-    <script src="js/codemirror.bundle.js"></script>
-
+    <script src="js/editor.bundle.js"></script>
+    <script>
+        // @ts-nocheck
+        if (window['Blazor']) {
+            window['Blazor'].start().catch(function (e) {
+                if (e && e.message && e.message.includes('Blazor has already started')) {
+                    console.log("检测到热重载重复启动，已按幂等原则忽略。");
+                } else {
+                    console.error("Blazor 启动失败:", e);
+                }
+            });
+        }
+    </script>
 </body>
 </html>
