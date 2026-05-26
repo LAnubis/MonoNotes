@@ -1,0 +1,152 @@
+﻿@using MonoNotes.Core.Models
+
+<div class="workspace-container">
+    <aside class="sidebar">
+        <div class="workspace-switcher">
+            <span class="icon">📂</span> My Workspace <span class="arrow">▾</span>
+        </div>
+
+        <button class="new-note-btn" @onclick="CreateNewNote">
+            <span class="icon">➕</span> 新建笔记
+        </button>
+
+        <nav class="nav-menu">
+            <div class="nav-item active"><span class="icon">📝</span> 全部笔记</div>
+            <div class="nav-item"><span class="icon">🕒</span> 最近编辑</div>
+            <div class="nav-item"><span class="icon">📌</span> 置顶笔记</div>
+            <div class="nav-item"><span class="icon">🗑️</span> 回收站</div>
+        </nav>
+
+        <div class="nav-section">
+            <div class="section-title">📁 文件夹</div>
+            <div class="sub-item">▸ 项目</div>
+            <div class="sub-item">▸ 学习</div>
+        </div>
+
+        <div class="sidebar-bottom">
+            <div class="nav-item"><span class="icon">⚙️</span> 设置</div>
+        </div>
+    </aside>
+
+    <section class="note-list">
+        <div class="list-header">
+            <input type="text" class="search-box" placeholder="🔍 搜索标题、标签或正文..." />
+        </div>
+
+        <div class="list-content">
+            @foreach (var note in MockNotes)
+            {
+                <div class="note-card @(note.Id == SelectedNoteId ? "selected" : "")"
+                     @onclick="() => SelectNote(note.Id)">
+                    <div class="note-title">@note.Title</div>
+                    <div class="note-summary">@note.Summary</div>
+                    <div class="note-meta">
+                        @note.UpdatedAt.ToString("t") · @string.Join(", ", note.Tags)
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+
+    <main class="editor-area">
+        @if (SelectedNote != null)
+        {
+            <div class="editor-header">
+                <div class="status-indicator">✓ 已保存 (@SelectedNote.UpdatedAt.ToString("t"))</div>
+                <button class="icon-btn" title="删除" @onclick="DeleteCurrentNote">🗑️</button>
+                <button class="icon-btn">⋯</button>
+            </div>
+
+            <div class="editor-body">
+                <h1 class="document-title">@SelectedNote.Title</h1>
+                <div class="document-content">
+                    @((MarkupString)SelectedNote.Content.Replace("\n", "<br/>"))
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">请选择一篇笔记或新建笔记</div>
+        }
+    </main>
+</div>
+
+@code {
+    private List<MonoNote> MockNotes = new();
+    private string SelectedNoteId = string.Empty;
+
+    private MonoNote? SelectedNote => MockNotes.FirstOrDefault(n => n.Id == SelectedNoteId);
+
+    protected override void OnInitialized()
+    {
+        // 植入假数据用于 UI 调试
+        MockNotes = new List<MonoNote>
+        {
+            new MonoNote
+            {
+                Title = "MonoNotes 需求设计文档",
+                Content = "传统云笔记通常依赖中心化账号、服务端数据库和专有存储格式。\nMonoNotes 采取不同路线：所有笔记以 Markdown 文件保存到用户本地目录中。",
+                Tags = new List<string> { "产品", "架构" },
+                UpdatedAt = DateTimeOffset.Now.AddMinutes(-10)
+            },
+            new MonoNote
+            {
+                Title = "API 接口联调记录",
+                Content = "登录接口超时问题排查，确认是网关层的负载均衡配置导致。\n下一步计划：优化超时重试机制。",
+                Tags = new List<string> { "研发", "后端" },
+                UpdatedAt = DateTimeOffset.Now.AddHours(-5)
+            },
+            new MonoNote
+            {
+                Title = "设计心理学读书摘要",
+                Content = "第一章核心概念：可见性与示能（Affordance）。\n好的设计应该让用户一眼就能看出如何操作，而不是依赖厚厚的说明书。",
+                Tags = new List<string> { "读书", "UX" },
+                UpdatedAt = DateTimeOffset.Now.AddDays(-1)
+            }
+        };
+
+        if (MockNotes.Any())
+        {
+            SelectedNoteId = MockNotes.First().Id;
+        }
+    }
+
+    private void SelectNote(string id)
+    {
+        SelectedNoteId = id;
+    }
+
+    // ========== 新增：真实的交互逻辑 ==========
+
+    private void CreateNewNote()
+    {
+        var newNote = new MonoNote
+        {
+            Title = "无标题笔记",
+            Content = "开始记录你的想法...",
+            UpdatedAt = DateTimeOffset.Now
+        };
+
+        // 插入到列表的最前面
+        MockNotes.Insert(0, newNote);
+
+        // 自动选中刚刚新建的笔记
+        SelectedNoteId = newNote.Id;
+
+        StateHasChanged();
+    }
+
+    private void DeleteCurrentNote()
+    {
+        if (SelectedNote != null)
+        {
+            // 从列表中移除
+            MockNotes.Remove(SelectedNote);
+
+            // 选中列表中的第一项（如果有的话），否则置空
+            SelectedNoteId = MockNotes.Any() ? MockNotes.First().Id : string.Empty;
+
+            StateHasChanged();
+        }
+    }
+}

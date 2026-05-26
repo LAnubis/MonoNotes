@@ -1,0 +1,216 @@
+﻿/* 基础容器 */
+.workspace-container {
+    display: flex;
+    height: 100vh; /* 撑满整个窗口 */
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #2C2C2C;
+    background-color: #FFFFFF;
+    overflow: hidden;
+}
+
+/* 1. 左侧边栏 */
+.sidebar {
+    width: 240px;
+    background-color: #F8F9FA; /* 极浅的灰色 */
+    border-right: 1px solid #EAEAEA;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 12px;
+}
+
+.workspace-switcher {
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 20px;
+}
+
+    .workspace-switcher:hover {
+        background-color: #EDEDED;
+    }
+
+.nav-menu, .nav-section {
+    margin-bottom: 24px;
+}
+
+.section-title {
+    font-size: 0.8em;
+    color: #888;
+    margin: 0 0 8px 12px;
+}
+
+.nav-item, .sub-item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95em;
+    color: #4A4A4A;
+    display: flex;
+    align-items: center;
+}
+
+    .nav-item:hover, .sub-item:hover {
+        background-color: #EDEDED;
+    }
+
+    .nav-item.active {
+        background-color: #E3EFFF;
+        color: #005FB8;
+        font-weight: 500;
+    }
+
+.icon {
+    margin-right: 10px;
+    font-size: 1.1em;
+}
+
+.sidebar-bottom {
+    margin-top: auto;
+}
+/* 推到底部 */
+
+/* 2. 中间笔记列表 */
+.note-list {
+    width: 320px;
+    border-right: 1px solid #EAEAEA;
+    display: flex;
+    flex-direction: column;
+    background-color: #FCFCFC;
+}
+
+.list-header {
+    padding: 16px;
+    border-bottom: 1px solid #F0F0F0;
+}
+
+.search-box {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #DDD;
+    background: #FFF;
+    outline: none;
+}
+
+    .search-box:focus {
+        border-color: #005FB8;
+    }
+
+.list-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.note-card {
+    padding: 16px;
+    border-bottom: 1px solid #F5F5F5;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+    .note-card:hover {
+        background-color: #F4F4F4;
+    }
+
+    .note-card.selected {
+        background-color: #FFFFFF;
+        box-shadow: inset 3px 0 0 #005FB8;
+    }
+
+.note-title {
+    font-weight: 600;
+    font-size: 1em;
+    margin-bottom: 4px;
+}
+
+.note-summary {
+    font-size: 0.85em;
+    color: #666;
+    line-height: 1.4;
+    margin-bottom: 8px;
+}
+
+.note-meta {
+    font-size: 0.75em;
+    color: #999;
+}
+
+/* 3. 右侧编辑器区 */
+.editor-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #FFFFFF;
+}
+
+.editor-header {
+    height: 50px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 0 24px;
+}
+
+.status-indicator {
+    font-size: 0.8em;
+    color: #AAA;
+    margin-right: 16px;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    font-size: 1.2em;
+    cursor: pointer;
+    color: #666;
+    position: relative;
+    z-index: 999;
+}
+
+.editor-body {
+    flex: 1;
+    padding: 20px 80px; /* 两侧留白，沉浸式阅读 */
+    overflow-y: auto;
+}
+
+.document-title {
+    font-size: 2.2em;
+    font-weight: 700;
+    margin-bottom: 24px;
+    border: none;
+    outline: none;
+}
+
+.document-content {
+    font-size: 1.1em;
+    line-height: 1.8;
+    color: #333;
+}
+
+.empty-state {
+    margin: auto;
+    color: #999;
+    font-size: 1.1em;
+}
+.new-note-btn {
+    background-color: #005FB8;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.95em;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background-color 0.2s;
+    position: relative;
+    z-index: 999;
+}
+
+    .new-note-btn:hover {
+        background-color: #004D96;
+    }
