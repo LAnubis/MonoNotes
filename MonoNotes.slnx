@@ -1,0 +1,11 @@
+<Solution>
+  <Project Path="MonoNotes.App/MonoNotes.App.csproj">
+    <Deploy Solution="Debug|*" />
+  </Project>
+  <Project Path="MonoNotes.Core/MonoNotes.Core.csproj" Id="faa94cf2-4db6-42f6-a858-3a9ca7e5acbd" />
+  <Project Path="MonoNotes.Platform/MonoNotes.Platform.csproj" Id="84e781e7-beaa-45e0-984d-4618b2e73e20" />
+  <Project Path="MonoNotes.Search/MonoNotes.Search.csproj" Id="2bf27206-0bfa-4082-a47d-859cd00700a8" />
+  <Project Path="MonoNotes.Storage/MonoNotes.Storage.csproj" Id="20cdac00-1bad-4769-b49c-ecc22494a52c" />
+  <Project Path="MonoNotes.Sync/MonoNotes.Sync.csproj" Id="e8fcb864-8fd3-4420-a683-10de5a6a1091" />
+  <Project Path="MonoNotes.UI/MonoNotes.UI.csproj" Id="feb00baf-6845-4df2-90ef-04b4940cc7fd" />
+</Solution>
