@@ -250,15 +250,13 @@
         background: var(--nt-hover);
     }
 
-/* ========================================== */
-/* 🌟 核心排版：给大纲视图预留专属右侧跑道 */
-/* ========================================== */
 .editor-body {
     flex: 1;
-    padding: 0 280px 0 40px; /* 右侧留出 280px 的安全跑道 (20px空隙 + 240px大纲 + 20px空隙) */
+    /* 🌟 核心排版：左40px，右280px (20px间隙 + 240px大纲 + 20px右边缘留白) */
+    padding: 0 280px 0 40px;
     margin: 0;
     width: 100%;
-    /* 🌟 核心救星：强制把 padding 算在 100% 宽度之内，正文瞬间收缩，绝不重叠！ */
+    /* 🌟 必须保留这一行，防止滚动条被挤到屏幕外面 */
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -272,8 +270,9 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    /* 🌟 拆除内墙：让内部的 Vditor 元素可以飞出这个框 */
     position: static !important;
+    max-width: 100%;
+    margin-right:10px;
 }
 
 .document-title {
@@ -284,7 +283,7 @@
     outline: none;
     background: transparent;
     /* 将 margin 修改为更紧凑的值：上 20px，左右 0，下 16px */
-    margin: 20px 0 16px 0;
+    margin: 20px 0 16px 10px;
     font-family: inherit;
 }
 
