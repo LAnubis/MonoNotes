@@ -21,9 +21,13 @@ namespace MonoNotes.Core.Models
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
         public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.Now;
 
+        //置顶
         public bool IsPinned { get; set; }
+        //归档字段映射
         public bool IsArchived { get; set; }
 
+        // 🌟 新增：全局收藏标记
+        public bool IsFavorite { get; set; }
         // 摘要，用于在笔记列表中展示前两行内容
         public string Summary
         {

@@ -22,7 +22,7 @@ namespace MonoNotes.App.Services
                 Directory.CreateDirectory(_storageDirectory);
             }
 
-            // 初始化 YAML 序列化器，使用驼峰命名法 (例如 updatedAt)
+            // 初始化 YAML 序列化器，使用驼峰命名法
             _yamlSerializer = new SerializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .Build();
@@ -70,7 +70,11 @@ namespace MonoNotes.App.Services
                                 Tags = meta.Tags ?? new List<string>(),
                                 UpdatedAt = meta.UpdatedAt != default ? meta.UpdatedAt : File.GetLastWriteTime(file),
                                 Content = content,
-                                Folder = relativePath // 🌟 直接使用你原有的字段！
+                                Folder = relativePath,
+                                // 🌟 核心修改 1：读取时赋值状态
+                                IsPinned = meta.IsPinned,
+                                IsFavorite = meta.IsFavorite,
+                                IsArchived = meta.IsArchived
                             });
                         }
                     }
@@ -85,7 +89,7 @@ namespace MonoNotes.App.Services
         {
             note.UpdatedAt = DateTimeOffset.Now;
 
-            // 🌟 解析真实路径（如果 Folder 是默认的 "notes" 或者空，就存根目录）
+            // 解析真实路径（如果 Folder 是默认的 "notes" 或者空，就存根目录）
             var isRoot = string.IsNullOrWhiteSpace(note.Folder) || note.Folder == "notes";
             var targetDirectory = isRoot
                 ? _storageDirectory
@@ -104,7 +108,11 @@ namespace MonoNotes.App.Services
                 Id = note.Id,
                 Title = note.Title ?? "无标题笔记",
                 UpdatedAt = note.UpdatedAt,
-                Tags = note.Tags ?? new List<string>()
+                Tags = note.Tags ?? new List<string>(),
+                // 🌟 核心修改 2：保存时赋值状态给 DTO
+                IsPinned = note.IsPinned,
+                IsFavorite = note.IsFavorite,
+                IsArchived = note.IsArchived
             };
 
             var yaml = _yamlSerializer.Serialize(meta);
@@ -141,6 +149,7 @@ namespace MonoNotes.App.Services
             }
             await Task.CompletedTask;
         }
+
         public async Task CreateFolderAsync(string parentFolderPath, string newFolderName)
         {
             // 如果没选中任何文件夹，或者选中的是根目录 notes，就建在根目录下
@@ -181,6 +190,7 @@ namespace MonoNotes.App.Services
 
             await Task.CompletedTask;
         }
+
         // 内部 DTO：专门用来映射 YAML 头部的结构
         private class NoteMetadata
         {
@@ -188,6 +198,12 @@ namespace MonoNotes.App.Services
             public string Title { get; set; }
             public DateTimeOffset UpdatedAt { get; set; }
             public List<string> Tags { get; set; }
+
+            // 🌟 核心修改 3：在映射实体中加入这两个字段
+            public bool IsPinned { get; set; }
+            public bool IsFavorite { get; set; }
+            // 🌟 核心修改 1：增加归档字段映射
+            public bool IsArchived { get; set; }
         }
     }
 }

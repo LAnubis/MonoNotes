@@ -12,6 +12,29 @@
         </div>
 
         <div class="nav-menu">
+            @if (Notes.Any(n => n.IsFavorite))
+            {
+                <div style="padding: 16px 16px 8px 16px; font-size: 11px; font-weight: 600; color: #999;">
+                    <span>快捷方式</span>
+                </div>
+                <div style="padding: 0 8px; margin-bottom: 12px;">
+                    <div class="nav-item @(_isFavoriteFilterActive ? "active" : "")"
+                         style="padding: 4px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-main);"
+                         @onclick="ShowFavorites">
+                        <span style="margin-right: 8px;">⭐</span>
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">我的收藏</span>
+                    </div>
+
+                    <div class="nav-item @(_isArchiveFilterActive ? "active" : "")"
+                         style="padding: 4px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-main);"
+                         @onclick="ShowArchives">
+                        <span style="margin-right: 8px;">🗄️</span>
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">归档</span>
+                    </div>
+                </div>
+            }
+
+
             <div style="padding: 0 16px 8px 16px; font-size: 11px; font-weight: 600; color: #999; display: flex; justify-content: space-between; align-items: center;">
                 <span>文件夹</span>
                 <button class="icon-btn" title="新建主文件夹" @onclick="ShowNewMainFolderInput" @onclick:stopPropagation="true" style="padding: 0 4px; font-size: 12px;">➕</button>
@@ -60,25 +83,32 @@
                    @bind="_searchQuery" @bind:event="oninput" />
         </div>
 
-        <div class="list-content">
-            @foreach (var note in FilteredNotes)
-            {
-                <div class="note-card @(note.Id == SelectedNoteId ? "selected" : "")"
-                     @onclick="() => SelectNote(note.Id)">
+        @foreach (var note in FilteredNotes)
+        {
+            <div class="note-card @(note.Id == SelectedNoteId ? "selected" : "")"
+                 @onclick="() => SelectNote(note.Id)"
+                 @oncontextmenu="(e) => ShowNoteContextMenu(e, note)"
+                 @oncontextmenu:preventDefault="true">
 
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" class="file-icon">
-                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-                        <polyline points="13 2 13 9 20 9"></polyline>
-                    </svg>
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="1.5" fill="none" class="file-icon">
+                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                    <polyline points="13 2 13 9 20 9"></polyline>
+                </svg>
 
-                    <div class="note-title">@(string.IsNullOrWhiteSpace(note.Title) ? "无标题" : note.Title)</div>
+                <div class="note-title">@(string.IsNullOrWhiteSpace(note.Title) ? "无标题" : note.Title)</div>
+
+                <div style="margin-left: auto; display: flex; gap: 4px; font-size: 12px; opacity: 0.7;">
+                    @if (note.IsFavorite)
+                    {
+                        <span>⭐</span>
+                    }
+                    @if (note.IsPinned)
+                    {
+                        <span>📌</span>
+                    }
                 </div>
-            }
-            @if (!FilteredNotes.Any())
-            {
-                <div class="empty-state" style="font-size:13px; text-align:center; padding:20px; color:var(--nt-text-gray);">没有页面</div>
-            }
-        </div>
+            </div>
+        }
     </section>
 
     <main class="editor-area">
@@ -135,6 +165,43 @@
             }
         </div>
     }
+
+
+
+    @if (_showNoteContextMenu && _contextMenuNote != null)
+    {
+        <div class="custom-context-menu" style="left: @(_noteContextMenuX)px; top: @(_noteContextMenuY)px;" @onclick:stopPropagation="true">
+            <div class="menu-item" @onclick="ToggleFavoriteContext">@(_contextMenuNote.IsFavorite ? "⭐ 取消收藏" : "⭐ 收藏")</div>
+            <div class="menu-item" @onclick="TogglePinContext">@(_contextMenuNote.IsPinned ? "📌 取消置顶" : "📌 置顶")</div>
+            <div class="menu-item" @onclick="ToggleArchiveContext">@(_contextMenuNote.IsArchived ? "🗄️ 取消归档" : "🗄️ 归档")</div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" @onclick="() => OpenFolderSelector(false)">📁 移动到...</div>
+            <div class="menu-item" @onclick="() => OpenFolderSelector(true)">📄 复制到...</div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" style="color: #ff4d4f;" @onclick="DeleteNoteContext">🗑️ 删除</div>
+        </div>
+    }
+
+    @if (_showFolderSelector)
+    {
+        <div class="modal-overlay" @onclick="CloseFolderSelector">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <span>@(_isCopyMode ? "复制到" : "移动到")</span>
+                    <button class="icon-btn" @onclick="CloseFolderSelector">×</button>
+                </div>
+                <div class="modal-body">
+                    <FolderTree Nodes="_folderTree"
+                                SelectedFolder="@_targetFolder"
+                                OnFolderSelected="(path) => _targetFolder = path" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-cancel" @onclick="CloseFolderSelector">取消</button>
+                    <button class="btn-primary" disabled="@(string.IsNullOrEmpty(_targetFolder))" @onclick="ConfirmMoveOrCopy">确认</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -164,7 +231,20 @@
     private string _selectedTag = string.Empty;
     private string _newTagInput = string.Empty;
 
+    // === 🌟 笔记右键菜单与弹窗状态 ===
+    private bool _showNoteContextMenu = false;
+    private double _noteContextMenuX = 0;
+    private double _noteContextMenuY = 0;
+    private MonoNote? _contextMenuNote;
 
+    private bool _showFolderSelector = false;
+    private bool _isCopyMode = false;
+    private string _targetFolder = string.Empty;
+
+    // 🌟 新增：收藏视图激活状态
+    private bool _isFavoriteFilterActive = false;
+    // 🌟 新增：归档视图激活状态
+    private bool _isArchiveFilterActive = false;
     // 动态计算系统中所有的唯一标签，并按字母排序
     private List<string> AllTags => Notes
         .Where(n => n.Tags != null)
@@ -173,8 +253,27 @@
         .OrderBy(t => t)
         .ToList();
 
+    // 🌟 激活收藏视图
+    private void ShowFavorites()
+    {
+        _isFavoriteFilterActive = true;
+        _isArchiveFilterActive = false;
+        _selectedFolderPath = string.Empty;
+        _selectedTag = string.Empty;
+        SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+    }
+    private void ShowArchives()
+    {
+        _isArchiveFilterActive = true;
+        _isFavoriteFilterActive = false;
+        _selectedFolderPath = string.Empty;
+        _selectedTag = string.Empty;
+        SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+    }
     private void OnFolderSelectedHandler(string path)
     {
+        _isFavoriteFilterActive = false; // 切换时取消收藏视图
+        _isArchiveFilterActive = false;
         _selectedFolderPath = path;
         _selectedTag = string.Empty; // 🌟 核心：选中文件夹时，清空标签过滤
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
@@ -182,6 +281,8 @@
     // 🌟 新增：点击标签时的处理逻辑
     private void SelectTag(string tag)
     {
+        _isFavoriteFilterActive = false; // 切换时取消收藏视图
+        _isArchiveFilterActive = false;
         if (_selectedTag == tag)
         {
             _selectedTag = string.Empty; // 再次点击取消选中
@@ -206,6 +307,7 @@
     private void CloseContextMenu()
     {
         _showContextMenu = false;
+        _showNoteContextMenu = false; // 新增
     }
 
     // 🌟 三种模式的输入框唤起方法
@@ -370,25 +472,41 @@
         {
             IEnumerable<MonoNote> result = Notes;
 
-            // 按文件夹过滤
-            if (!string.IsNullOrEmpty(_selectedFolderPath))
+            // 🌟 核心拦截 1：如果处于“归档视图”，只显示已归档的笔记
+            if (_isArchiveFilterActive)
             {
-                result = result.Where(n => n.Folder == _selectedFolderPath);
+                result = result.Where(n => n.IsArchived);
+            }
+            else
+            {
+                // 🌟 核心拦截 2：如果处于“常规视图”，必须强制过滤掉所有已归档的笔记！
+                result = result.Where(n => !n.IsArchived);
+
+                // 在排除了归档笔记的基础上，继续进行原有的分类过滤
+                if (_isFavoriteFilterActive)
+                {
+                    result = result.Where(n => n.IsFavorite);
+                }
+                else if (!string.IsNullOrEmpty(_selectedFolderPath))
+                {
+                    result = result.Where(n => n.Folder == _selectedFolderPath);
+                }
+                else if (!string.IsNullOrEmpty(_selectedTag))
+                {
+                    result = result.Where(n => n.Tags != null && n.Tags.Contains(_selectedTag));
+                }
             }
 
-            // 🌟 新增：按选中标签全局过滤
-            if (!string.IsNullOrEmpty(_selectedTag))
-            {
-                result = result.Where(n => n.Tags != null && n.Tags.Contains(_selectedTag));
-            }
-
-            // 按搜索词过滤
+            // 搜索过滤（全局生效）
             if (!string.IsNullOrWhiteSpace(_searchQuery))
             {
                 var query = _searchQuery.ToLower().Trim();
                 result = result.Where(n => (n.Title?.ToLower().Contains(query) ?? false) || (n.Content?.ToLower().Contains(query) ?? false));
             }
-            return result;
+
+            return result
+                .OrderByDescending(n => n.IsPinned)
+                .ThenByDescending(n => n.UpdatedAt);
         }
     }
 
@@ -474,5 +592,102 @@
             SelectedNote.Tags.Remove(tag);
             await PerformSaveAsync();
         }
+    }
+
+    private void ShowNoteContextMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, MonoNote note)
+    {
+        CloseContextMenu();
+        _contextMenuNote = note;
+        _noteContextMenuX = e.ClientX;
+        _noteContextMenuY = e.ClientY;
+        _showNoteContextMenu = true;
+    }
+
+    private async Task ToggleFavoriteContext()
+    {
+        if (_contextMenuNote != null)
+        {
+            _contextMenuNote.IsFavorite = !_contextMenuNote.IsFavorite;
+            // 🌟 直接调用底层的 SaveNoteAsync，并传入当前右击的笔记
+            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+            StateHasChanged();
+        }
+        _showNoteContextMenu = false;
+    }
+
+    private async Task TogglePinContext()
+    {
+        if (_contextMenuNote != null)
+        {
+            _contextMenuNote.IsPinned = !_contextMenuNote.IsPinned;
+            // 🌟 同样直接调用底层保存方法
+            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+            StateHasChanged();
+        }
+        _showNoteContextMenu = false;
+    }
+
+    private async Task DeleteNoteContext()
+    {
+        if (_contextMenuNote != null)
+        {
+            await NoteRepository.DeleteNoteAsync(_contextMenuNote.Id);
+            Notes.Remove(_contextMenuNote);
+            if (SelectedNoteId == _contextMenuNote.Id) SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+        }
+        _showNoteContextMenu = false;
+    }
+
+    private void OpenFolderSelector(bool isCopy)
+    {
+        _isCopyMode = isCopy;
+        _targetFolder = string.Empty;
+        _showFolderSelector = true;
+        _showNoteContextMenu = false;
+    }
+
+    private void CloseFolderSelector() => _showFolderSelector = false;
+
+    private async Task ConfirmMoveOrCopy()
+    {
+        if (_contextMenuNote == null || string.IsNullOrEmpty(_targetFolder)) return;
+
+        if (_isCopyMode)
+        {
+            // 🌟 复制逻辑：生成新 ID，追加“副本”标识
+            var newNote = new MonoNote
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Title = _contextMenuNote.Title + " - 副本",
+                Content = _contextMenuNote.Content,
+                Folder = _targetFolder,
+                UpdatedAt = DateTimeOffset.Now
+            };
+            Notes.Insert(0, newNote);
+            await NoteRepository.SaveNoteAsync(newNote);
+        }
+        else
+        {
+            // 🌟 移动逻辑
+            // 【注意】如果你底层是写死的 IO，这里可能需要调用专门的 MoveNoteAsync 删除老物理文件。
+            // 只要底层仓储处理好了，这里只需改内存即可。
+            _contextMenuNote.Folder = _targetFolder;
+            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+        }
+
+        _showFolderSelector = false;
+        StateHasChanged();
+    }
+
+    // 🌟 新增：切换归档状态
+    private async Task ToggleArchiveContext()
+    {
+        if (_contextMenuNote != null)
+        {
+            _contextMenuNote.IsArchived = !_contextMenuNote.IsArchived;
+            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+            StateHasChanged();
+        }
+        _showNoteContextMenu = false;
     }
 }
