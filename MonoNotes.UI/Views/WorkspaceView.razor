@@ -120,7 +120,89 @@
         }
     </section>
 
-    <main class="editor-area">
+    <main class="editor-area" style="display: flex; flex-direction: column;">
+
+        <style>
+                    .tabs-bar {
+                        display: flex;
+                        background-color: #fbfbfa;
+                        border-bottom: 1px solid rgba(55, 53, 47, 0.09);
+                        padding: 8px 12px 0 12px;
+                        gap: 4px;
+                        overflow-x: auto;
+                        min-height: 42px;
+                    }
+
+                        .tabs-bar::-webkit-scrollbar {
+                            display: none;
+                        }
+                    /* 隐藏滚动条 */
+
+                    .tab-item {
+                        display: flex;
+                        align-items: center;
+                        padding: 6px 14px;
+                        border-radius: 8px 8px 0 0;
+                        cursor: pointer;
+                        font-size: 13px;
+                        max-width: 180px;
+                        min-width: 120px;
+                        color: rgba(55, 53, 47, 0.6);
+                        background: transparent;
+                        border: 1px solid transparent;
+                        border-bottom: none;
+                        transition: background-color 0.15s ease;
+                    }
+
+                        .tab-item:hover {
+                            background: rgba(55, 53, 47, 0.05);
+                        }
+
+                        /* 激活状态：浮起并变成纯白底色 */
+                        .tab-item.active {
+                            background: #ffffff;
+                            color: rgba(55, 53, 47, 0.85);
+                            font-weight: 500;
+                            border-color: rgba(55, 53, 47, 0.09);
+                            box-shadow: 0 -2px 6px rgba(0,0,0,0.02);
+                        }
+
+                    .tab-close-btn {
+                        margin-left: auto;
+                        border-radius: 4px;
+                        padding: 0 4px;
+                        opacity: 0;
+                        font-size: 14px;
+                        transition: opacity 0.2s, background-color 0.2s;
+                    }
+
+                    .tab-item:hover .tab-close-btn, .tab-item.active .tab-close-btn {
+                        opacity: 0.5;
+                    }
+
+                    .tab-close-btn:hover {
+                        opacity: 1 !important;
+                        background: rgba(55, 53, 47, 0.1);
+                        color: #ff4d4f;
+                    }
+        </style>
+
+        <div class="tabs-bar">
+            @foreach (var tabId in _openTabs)
+            {
+                var tabNote = Notes.FirstOrDefault(n => n.Id == tabId);
+                if (tabNote != null)
+                {
+                    <div class="tab-item @(tabId == SelectedNoteId ? "active" : "")" @onclick="() => SelectNote(tabId)">
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;">
+                            @(string.IsNullOrWhiteSpace(tabNote.Title) ? "无标题" : tabNote.Title)
+                        </span>
+                        <button class="icon-btn tab-close-btn" @onclick="() => CloseTab(tabId)" @onclick:stopPropagation="true">×</button>
+                    </div>
+                }
+            }
+        </div>
+
         @if (SelectedNote != null)
         {
             <div class="editor-header">
@@ -164,6 +246,13 @@
                                     ContentChanged="@((newContent) => { SelectedNote.Content = newContent; OnNoteChanged(); })"
                                     CurrentFolder="@SelectedNote.Folder" />
                 </div>
+            </div>
+        }
+        else
+        {
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #ffffff;">
+                <span style="font-size: 48px; filter: grayscale(1) opacity(0.2); margin-bottom: 16px;">📝</span>
+                <p style="color: rgba(55,53,47,0.4); font-size: 14px; letter-spacing: 1px;">选择或新建一篇笔记以开始编写</p>
             </div>
         }
     </main>
@@ -430,6 +519,9 @@
     private bool _showTagDeleteConfirm = false;
     private string _tagToDelete = string.Empty;
 
+    // === 🌟 多标签页管理状态 ===
+    private List<string> _openTabs = new();
+
     private void ShowTrash()
     {
         _isTrashFilterActive = true;
@@ -592,10 +684,18 @@
         }
     }
 
-    // 🌟 在当前右键目标文件夹中新建笔记
     private async Task CreateNoteInContextFolder()
     {
         if (_contextMenuTarget == null) return;
+
+        // 🌟 右键新建前同样拦截
+        if (_openTabs.Count >= 7)
+        {
+            _warningMessage = "最多只能同时打开 7 个标签页，请先关闭一些不常用的笔记再新建。";
+            _showWarningDialog = true;
+            CloseContextMenu();
+            return;
+        }
 
         var newNote = new MonoNote
         {
@@ -608,7 +708,8 @@
 
         Notes.Insert(0, newNote);
         SelectedNoteId = newNote.Id;
-        _selectedFolderPath = _contextMenuTarget.FullPath; // 界面焦点自动跳过去
+        _selectedFolderPath = _contextMenuTarget.FullPath;
+        OpenInTab(newNote.Id); // 确保新笔记进入 Tab
         await NoteRepository.SaveNoteAsync(newNote);
 
         CloseContextMenu();
@@ -664,7 +765,11 @@
 
         BuildFolderTree(rawFolders);
 
-        if (FilteredNotes.Any()) SelectedNoteId = FilteredNotes.First().Id;
+        if (FilteredNotes.Any())
+        {
+            SelectedNoteId = FilteredNotes.First().Id;
+            OpenInTab(SelectedNoteId); // 🌟 新增：启动时默认打开进 Tab
+        }
         else await CreateNewNote();
 
         _autoSaveTimer.Elapsed += async (sender, e) => await PerformSaveAsync();
@@ -725,6 +830,14 @@
 
     private async Task CreateNewNote()
     {
+        // 🌟 新建前拦截：如果满了，直接弹窗并终止新建
+        if (_openTabs.Count >= 7)
+        {
+            _warningMessage = "最多只能同时打开 7 个标签页，请先关闭一些不常用的笔记再新建。";
+            _showWarningDialog = true;
+            return;
+        }
+
         var targetFolder = string.IsNullOrWhiteSpace(_selectedFolderPath) ? "notes" : _selectedFolderPath;
         var newNote = new MonoNote
         {
@@ -735,7 +848,10 @@
             Folder = targetFolder
         };
         Notes.Insert(0, newNote);
+
         SelectedNoteId = newNote.Id;
+        OpenInTab(newNote.Id); // 确保新笔记进入 Tab
+
         await NoteRepository.SaveNoteAsync(newNote);
         StateHasChanged();
     }
@@ -746,12 +862,21 @@
         {
             SelectedNote.IsDeleted = true;
             await PerformSaveAsync();
-            SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+            var deletedId = SelectedNote.Id; // 先缓存 ID
+            CloseTab(deletedId); // 🌟 核心修复：自动关闭该标签页
             StateHasChanged();
         }
     }
 
-    private void SelectNote(string id) { SelectedNoteId = id; _saveStatus = "已保存"; }
+    private void SelectNote(string id)
+    {
+        // 🌟 只有成功放入 Tab，才允许切换编辑器画面
+        if (OpenInTab(id))
+        {
+            SelectedNoteId = id;
+            _saveStatus = "已保存";
+        }
+    }
 
     private void SwitchNav(string navType) { _currentNav = navType; SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty; }
 
@@ -897,7 +1022,7 @@
         {
             _contextMenuNote.IsDeleted = true;
             await NoteRepository.SaveNoteAsync(_contextMenuNote);
-            if (SelectedNoteId == _contextMenuNote.Id) SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+            CloseTab(_contextMenuNote.Id); // 🌟 核心修复：不管它有没有打开，强行从 Tab 移除
             StateHasChanged();
         }
         _showNoteContextMenu = false;
@@ -916,16 +1041,13 @@
         _showNoteContextMenu = false;
     }
 
-    // 右键菜单 -> 彻底物理删除
     private async Task HardDeleteNoteContext()
     {
         if (_contextMenuNote != null)
         {
-            // 🌟 物理删除硬盘上的文件
             await NoteRepository.DeleteNoteAsync(_contextMenuNote.Id);
-            // 从内存列表中彻底抹除
             Notes.Remove(_contextMenuNote);
-            if (SelectedNoteId == _contextMenuNote.Id) SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+            CloseTab(_contextMenuNote.Id); // 🌟 核心修复：强行从 Tab 移除
             StateHasChanged();
         }
         _showNoteContextMenu = false;
@@ -983,11 +1105,14 @@
         // 1. 调用底层物理删除与转移
         await NoteRepository.DeleteFolderAsync(_contextMenuTarget.FullPath, moveNotesToTrash);
 
-        // 2. 更新内存数据，保持 UI 瞬间同步
         foreach (var note in Notes.Where(n => n.Folder == _contextMenuTarget.FullPath))
         {
             note.Folder = "notes";
-            if (moveNotesToTrash) note.IsDeleted = true;
+            if (moveNotesToTrash)
+            {
+                note.IsDeleted = true;
+                CloseTab(note.Id); // 🌟 核心修复：如果删除了文件夹连带笔记，必须清理幽灵 Tab
+            }
         }
 
         // 3. 重新刷新左侧文件夹树
@@ -1100,5 +1225,44 @@
         _showTagDeleteConfirm = false;
         _tagToDelete = string.Empty;
         StateHasChanged();
+    }
+
+    private bool OpenInTab(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return false;
+
+        if (!_openTabs.Contains(id))
+        {
+            // 如果还没打开，且已经满了 7 个，强行拦截！
+            if (_openTabs.Count >= 7)
+            {
+                _warningMessage = "最多只能同时打开 7 个标签页，请先关闭一些不常用的笔记。";
+                _showWarningDialog = true;
+                return false; // 告诉调用者：打开失败
+            }
+            _openTabs.Add(id);
+        }
+        return true; // 成功打开，或者该笔记本来就在 Tab 里
+    }
+
+    private void CloseTab(string id)
+    {
+        int index = _openTabs.IndexOf(id);
+        if (index == -1) return;
+
+        _openTabs.RemoveAt(index);
+
+        if (SelectedNoteId == id)
+        {
+            if (_openTabs.Count > 0)
+            {
+                int newIndex = index > 0 ? index - 1 : 0;
+                SelectedNoteId = _openTabs[newIndex];
+            }
+            else
+            {
+                SelectedNoteId = string.Empty;
+            }
+        }
     }
 }
