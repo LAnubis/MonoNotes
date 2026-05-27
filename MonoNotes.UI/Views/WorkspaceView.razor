@@ -14,7 +14,11 @@
         <div class="nav-menu">
             <div style="padding: 0 16px 8px 16px; font-size: 11px; font-weight: 600; color: #999; display: flex; justify-content: space-between; align-items: center;">
                 <span>文件夹</span>
-                <button class="icon-btn" title="新建子文件夹" @onclick="ShowNewFolderInput" style="padding: 0 4px; font-size: 12px;">➕</button>
+
+                @if (GetCurrentFolderDepth() < 4)
+                {
+                    <button class="icon-btn" title="新建子文件夹" @onclick="ShowNewFolderInput" style="padding: 0 4px; font-size: 12px;">➕</button>
+                }
             </div>
 
             @if (_isCreatingFolder)
@@ -83,236 +87,7 @@
 </div>
 
 <style>
-    :root {
-        /* Notion 核心色彩体系 */
-        --nt-bg: #ffffff;
-        --nt-sidebar: #f7f7f5;
-        --nt-hover: #efefef;
-        --nt-hover-blue: rgba(46, 170, 220, 0.1);
-        --nt-text-main: #37352f;
-        --nt-text-gray: rgba(55, 53, 47, 0.6);
-        --nt-border: rgba(55, 53, 47, 0.09);
-        /* 苹果/Notion 同款系统无衬线字体 */
-        --nt-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif;
-    }
-
-    .notion-workspace, .notion-workspace * {
-        box-sizing: border-box;
-    }
-
-    .notion-workspace {
-        display: flex;
-        height: 100vh;
-        width: 100%; /* 限制最大宽度 */
-        overflow: hidden; /* 绝对禁止出现整个窗口的滚动条 */
-        font-family: var(--nt-font);
-        color: var(--nt-text-main);
-        background: var(--nt-bg);
-    }
-    /* 左侧极窄边栏 */
-    .sidebar {
-        width: 220px;
-        background: var(--nt-sidebar);
-        border-right: 1px solid var(--nt-border);
-        display: flex;
-        flex-direction: column;
-        padding-top: 12px;
-    }
-
-    .workspace-switcher {
-        padding: 8px 16px;
-        font-size: 14px;
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        cursor: pointer;
-    }
-
-        .workspace-switcher:hover {
-            background: var(--nt-hover);
-        }
-
-    .nav-menu {
-        margin-top: 16px;
-        flex: 1;
-    }
-
-    .nav-item {
-        padding: 6px 16px;
-        font-size: 14px;
-        color: var(--nt-text-gray);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-        .nav-item:hover {
-            background: var(--nt-hover);
-        }
-
-        .nav-item.active {
-            background: var(--nt-hover);
-            color: var(--nt-text-main);
-            font-weight: 500;
-        }
-
-    .new-note-btn {
-        margin: 16px;
-        padding: 8px;
-        background: transparent;
-        border: 1px solid var(--nt-border);
-        border-radius: 4px;
-        color: var(--nt-text-gray);
-        cursor: pointer;
-        text-align: left;
-    }
-
-        .new-note-btn:hover {
-            background: var(--nt-hover);
-        }
-
-    /* 中间列表：大幅缩小宽度，字体更加精致 */
-    .note-list {
-        width: 280px; /* 从宽幅变窄 */
-        background: var(--nt-bg);
-        border-right: 1px solid var(--nt-border);
-        display: flex;
-        flex-direction: column;
-    }
-
-    .list-header {
-        padding: 12px;
-        border-bottom: 1px solid var(--nt-border);
-    }
-
-    .search-box {
-        width: 100%;
-        padding: 6px 10px;
-        background: #f1f1ef;
-        border: 1px solid transparent;
-        border-radius: 4px;
-        font-size: 13px;
-        outline: none;
-        color: var(--nt-text-main);
-    }
-
-        .search-box:focus {
-            background: var(--nt-bg);
-            border-color: #2eaadc;
-        }
-
-    .list-content {
-        flex: 1;
-        overflow-y: auto;
-        padding: 8px;
-    }
-
-    .note-card {
-        padding: 8px 12px; /* 高度调紧凑一点 */
-        margin-bottom: 2px;
-        border-radius: 6px;
-        cursor: pointer;
-    }
-
-        .note-card:hover {
-            background: var(--nt-hover);
-        }
-
-        .note-card.selected {
-            background: var(--nt-hover-blue);
-        }
-
-    .note-title {
-        font-size: 13px; /* 字体调小 */
-        font-weight: 400; /* 取消加粗，回归正常粗细 */
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        color: var(--nt-text-main);
-    }
-
-    .note-summary {
-        font-size: 12px;
-        color: var(--nt-text-gray);
-        line-height: 1.4;
-    }
-
-    .note-meta {
-        font-size: 11px;
-        color: var(--nt-text-gray);
-        margin-top: 8px;
-    }
-
-    /* 右侧编辑器区 */
-    .editor-area {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .editor-header {
-        display: flex;
-        justify-content: space-between;
-        padding: 12px 36px;
-        font-size: 13px;
-        color: var(--nt-text-gray);
-    }
-
-    .icon-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 4px 8px;
-        border-radius: 4px;
-    }
-
-        .icon-btn:hover {
-            background: var(--nt-hover);
-        }
-
-    .editor-body {
-        flex: 1;
-        padding: 0 80px; /* 两侧留白 */
-        max-width: 900px;
-        margin: 0 auto;
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .document-title {
-        font-size: 40px;
-        font-weight: 700;
-        color: var(--nt-text-main);
-        border: none;
-        outline: none;
-        background: transparent;
-        margin: 30px 0 20px 0;
-        font-family: inherit;
-    }
-
-        .document-title::placeholder {
-            color: #dbdbd9;
-        }
-
-    .document-content {
-        flex: 1;
-        overflow: hidden;
-    }
-
-    .nav-menu, .list-content {
-        overflow-y: auto; /* 允许内容垂直滚动 */
-        scrollbar-width: none; /* Firefox 隐藏滚动条 */
-        -ms-overflow-style: none; /* IE/Edge 隐藏滚动条 */
-    }
-
-        /* 针对 Chrome / Safari / Edge (Webkit内核) 隐藏滚动条 */
-        .nav-menu::-webkit-scrollbar,
-        .list-content::-webkit-scrollbar {
-            display: none; /* 彻底隐藏 Webkit 滚动条 */
-        }
+   
 </style>
 
 @code {
@@ -385,16 +160,17 @@
                 var part = parts[i];
                 currentFullPath = string.IsNullOrEmpty(currentFullPath) ? part : $"{currentFullPath}/{part}";
 
-                // 🌟 修复点 1：改用 FullPath 来判断节点是否已存在，因为后面我们把 Name 改了
+
                 var existingNode = currentLevel.FirstOrDefault(n => n.FullPath == currentFullPath);
                 if (existingNode == null)
                 {
                     existingNode = new FolderTree.FolderNode
                     {
-                        // 🌟 修复点 2：UI 映射魔法。如果是最顶层的 notes 文件夹，界面上显示为“未分类”
                         Name = currentFullPath == "notes" ? "未分类" : part,
                         FullPath = currentFullPath,
-                        IsExpanded = currentFullPath == "notes"
+
+                        // 🌟 核心修改：i=0 是第一级，i=1 是第二级。只有前两级才默认展开，第三四级默认折叠！
+                        IsExpanded = i < 2
                     };
                     currentLevel.Add(existingNode);
                 }
@@ -495,4 +271,12 @@
     }
 
     public void Dispose() { _autoSaveTimer.Dispose(); }
+
+    // 🌟 计算当前选中文件夹的层级深度
+    private int GetCurrentFolderDepth()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedFolderPath)) return 1;
+        return _selectedFolderPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Length;
+    }
+
 }

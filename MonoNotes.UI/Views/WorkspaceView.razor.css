@@ -1,37 +1,107 @@
-﻿/* 基础容器 */
-.workspace-container {
-    display: flex;
-    height: 100vh; /* 撑满整个窗口 */
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    color: #2C2C2C;
-    background-color: #FFFFFF;
-    overflow: hidden;
+﻿/* ========================================== */
+/* 1. 全局变量与核心布局                       */
+/* ========================================== */
+/*:root {*/
+    /* Notion 核心色彩体系 */
+    /*--nt-bg: #ffffff;
+    --nt-sidebar: #f7f7f5;
+    --nt-hover: #efefef;
+    --nt-hover-blue: rgba(46, 170, 220, 0.1);
+    --nt-text-main: #37352f;
+    --nt-text-gray: rgba(55, 53, 47, 0.6);
+    --nt-border: rgba(55, 53, 47, 0.09);*/
+    /* 苹果/Notion 同款系统无衬线字体 */
+    /*--nt-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif;
+}*/
+
+.notion-workspace, .notion-workspace * {
+    box-sizing: border-box;
 }
 
-/* 1. 左侧边栏 */
+.notion-workspace {
+    display: flex;
+    height: 100vh;
+    width: 100%; /* 限制最大宽度 */
+    overflow: hidden; /* 绝对禁止出现整个窗口的滚动条 */
+    font-family: var(--nt-font);
+    color: var(--nt-text-main);
+    background: var(--nt-bg);
+}
+
+/* ========================================== */
+/* 2. 左侧极窄边栏                            */
+/* ========================================== */
 .sidebar {
-    width: 240px;
-    background-color: #F8F9FA; /* 极浅的灰色 */
-    border-right: 1px solid #EAEAEA;
+    width: 220px;
+    background: var(--nt-sidebar);
+    border-right: 1px solid var(--nt-border);
     display: flex;
     flex-direction: column;
-    padding: 16px 12px;
+    padding-top: 12px;
 }
 
 .workspace-switcher {
-    font-weight: 600;
-    padding: 8px 12px;
-    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     cursor: pointer;
     margin-bottom: 20px;
 }
 
     .workspace-switcher:hover {
-        background-color: #EDEDED;
+        background: var(--nt-hover);
     }
 
-.nav-menu, .nav-section {
-    margin-bottom: 24px;
+.nav-menu {
+    margin-top: 16px;
+    flex: 1;
+}
+
+.nav-item {
+    padding: 6px 16px;
+    font-size: 14px;
+    color: var(--nt-text-gray);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+    .nav-item:hover {
+        background: var(--nt-hover);
+    }
+
+    .nav-item.active {
+        background: var(--nt-hover);
+        color: var(--nt-text-main);
+        font-weight: 500;
+    }
+
+.new-note-btn {
+    margin: 16px;
+    padding: 8px;
+    background: transparent;
+    border: 1px solid var(--nt-border);
+    border-radius: 4px;
+    color: var(--nt-text-gray);
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.2s;
+    position: relative;
+    z-index: 999;
+}
+
+    .new-note-btn:hover {
+        background: var(--nt-hover);
+    }
+
+/* (旧版遗留的辅助样式，保留以防HTML中仍在使用) */
+.icon {
+    margin-right: 10px;
+    font-size: 1.1em;
 }
 
 .section-title {
@@ -40,116 +110,113 @@
     margin: 0 0 8px 12px;
 }
 
-.nav-item, .sub-item {
-    padding: 8px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.95em;
-    color: #4A4A4A;
-    display: flex;
-    align-items: center;
-}
-
-    .nav-item:hover, .sub-item:hover {
-        background-color: #EDEDED;
-    }
-
-    .nav-item.active {
-        background-color: #E3EFFF;
-        color: #005FB8;
-        font-weight: 500;
-    }
-
-.icon {
-    margin-right: 10px;
-    font-size: 1.1em;
-}
-
 .sidebar-bottom {
     margin-top: auto;
 }
-/* 推到底部 */
 
-/* 2. 中间笔记列表 */
+/* ========================================== */
+/* 3. 中间笔记列表                            */
+/* ========================================== */
 .note-list {
-    width: 320px;
-    border-right: 1px solid #EAEAEA;
+    width: 280px;
+    background: var(--nt-bg);
+    border-right: 1px solid var(--nt-border);
     display: flex;
     flex-direction: column;
-    background-color: #FCFCFC;
 }
 
 .list-header {
-    padding: 16px;
-    border-bottom: 1px solid #F0F0F0;
+    padding: 12px;
+    border-bottom: 1px solid var(--nt-border);
 }
 
 .search-box {
     width: 100%;
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: 1px solid #DDD;
-    background: #FFF;
+    padding: 6px 10px;
+    background: #f1f1ef;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 13px;
     outline: none;
+    color: var(--nt-text-main);
 }
 
     .search-box:focus {
-        border-color: #005FB8;
+        background: var(--nt-bg);
+        border-color: #2eaadc;
     }
 
 .list-content {
     flex: 1;
     overflow-y: auto;
+    padding: 8px;
 }
 
+.empty-state {
+    margin: auto;
+    color: #999;
+    font-size: 1.1em;
+    text-align: center;
+    padding: 20px;
+}
+
+/* 极致压缩的卡片样式 */
 .note-card {
-    padding: 16px;
-    border-bottom: 1px solid #F5F5F5;
+    padding: 5px 8px;
+    margin-bottom: 1px;
+    border-radius: 4px;
     cursor: pointer;
-    transition: background-color 0.1s;
 }
 
     .note-card:hover {
-        background-color: #F4F4F4;
+        background: var(--nt-hover);
     }
 
     .note-card.selected {
-        background-color: #FFFFFF;
-        box-shadow: inset 3px 0 0 #005FB8;
+        background: var(--nt-hover-blue);
     }
 
 .note-title {
-    font-weight: 600;
-    font-size: 1em;
-    margin-bottom: 4px;
+    font-size: 13px;
+    font-weight: 400 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--nt-text-main);
+    line-height: 1.5;
 }
 
 .note-summary {
-    font-size: 0.85em;
-    color: #666;
+    font-size: 12px;
+    color: var(--nt-text-gray);
     line-height: 1.4;
     margin-bottom: 8px;
 }
 
 .note-meta {
-    font-size: 0.75em;
-    color: #999;
+    font-size: 11px;
+    color: var(--nt-text-gray);
+    margin-top: 8px;
 }
 
-/* 3. 右侧编辑器区 */
+/* ========================================== */
+/* 4. 右侧编辑器区                            */
+/* ========================================== */
 .editor-area {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background-color: #FFFFFF;
+    background-color: var(--nt-bg);
 }
 
 .editor-header {
-    height: 50px;
     display: flex;
-    justify-content: flex-end;
+    justify-content: flex-end; /* 或者 space-between 根据你的 HTML */
     align-items: center;
-    padding: 0 24px;
+    padding: 12px 36px;
+    height: 50px;
+    font-size: 13px;
+    color: var(--nt-text-gray);
 }
 
 .status-indicator {
@@ -161,56 +228,62 @@
 .icon-btn {
     background: none;
     border: none;
-    font-size: 1.2em;
     cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
     color: #666;
     position: relative;
     z-index: 999;
 }
 
+    .icon-btn:hover {
+        background: var(--nt-hover);
+    }
+
 .editor-body {
     flex: 1;
-    padding: 20px 80px; /* 两侧留白，沉浸式阅读 */
+    padding: 0 80px;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
 }
 
 .document-title {
-    font-size: 2.2em;
+    font-size: 40px;
     font-weight: 700;
-    margin-bottom: 24px;
+    color: var(--nt-text-main);
     border: none;
     outline: none;
+    background: transparent;
+    margin: 30px 0 20px 0;
+    font-family: inherit;
 }
 
+    .document-title::placeholder {
+        color: #dbdbd9;
+    }
+
 .document-content {
+    flex: 1;
+    overflow: hidden;
     font-size: 1.1em;
     line-height: 1.8;
     color: #333;
 }
 
-.empty-state {
-    margin: auto;
-    color: #999;
-    font-size: 1.1em;
-}
-.new-note-btn {
-    background-color: #005FB8;
-    color: white;
-    border: none;
-    padding: 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 500;
-    font-size: 0.95em;
-    margin-bottom: 20px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    transition: background-color 0.2s;
-    position: relative;
-    z-index: 999;
+/* ========================================== */
+/* 5. 滚动条隐形魔法 (保留滑动功能，隐藏实体) */
+/* ========================================== */
+.nav-menu, .list-content {
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
-    .new-note-btn:hover {
-        background-color: #004D96;
+    .nav-menu::-webkit-scrollbar,
+    .list-content::-webkit-scrollbar {
+        display: none;
     }

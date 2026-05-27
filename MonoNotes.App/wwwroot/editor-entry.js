@@ -13,6 +13,9 @@ window.MonoNotesEditor = {
             previewStyle: 'vertical',
             height: '100%',
             hideModeSwitch: true, // 隐藏底部的模式切换，让界面更像 Notion
+            customHTMLSanitizer: html => {
+                return html;
+            },
             events: {
                 change: () => {
                     // 当内容发生改变时，将 Markdown 源码传回给 C#

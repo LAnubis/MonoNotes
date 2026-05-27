@@ -69,6 +69,7 @@
         display: flex;
         flex-direction: column;
     }
+    /* 🌟 修改 1：默认文字颜色改为正文颜色 (--nt-text-main)，不再发暗 */
     .folder-header {
         display: flex;
         align-items: center;
@@ -76,12 +77,20 @@
         margin: 1px 0;
         border-radius: 4px;
         cursor: pointer;
-        color: var(--nt-text-gray);
+        color: var(--nt-text-main);
         font-size: 13px;
         user-select: none;
     }
-    .folder-header:hover { background: var(--nt-hover); }
-    .folder-header.selected { background: var(--nt-hover); color: var(--nt-text-main); font-weight: 500; }
+
+        .folder-header:hover {
+            background: var(--nt-hover);
+        }
+
+        /* 🌟 修改 2：选中时，给一个淡淡的蓝色背景，并稍微加粗字体，效果非常清爽 */
+        .folder-header.selected {
+            background: var(--nt-hover-blue);
+            font-weight: 500;
+        }
 
     .toggle-wrapper {
         width: 16px;
@@ -92,15 +101,26 @@
         margin-right: 4px;
         border-radius: 3px;
     }
-    .toggle-wrapper:hover { background: rgba(55, 53, 47, 0.08); }
+
+        .toggle-wrapper:hover {
+            background: rgba(55, 53, 47, 0.08);
+        }
 
     .toggle-icon {
         font-size: 10px;
         transition: transform 0.15s ease-out;
+        color: var(--nt-text-gray); /* 展开小三角可以保持一点点灰色，避免喧宾夺主 */
     }
-    .toggle-icon.expanded { transform: rotate(90deg); }
 
-    .folder-icon { font-size: 14px; margin-right: 6px; opacity: 0.8; }
+        .toggle-icon.expanded {
+            transform: rotate(90deg);
+        }
+
+    /* 🌟 修改 3：去掉了 opacity: 0.8，让 📁 图标保持系统原本的亮度和清晰度 */
+    .folder-icon {
+        font-size: 14px;
+        margin-right: 6px;
+    }
 
     .folder-name {
         white-space: nowrap;
@@ -108,10 +128,11 @@
         text-overflow: ellipsis;
     }
 
-    /* 子文件夹左侧内边距缩进 */
     .folder-children {
         padding-left: 12px;
         margin-left: 10px;
-        border-left: 1px solid var(--nt-border); /* 细细的辅助线 */
+        border-left: 1px solid var(--nt-border);
     }
+
+
 </style>
