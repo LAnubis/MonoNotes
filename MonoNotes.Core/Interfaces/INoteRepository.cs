@@ -23,5 +23,8 @@ namespace MonoNotes.Core.Interfaces
         Task<string> SaveAssetAsync(byte[] fileData, string extension);
 
         Task DeleteFolderAsync(string folderPath, bool moveNotesToTrash);
+
+        Task RenameTagGlobalAsync(string oldTag, string newTag);
+        Task DeleteTagGlobalAsync(string targetTag);
     }
 }

@@ -299,7 +299,44 @@ namespace MonoNotes.App.Services
             // 3. 物理清场：直接抹除旧文件夹及其内部残留的旧 .md 文件
             Directory.Delete(fullPath, true);
         }
+        // 🌟 全局重命名标签
+        public async Task RenameTagGlobalAsync(string oldTag, string newTag)
+        {
+            if (string.IsNullOrWhiteSpace(oldTag) || string.IsNullOrWhiteSpace(newTag) || oldTag == newTag) return;
 
+            var allNotes = await GetAllNotesAsync();
+
+            // 筛选出包含旧标签的笔记
+            var affectedNotes = allNotes.Where(n => n.Tags != null && n.Tags.Contains(oldTag)).ToList();
+
+            foreach (var bookNote in affectedNotes)
+            {
+                bookNote.Tags.Remove(oldTag);
+                // 防止新旧标签合并时产生重复
+                if (!bookNote.Tags.Contains(newTag))
+                {
+                    bookNote.Tags.Add(newTag);
+                }
+
+                // 将更新后的笔记重新写入物理硬盘
+                await SaveNoteAsync(bookNote);
+            }
+        }
+
+        // 🌟 全局删除标签
+        public async Task DeleteTagGlobalAsync(string targetTag)
+        {
+            if (string.IsNullOrWhiteSpace(targetTag)) return;
+
+            var allNotes = await GetAllNotesAsync();
+            var affectedNotes = allNotes.Where(n => n.Tags != null && n.Tags.Contains(targetTag)).ToList();
+
+            foreach (var bookNote in affectedNotes)
+            {
+                bookNote.Tags.Remove(targetTag);
+                await SaveNoteAsync(bookNote);
+            }
+        }
         // 内部 DTO：专门用来映射 YAML 头部的结构
         private class NoteMetadata
         {

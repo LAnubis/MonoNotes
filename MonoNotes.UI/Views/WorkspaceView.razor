@@ -65,8 +65,9 @@
 
             @if (AllTags.Any())
             {
-                <div style="padding: 16px 16px 8px 16px; font-size: 11px; font-weight: 600; color: #999; margin-top: 8px;">
+                <div style="padding: 16px 16px 8px 16px; font-size: 11px; font-weight: 600; color: #999; display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
                     <span>标签</span>
+                    <button class="icon-btn" style="font-size: 14px; opacity: 0.6; padding: 0 4px;" title="管理标签" @onclick="OpenTagManager" @onclick:stopPropagation="true">⚙️</button>
                 </div>
                 <div style="padding: 0 8px; overflow-y: auto; flex: 1;">
                     @foreach (var tag in AllTags)
@@ -186,8 +187,6 @@
         </div>
     }
 
-
-
     @if (_showNoteContextMenu && _contextMenuNote != null)
     {
         <div class="custom-context-menu" style="left: @(_noteContextMenuX)px; top: @(_noteContextMenuY)px;" @onclick:stopPropagation="true">
@@ -207,9 +206,7 @@
                 <div class="menu-item" @onclick="() => OpenFolderSelector(true)">📄 复制到...</div>
                 <div class="menu-divider"></div>
                 <div class="menu-item" style="color: #ff4d4f;" @onclick="SoftDeleteNoteContext">🗑️ 移至回收站</div>
-                
             }
-          
         </div>
     }
 
@@ -300,6 +297,76 @@
             </div>
         </div>
     }
+
+    @if (_showTagManagerDialog)
+    {
+        <div class="modal-overlay" @onclick="() => _showTagManagerDialog = false">
+            <div class="modal-content" style="width: 420px;" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <span style="font-weight: 600;">⚙️ 标签管理</span>
+                    <button class="icon-btn" @onclick="() => _showTagManagerDialog = false">×</button>
+                </div>
+                <div class="modal-body" style="padding: 16px; max-height: 400px; overflow-y: auto;">
+                    @if (_allUniqueTags.Count == 0)
+                    {
+                        <p style="color: var(--nt-text-gray); text-align: center; margin: 20px 0;">目前没有任何标签</p>
+                    }
+                    else
+                    {
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            @foreach (var tag in _allUniqueTags)
+                            {
+                                <li style="display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; border-bottom: 1px solid var(--nt-border);">
+                                    @if (_editingTag == tag)
+                                    {
+                                        <input @bind="_newTagName" style="flex: 1; margin-right: 12px; padding: 4px 8px; border: 1px solid #2eaadc; border-radius: 4px; outline: none;" placeholder="输入新标签名" />
+                                        <div style="display: flex; gap: 8px;">
+                                            <button class="btn-primary" style="padding: 4px 12px; font-size: 12px; border: none; border-radius: 4px; background: #2eaadc; color: white; cursor: pointer;" @onclick="ConfirmRenameTag">保存</button>
+                                            <button class="btn-cancel" style="padding: 4px 12px; font-size: 12px; border: 1px solid var(--nt-border); border-radius: 4px; background: transparent; cursor: pointer;" @onclick="CancelEditTag">取消</button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span style="color: var(--nt-text-main); font-size: 14px;">
+                                            <span style="color: var(--nt-text-gray); margin-right: 4px;">#</span>@tag
+                                        </span>
+                                        <div style="display: flex; gap: 8px;">
+                                            <button class="icon-btn" style="cursor: pointer; opacity: 0.6;" title="重命名" @onclick="() => StartEditTag(tag)">✏️</button>
+                                            <button class="icon-btn" style="color: #ff4d4f; cursor: pointer; opacity: 0.8;" title="全局删除" @onclick="() => ConfirmDeleteTag(tag)">🗑️</button>
+                                        </div>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_showTagDeleteConfirm)
+    {
+        <div class="modal-overlay" @onclick="() => _showTagDeleteConfirm = false">
+            <div class="modal-content" style="width: 340px;" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <span style="font-weight: 600; color: #ff4d4f;">⚠️ 删除标签</span>
+                    <button class="icon-btn" @onclick="() => _showTagDeleteConfirm = false">×</button>
+                </div>
+                <div class="modal-body" style="padding: 20px 16px;">
+                    <p style="margin: 0 0 12px 0; font-size: 14px; color: var(--nt-text-main);">
+                        确定要全局删除标签 <strong>#@_tagToDelete</strong> 吗？
+                    </p>
+                    <p style="margin: 0; font-size: 13px; color: var(--nt-text-gray);">
+                        这会从所有关联的笔记中移除该标签，但不会删除笔记内容本身。
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-cancel" style="background: transparent; border: 1px solid var(--nt-border); padding: 6px 16px; border-radius: 4px;" @onclick="() => _showTagDeleteConfirm = false">取消</button>
+                    <button class="btn-primary" style="background: #ff4d4f; color: white; border: none; padding: 6px 16px; border-radius: 4px;" @onclick="ExecuteDeleteTag">确认删除</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -323,7 +390,6 @@
     private string _folderInputValue = string.Empty;
     private string _folderInputPlaceholder = string.Empty;
     private int _folderActionType = 0; // 0:主文件夹, 1:子文件夹, 2:重命名
-
 
     // === 🌟 标签系统状态 ===
     private string _selectedTag = string.Empty;
@@ -354,6 +420,16 @@
     private bool _showWarningDialog = false;
     private string _warningMessage = string.Empty;
 
+    // === 🌟 核心修改 3：标签管理状态与逻辑 ===
+    private bool _showTagManagerDialog = false;
+    private List<string> _allUniqueTags = new();
+    private string _editingTag = string.Empty;
+    private string _newTagName = string.Empty;
+
+    // === 在标签管理状态下，新增删除确认相关的变量 ===
+    private bool _showTagDeleteConfirm = false;
+    private string _tagToDelete = string.Empty;
+
     private void ShowTrash()
     {
         _isTrashFilterActive = true;
@@ -365,10 +441,9 @@
         StateHasChanged(); // 强制刷新 UI
     }
 
-    // ⚠️ 注意：请在其他的 ShowFavorites()、ShowArchives()、OnFolderSelectedHandler()、SelectTag() 方法中，都加上一行 _isTrashFilterActive = false; 确保互斥！
     // 动态计算系统中所有的唯一标签，并按字母排序
     private List<string> AllTags => Notes
-        .Where(n => n.Tags != null)
+      .Where(n => !n.IsDeleted && n.Tags != null)
         .SelectMany(n => n.Tags)
         .Distinct()
         .OrderBy(t => t)
@@ -384,6 +459,7 @@
         _selectedTag = string.Empty;
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
+
     private void ShowArchives()
     {
         _isArchiveFilterActive = true;
@@ -393,6 +469,7 @@
         _selectedTag = string.Empty;
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
+
     private void OnFolderSelectedHandler(string path)
     {
         _isFavoriteFilterActive = false; // 切换时取消收藏视图
@@ -402,6 +479,7 @@
         _selectedTag = string.Empty; // 🌟 核心：选中文件夹时，清空标签过滤
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
+
     // 🌟 新增：点击标签时的处理逻辑
     private void SelectTag(string tag)
     {
@@ -420,6 +498,7 @@
         }
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
+
     // 🌟 处理子组件传来的右键事件
     private void HandleTreeContextMenu((Microsoft.AspNetCore.Components.Web.MouseEventArgs e, FolderTree.FolderNode node) args)
     {
@@ -432,7 +511,7 @@
     private void CloseContextMenu()
     {
         _showContextMenu = false;
-        _showNoteContextMenu = false; // 新增
+        _showNoteContextMenu = false;
     }
 
     // 🌟 三种模式的输入框唤起方法
@@ -468,7 +547,6 @@
         if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_folderInputValue))
         {
             var val = _folderInputValue.Trim();
-
             if (_folderActionType == 0)
             {
                 await NoteRepository.CreateFolderAsync("", val);
@@ -541,6 +619,7 @@
     private void BuildFolderTree(List<string> rawPaths)
     {
         _folderTree.Clear();
+
         foreach (var path in rawPaths)
         {
             var parts = path.Split('/');
@@ -596,7 +675,6 @@
         get
         {
             IEnumerable<MonoNote> result = Notes;
-
             if (_isTrashFilterActive)
             {
                 result = result.Where(n => n.IsDeleted);
@@ -605,6 +683,7 @@
             {
                 // 🌟 常规视图，绝对不能显示已删除的笔记
                 result = result.Where(n => !n.IsDeleted);
+
                 // 🌟 核心拦截 1：如果处于“归档视图”，只显示已归档的笔记
                 if (_isArchiveFilterActive)
                 {
@@ -630,7 +709,6 @@
                     }
                 }
             }
-           
 
             // 搜索过滤（全局生效）
             if (!string.IsNullOrWhiteSpace(_searchQuery))
@@ -709,7 +787,6 @@
         {
             var tag = _newTagInput.Trim().TrimStart('#'); // 去掉用户可能多输入的 #
             SelectedNote.Tags ??= new List<string>();
-
             if (!SelectedNote.Tags.Contains(tag))
             {
                 SelectedNote.Tags.Add(tag);
@@ -793,8 +870,6 @@
         else
         {
             // 🌟 移动逻辑
-            // 【注意】如果你底层是写死的 IO，这里可能需要调用专门的 MoveNoteAsync 删除老物理文件。
-            // 只要底层仓储处理好了，这里只需改内存即可。
             _contextMenuNote.Folder = _targetFolder;
             await NoteRepository.SaveNoteAsync(_contextMenuNote);
         }
@@ -850,7 +925,6 @@
             await NoteRepository.DeleteNoteAsync(_contextMenuNote.Id);
             // 从内存列表中彻底抹除
             Notes.Remove(_contextMenuNote);
-
             if (SelectedNoteId == _contextMenuNote.Id) SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
             StateHasChanged();
         }
@@ -930,9 +1004,101 @@
         _showFolderDeleteConfirm = false;
         StateHasChanged();
     }
+
     // === 🌟 辅助刷新方法（解决 CS0103 RefreshSelection 不存在的问题） ===
     private void RefreshSelection()
     {
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+    }
+
+    // === 🌟 核心修改 4：标签管理逻辑实现 ===
+    private void OpenTagManager()
+    {
+        // 从当前内存中所有未删除的笔记中，实时提取唯一的标签列表
+        _allUniqueTags = Notes
+            .Where(n => !n.IsDeleted && n.Tags != null)
+            .SelectMany(n => n.Tags)
+            .Distinct()
+            .OrderBy(t => t)
+            .ToList();
+
+        _showTagManagerDialog = true;
+        CancelEditTag();
+    }
+
+    private void StartEditTag(string tag)
+    {
+        _editingTag = tag;
+        _newTagName = tag;
+    }
+
+    private void CancelEditTag()
+    {
+        _editingTag = string.Empty;
+        _newTagName = string.Empty;
+    }
+
+    private async Task ConfirmRenameTag()
+    {
+        if (string.IsNullOrWhiteSpace(_newTagName) || _newTagName == _editingTag)
+        {
+            CancelEditTag();
+            return;
+        }
+
+        // 1. 调用仓储层更新物理文件
+        await NoteRepository.RenameTagGlobalAsync(_editingTag, _newTagName);
+
+        // 2. 更新内存数据，保证左侧菜单和当前编辑器瞬间同步
+        foreach (var bookNote in Notes.Where(n => n.Tags != null && n.Tags.Contains(_editingTag)))
+        {
+            bookNote.Tags.Remove(_editingTag);
+            if (!bookNote.Tags.Contains(_newTagName))
+            {
+                bookNote.Tags.Add(_newTagName);
+            }
+        }
+
+        // 3. 刷新弹窗内部的标签列表，并退出编辑状态
+        _allUniqueTags = _allUniqueTags.Select(t => t == _editingTag ? _newTagName : t).Distinct().OrderBy(t => t).ToList();
+        CancelEditTag();
+        StateHasChanged();
+    }
+
+    private void ConfirmDeleteTag(string tag)
+    {
+        _tagToDelete = tag;
+        _showTagDeleteConfirm = true;
+    }
+
+    // 🌟 核心修改：用户在弹窗中点击“确认删除”后，实际执行的方法
+    private async Task ExecuteDeleteTag()
+    {
+        if (string.IsNullOrWhiteSpace(_tagToDelete)) return;
+
+        string tag = _tagToDelete;
+
+        // 1. 调用仓储层物理删除
+        await NoteRepository.DeleteTagGlobalAsync(tag);
+
+        // 2. 清理内存中关联该标签的数据
+        foreach (var bookNote in Notes.Where(n => n.Tags != null && n.Tags.Contains(tag)))
+        {
+            bookNote.Tags.Remove(tag);
+        }
+
+        // 3. 移出列表
+        _allUniqueTags.Remove(tag);
+
+        // 4. 如果删除的刚好是左侧正在被筛选的标签，清空筛选条件
+        if (_selectedTag == tag)
+        {
+            _selectedTag = string.Empty;
+        }
+
+        // 5. 关掉弹窗，重置状态
+        _showTagDeleteConfirm = false;
+        _tagToDelete = string.Empty;
+        StateHasChanged();
     }
 }
