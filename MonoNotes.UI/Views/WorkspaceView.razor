@@ -22,18 +22,18 @@
                          style="padding: 4px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-main);"
                          @onclick="ShowFavorites">
                         <span style="margin-right: 8px;">⭐</span>
-                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">我的收藏</span>
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">收藏</span>
                     </div>
 
                     <div class="nav-item @(_isArchiveFilterActive ? "active" : "")"
-                         style="padding: 4px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-main); margin-top: 10px;"
+                         style="padding: 4px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-main); margin-top: 6px;"
                          @onclick="ShowArchives">
                         <span style="margin-right: 8px;">🗄️</span>
                         <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">归档</span>
                     </div>
 
                     <div class="nav-item @(_isTrashFilterActive ? "active" : "")"
-                         style="padding: 4px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-main); margin-top: 10px;"
+                         style="padding: 4px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-main); margin-top: 6px;"
                          @onclick="ShowTrash">
                         <span style="margin-right: 8px;">🗑️</span>
                         <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">回收站</span>
