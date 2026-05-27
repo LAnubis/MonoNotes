@@ -161,6 +161,26 @@ namespace MonoNotes.App.Services
             // 返回完成状态
             await Task.CompletedTask;
         }
+
+        public async Task RenameFolderAsync(string oldFolderPath, string newFolderName)
+        {
+            // 保护机制：不允许重命名根目录或未分类
+            if (string.IsNullOrWhiteSpace(oldFolderPath) || oldFolderPath == "notes") return;
+
+            var oldFullPath = Path.Combine(_storageDirectory, oldFolderPath);
+            var parentPath = Path.GetDirectoryName(oldFullPath);
+            if (parentPath == null) return;
+
+            var newFullPath = Path.Combine(parentPath, newFolderName);
+
+            // 在物理硬盘上真实地移动（重命名）文件夹
+            if (Directory.Exists(oldFullPath) && !Directory.Exists(newFullPath))
+            {
+                Directory.Move(oldFullPath, newFullPath);
+            }
+
+            await Task.CompletedTask;
+        }
         // 内部 DTO：专门用来映射 YAML 头部的结构
         private class NoteMetadata
         {

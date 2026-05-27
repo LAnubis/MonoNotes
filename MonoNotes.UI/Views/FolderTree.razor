@@ -1,9 +1,13 @@
-﻿<div class="folder-tree">
+﻿@using Microsoft.AspNetCore.Components.Web
+
+<div class="folder-tree">
     @foreach (var node in Nodes)
     {
         <div class="folder-item">
             <div class="folder-header @(node.FullPath == SelectedFolder ? "selected" : "")"
-                 @onclick="() => OnFolderClick(node)">
+                 @onclick="() => OnFolderClick(node)"
+                 @oncontextmenu="(e) => OnFolderRightClick(e, node)"
+                 @oncontextmenu:preventDefault="true">
 
                 <div class="toggle-wrapper" @onclick:stopPropagation="true" @onclick="() => ToggleNode(node)">
                     @if (node.Children.Any())
@@ -12,7 +16,10 @@
                     }
                 </div>
 
-                <span class="folder-icon">📁</span>
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" class="folder-icon">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+
                 <span class="folder-name">@node.Name</span>
             </div>
 
@@ -21,7 +28,8 @@
                 <div class="folder-children">
                     <FolderTree Nodes="node.Children"
                                 SelectedFolder="@SelectedFolder"
-                                OnFolderSelected="OnFolderSelected" />
+                                OnFolderSelected="OnFolderSelected"
+                                OnContextMenu="OnContextMenu" />
                 </div>
             }
         </div>
@@ -33,6 +41,9 @@
     [Parameter] public string SelectedFolder { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> OnFolderSelected { get; set; }
 
+    // 🌟 新增：对外暴露的右键事件
+    [Parameter] public EventCallback<(MouseEventArgs, FolderNode)> OnContextMenu { get; set; }
+
     private void ToggleNode(FolderNode node)
     {
         if (node.Children.Any())
@@ -43,17 +54,22 @@
 
     private async Task OnFolderClick(FolderNode node)
     {
-        // 如果点击的是没有子文件夹的节点，或者点击节点本体，触发选中事件
         await OnFolderSelected.InvokeAsync(node.FullPath);
-
-        // 可选体验优化：点击文件夹本体时，也顺便展开它
         if (node.Children.Any() && !node.IsExpanded)
         {
             node.IsExpanded = true;
         }
     }
 
-    // 内部使用的数据结构
+    // 🌟 处理右键点击
+    private async Task OnFolderRightClick(MouseEventArgs e, FolderNode node)
+    {
+        if (OnContextMenu.HasDelegate)
+        {
+            await OnContextMenu.InvokeAsync((e, node));
+        }
+    }
+
     public class FolderNode
     {
         public string Name { get; set; } = string.Empty;
@@ -62,77 +78,3 @@
         public List<FolderNode> Children { get; set; } = new();
     }
 }
-
-<style>
-    /* 极致 Notion 风格的文件夹样式 */
-    .folder-tree {
-        display: flex;
-        flex-direction: column;
-    }
-    /* 🌟 修改 1：默认文字颜色改为正文颜色 (--nt-text-main)，不再发暗 */
-    .folder-header {
-        display: flex;
-        align-items: center;
-        padding: 4px 8px;
-        margin: 1px 0;
-        border-radius: 4px;
-        cursor: pointer;
-        color: var(--nt-text-main);
-        font-size: 13px;
-        user-select: none;
-    }
-
-        .folder-header:hover {
-            background: var(--nt-hover);
-        }
-
-        /* 🌟 修改 2：选中时，给一个淡淡的蓝色背景，并稍微加粗字体，效果非常清爽 */
-        .folder-header.selected {
-            background: var(--nt-hover-blue);
-            font-weight: 500;
-        }
-
-    .toggle-wrapper {
-        width: 16px;
-        height: 16px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-right: 4px;
-        border-radius: 3px;
-    }
-
-        .toggle-wrapper:hover {
-            background: rgba(55, 53, 47, 0.08);
-        }
-
-    .toggle-icon {
-        font-size: 10px;
-        transition: transform 0.15s ease-out;
-        color: var(--nt-text-gray); /* 展开小三角可以保持一点点灰色，避免喧宾夺主 */
-    }
-
-        .toggle-icon.expanded {
-            transform: rotate(90deg);
-        }
-
-    /* 🌟 修改 3：去掉了 opacity: 0.8，让 📁 图标保持系统原本的亮度和清晰度 */
-    .folder-icon {
-        font-size: 14px;
-        margin-right: 6px;
-    }
-
-    .folder-name {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .folder-children {
-        padding-left: 12px;
-        margin-left: 10px;
-        border-left: 1px solid var(--nt-border);
-    }
-
-
-</style>

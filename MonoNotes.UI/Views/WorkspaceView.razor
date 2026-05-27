@@ -4,7 +4,7 @@
 @inject INoteRepository NoteRepository
 @implements IDisposable
 
-<div class="notion-workspace">
+<div class="notion-workspace" @onclick="CloseContextMenu">
     <aside class="sidebar">
         <div class="workspace-switcher">
             <span class="icon">📝</span>
@@ -14,26 +14,39 @@
         <div class="nav-menu">
             <div style="padding: 0 16px 8px 16px; font-size: 11px; font-weight: 600; color: #999; display: flex; justify-content: space-between; align-items: center;">
                 <span>文件夹</span>
-
-                @if (GetCurrentFolderDepth() < 4)
-                {
-                    <button class="icon-btn" title="新建子文件夹" @onclick="ShowNewFolderInput" style="padding: 0 4px; font-size: 12px;">➕</button>
-                }
+                <button class="icon-btn" title="新建主文件夹" @onclick="ShowNewMainFolderInput" @onclick:stopPropagation="true" style="padding: 0 4px; font-size: 12px;">➕</button>
             </div>
 
-            @if (_isCreatingFolder)
+            @if (_showFolderInput)
             {
-                <div style="padding: 0 16px 8px 16px;">
-                    <input type="text" class="search-box" placeholder="输入名称并回车..."
-                           @bind="_newFolderName" @bind:event="oninput" @onkeyup="HandleNewFolderKey" />
+                <div style="padding: 0 16px 8px 16px;" @onclick:stopPropagation="true">
+                    <input type="text" class="search-box" placeholder="@_folderInputPlaceholder"
+                           @bind="_folderInputValue" @bind:event="oninput" @onkeyup="HandleFolderInputKey" />
                 </div>
             }
 
             <div style="padding: 0 8px;">
                 <FolderTree Nodes="_folderTree"
                             SelectedFolder="@_selectedFolderPath"
-                            OnFolderSelected="OnFolderSelectedHandler" />
+                            OnFolderSelected="OnFolderSelectedHandler"
+                            OnContextMenu="HandleTreeContextMenu" />
             </div>
+
+            @if (AllTags.Any())
+            {
+                <div style="padding: 16px 16px 8px 16px; font-size: 11px; font-weight: 600; color: #999; margin-top: 8px;">
+                    <span>标签</span>
+                </div>
+                <div style="padding: 0 8px; overflow-y: auto; flex: 1;">
+                    @foreach (var tag in AllTags)
+                    {
+                        <div class="nav-item @(tag == _selectedTag ? "active" : "")" @onclick="() => SelectTag(tag)">
+                            <span style="margin-right: 8px; color: #888;">#</span>
+                            <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@tag</span>
+                        </div>
+                    }
+                </div>
+            }
         </div>
 
         <button class="new-note-btn" @onclick="CreateNewNote">
@@ -52,6 +65,12 @@
             {
                 <div class="note-card @(note.Id == SelectedNoteId ? "selected" : "")"
                      @onclick="() => SelectNote(note.Id)">
+
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" class="file-icon">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+
                     <div class="note-title">@(string.IsNullOrWhiteSpace(note.Title) ? "无标题" : note.Title)</div>
                 </div>
             }
@@ -77,6 +96,21 @@
                 <input class="document-title" placeholder="无标题"
                        @bind="SelectedNote.Title" @bind:event="oninput" @onkeyup="OnNoteChanged" />
 
+                <div class="note-tags-editor">
+                    @if (SelectedNote.Tags != null)
+                    {
+                        @foreach (var tag in SelectedNote.Tags)
+                        {
+                            <span class="tag-pill">
+                                <span>@tag</span>
+                                <button class="tag-remove-btn" @onclick="() => RemoveTag(tag)">×</button>
+                            </span>
+                        }
+                    }
+                    <input type="text" class="tag-input" placeholder="输入标签并回车..."
+                           @bind="_newTagInput" @bind:event="oninput" @onkeyup="HandleTagInputKey" />
+                </div>
+
                 <div class="document-content">
                     <MarkdownEditor Content="@SelectedNote.Content"
                                     ContentChanged="@((newContent) => { SelectedNote.Content = newContent; OnNoteChanged(); })" />
@@ -84,14 +118,26 @@
             </div>
         }
     </main>
+
+    @if (_showContextMenu && _contextMenuTarget != null)
+    {
+        <div class="custom-context-menu" style="left: @(_contextMenuX)px; top: @(_contextMenuY)px;" @onclick:stopPropagation="true">
+            <div class="menu-item" @onclick="CreateNoteInContextFolder">📄 在此新建笔记</div>
+
+            @if (_contextMenuTarget.FullPath != "notes")
+            {
+                <div class="menu-divider"></div>
+                @if (GetCurrentFolderDepth(_contextMenuTarget.FullPath) < 4)
+                {
+                    <div class="menu-item" @onclick="ShowNewSubFolderInput">📁 新建子文件夹</div>
+                }
+                <div class="menu-item" @onclick="ShowRenameFolderInput">✏️ 重命名</div>
+            }
+        </div>
+    }
 </div>
 
-<style>
-   
-</style>
-
 @code {
-    // === C# 代码部分完全保持你上一版成功的逻辑不变 ===
     private List<MonoNote> Notes = new();
     private string SelectedNoteId = string.Empty;
     private string _searchQuery = string.Empty;
@@ -99,56 +145,175 @@
     private MonoNote? SelectedNote => Notes.FirstOrDefault(n => n.Id == SelectedNoteId);
 
     private List<FolderTree.FolderNode> _folderTree = new();
-    private string _selectedFolderPath = "notes"; // 默认选中根目录
+    private string _selectedFolderPath = "notes";
 
-    // 新建文件夹相关的状态
-    private bool _isCreatingFolder = false;
-    private string _newFolderName = string.Empty;
-   
-    // 监听文件夹点击事件
+    // === 🌟 右键菜单状态 ===
+    private bool _showContextMenu = false;
+    private double _contextMenuX = 0;
+    private double _contextMenuY = 0;
+    private FolderTree.FolderNode? _contextMenuTarget;
+
+    // === 🌟 统一输入框状态 ===
+    private bool _showFolderInput = false;
+    private string _folderInputValue = string.Empty;
+    private string _folderInputPlaceholder = string.Empty;
+    private int _folderActionType = 0; // 0:主文件夹, 1:子文件夹, 2:重命名
+
+
+    // === 🌟 标签系统状态 ===
+    private string _selectedTag = string.Empty;
+    private string _newTagInput = string.Empty;
+
+
+    // 动态计算系统中所有的唯一标签，并按字母排序
+    private List<string> AllTags => Notes
+        .Where(n => n.Tags != null)
+        .SelectMany(n => n.Tags)
+        .Distinct()
+        .OrderBy(t => t)
+        .ToList();
+
     private void OnFolderSelectedHandler(string path)
     {
         _selectedFolderPath = path;
-        // 选中文件夹后，默认选中该文件夹下的第一篇笔记
+        _selectedTag = string.Empty; // 🌟 核心：选中文件夹时，清空标签过滤
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
-    // 显示输入框
-    private void ShowNewFolderInput()
+    // 🌟 新增：点击标签时的处理逻辑
+    private void SelectTag(string tag)
     {
-        _isCreatingFolder = true;
-        _newFolderName = string.Empty;
+        if (_selectedTag == tag)
+        {
+            _selectedTag = string.Empty; // 再次点击取消选中
+            _selectedFolderPath = "notes"; // 默认回到未分类
+        }
+        else
+        {
+            _selectedTag = tag;
+            _selectedFolderPath = string.Empty; // 🌟 核心：开启全局标签搜索，无视文件夹
+        }
+        SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+    }
+    // 🌟 处理子组件传来的右键事件
+    private void HandleTreeContextMenu((Microsoft.AspNetCore.Components.Web.MouseEventArgs e, FolderTree.FolderNode node) args)
+    {
+        _contextMenuTarget = args.node;
+        _contextMenuX = args.e.ClientX;
+        _contextMenuY = args.e.ClientY;
+        _showContextMenu = true;
     }
 
-    // 处理输入框的回车和取消
-    private async Task HandleNewFolderKey(KeyboardEventArgs e)
+    private void CloseContextMenu()
     {
-        // 按回车且名字不为空时，创建文件夹
-        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_newFolderName))
+        _showContextMenu = false;
+    }
+
+    // 🌟 三种模式的输入框唤起方法
+    private void ShowNewMainFolderInput()
+    {
+        CloseContextMenu();
+        _folderActionType = 0;
+        _folderInputPlaceholder = "新建主文件夹...";
+        _folderInputValue = string.Empty;
+        _showFolderInput = true;
+    }
+
+    private void ShowNewSubFolderInput()
+    {
+        _folderActionType = 1;
+        _folderInputPlaceholder = $"在 {_contextMenuTarget?.Name} 下新建...";
+        _folderInputValue = string.Empty;
+        _showFolderInput = true;
+        CloseContextMenu();
+    }
+
+    private void ShowRenameFolderInput()
+    {
+        _folderActionType = 2;
+        _folderInputPlaceholder = $"重命名 {_contextMenuTarget?.Name}...";
+        _folderInputValue = _contextMenuTarget?.Name ?? "";
+        _showFolderInput = true;
+        CloseContextMenu();
+    }
+
+    private async Task HandleFolderInputKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_folderInputValue))
         {
-            await NoteRepository.CreateFolderAsync(_selectedFolderPath, _newFolderName.Trim());
+            var val = _folderInputValue.Trim();
 
-            // 隐藏输入框，清空名称
-            _isCreatingFolder = false;
-            _newFolderName = string.Empty;
+            if (_folderActionType == 0)
+            {
+                await NoteRepository.CreateFolderAsync("", val);
+            }
+            else if (_folderActionType == 1 && _contextMenuTarget != null)
+            {
+                await NoteRepository.CreateFolderAsync(_contextMenuTarget.FullPath, val);
+            }
+            else if (_folderActionType == 2 && _contextMenuTarget != null)
+            {
+                await NoteRepository.RenameFolderAsync(_contextMenuTarget.FullPath, val);
+            }
 
-            // 🌟 核心：重新从底层拉取最新的文件夹结构，并重建树状菜单
+            _showFolderInput = false;
+
+            // 🌟 修复 1：重新拉取最新的文件夹结构并构建树
             var rawFolders = await NoteRepository.GetAllFoldersAsync();
             BuildFolderTree(rawFolders);
 
+            // 🌟 修复 2：重新拉取所有笔记！(确保内存中的 Note.Folder 属性是最新的)
+            Notes = await NoteRepository.GetAllNotesAsync();
+
+            // 🌟 修复 3：如果是重命名，自动计算新路径，并让左侧菜单重新选中它
+            if (_folderActionType == 2 && _contextMenuTarget != null)
+            {
+                // 计算父级路径
+                var parentPath = _contextMenuTarget.FullPath.Contains('/')
+                    ? _contextMenuTarget.FullPath.Substring(0, _contextMenuTarget.FullPath.LastIndexOf('/'))
+                    : "";
+
+                // 拼接出重命名后的新路径
+                _selectedFolderPath = string.IsNullOrEmpty(parentPath) ? val : $"{parentPath}/{val}";
+
+                // 默认选中该文件夹下的第一篇笔记
+                SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+            }
+
             StateHasChanged();
         }
-        // 按 Esc 键取消新建
         else if (e.Key == "Escape")
         {
-            _isCreatingFolder = false;
-            _newFolderName = string.Empty;
+            _showFolderInput = false;
         }
     }
-    // 🌟 核心算法：将平级的路径列表转化为树状结构
+
+    // 🌟 在当前右键目标文件夹中新建笔记
+    private async Task CreateNoteInContextFolder()
+    {
+        if (_contextMenuTarget == null) return;
+
+        var newNote = new MonoNote
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Title = "",
+            Content = "",
+            UpdatedAt = DateTimeOffset.Now,
+            Folder = _contextMenuTarget.FullPath
+        };
+
+        Notes.Insert(0, newNote);
+        SelectedNoteId = newNote.Id;
+        _selectedFolderPath = _contextMenuTarget.FullPath; // 界面焦点自动跳过去
+        await NoteRepository.SaveNoteAsync(newNote);
+
+        CloseContextMenu();
+        StateHasChanged();
+    }
+
+    // 🌟 树状结构构建算法
     private void BuildFolderTree(List<string> rawPaths)
     {
         _folderTree.Clear();
-
         foreach (var path in rawPaths)
         {
             var parts = path.Split('/');
@@ -160,7 +325,6 @@
                 var part = parts[i];
                 currentFullPath = string.IsNullOrEmpty(currentFullPath) ? part : $"{currentFullPath}/{part}";
 
-
                 var existingNode = currentLevel.FirstOrDefault(n => n.FullPath == currentFullPath);
                 if (existingNode == null)
                 {
@@ -168,15 +332,20 @@
                     {
                         Name = currentFullPath == "notes" ? "未分类" : part,
                         FullPath = currentFullPath,
-
-                        // 🌟 核心修改：i=0 是第一级，i=1 是第二级。只有前两级才默认展开，第三四级默认折叠！
-                        IsExpanded = i < 2
+                        // 🌟 只展开第一级 (i == 0)
+                        IsExpanded = i == 0
                     };
                     currentLevel.Add(existingNode);
                 }
                 currentLevel = existingNode.Children;
             }
         }
+
+        // 🌟 重新排序：让未分类永远在第一位
+        _folderTree = _folderTree
+            .OrderByDescending(n => n.FullPath == "notes")
+            .ThenBy(n => n.Name)
+            .ToList();
     }
 
     private Timer _autoSaveTimer = new Timer(1000) { AutoReset = false };
@@ -184,33 +353,36 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // 1. 获取所有笔记和所有文件夹路径
         Notes = await NoteRepository.GetAllNotesAsync();
         var rawFolders = await NoteRepository.GetAllFoldersAsync();
 
-        // 2. 构建左侧树
         BuildFolderTree(rawFolders);
 
-        // 3. 选中默认笔记
         if (FilteredNotes.Any()) SelectedNoteId = FilteredNotes.First().Id;
         else await CreateNewNote();
 
         _autoSaveTimer.Elapsed += async (sender, e) => await PerformSaveAsync();
     }
-    // 更新过滤逻辑：根据选中的文件夹来过滤笔记
+
     private IEnumerable<MonoNote> FilteredNotes
     {
         get
         {
             IEnumerable<MonoNote> result = Notes;
 
-            // 按选中的文件夹过滤
+            // 按文件夹过滤
             if (!string.IsNullOrEmpty(_selectedFolderPath))
             {
                 result = result.Where(n => n.Folder == _selectedFolderPath);
             }
 
-            // 搜索过滤保持不变
+            // 🌟 新增：按选中标签全局过滤
+            if (!string.IsNullOrEmpty(_selectedTag))
+            {
+                result = result.Where(n => n.Tags != null && n.Tags.Contains(_selectedTag));
+            }
+
+            // 按搜索词过滤
             if (!string.IsNullOrWhiteSpace(_searchQuery))
             {
                 var query = _searchQuery.ToLower().Trim();
@@ -219,20 +391,18 @@
             return result;
         }
     }
+
     private async Task CreateNewNote()
     {
-        // 🌟 获取当前选中的文件夹，如果没有选中，则默认放到 "notes"
         var targetFolder = string.IsNullOrWhiteSpace(_selectedFolderPath) ? "notes" : _selectedFolderPath;
-
         var newNote = new MonoNote
         {
             Id = Guid.NewGuid().ToString("N"),
             Title = "",
             Content = "",
             UpdatedAt = DateTimeOffset.Now,
-            Folder = targetFolder // 🌟 核心修复：把当前选中的文件夹路径赋给新笔记
+            Folder = targetFolder
         };
-
         Notes.Insert(0, newNote);
         SelectedNoteId = newNote.Id;
         await NoteRepository.SaveNoteAsync(newNote);
@@ -251,6 +421,7 @@
     }
 
     private void SelectNote(string id) { SelectedNoteId = id; _saveStatus = "已保存"; }
+
     private void SwitchNav(string navType) { _currentNav = navType; SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty; }
 
     private void OnNoteChanged()
@@ -272,11 +443,36 @@
 
     public void Dispose() { _autoSaveTimer.Dispose(); }
 
-    // 🌟 计算当前选中文件夹的层级深度
-    private int GetCurrentFolderDepth()
+    private int GetCurrentFolderDepth(string path)
     {
-        if (string.IsNullOrWhiteSpace(_selectedFolderPath)) return 1;
-        return _selectedFolderPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Length;
+        if (string.IsNullOrWhiteSpace(path)) return 1;
+        return path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Length;
     }
 
+    // 🌟 新增：处理标签输入
+    private async Task HandleTagInputKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_newTagInput) && SelectedNote != null)
+        {
+            var tag = _newTagInput.Trim().TrimStart('#'); // 去掉用户可能多输入的 #
+            SelectedNote.Tags ??= new List<string>();
+
+            if (!SelectedNote.Tags.Contains(tag))
+            {
+                SelectedNote.Tags.Add(tag);
+                await PerformSaveAsync(); // 立即保存到物理文件
+            }
+            _newTagInput = string.Empty;
+        }
+    }
+
+    // 🌟 新增：删除标签
+    private async Task RemoveTag(string tag)
+    {
+        if (SelectedNote != null && SelectedNote.Tags != null)
+        {
+            SelectedNote.Tags.Remove(tag);
+            await PerformSaveAsync();
+        }
+    }
 }

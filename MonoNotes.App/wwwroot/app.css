@@ -43,3 +43,67 @@ input:focus, button:focus {
         z-index: 1;
     }
 }
+/* ========================================== */
+/* 4. Vditor 沉浸式无边框改造                 */
+/* ========================================== */
+
+/* 去除整体边框和背景，启用弹性布局 */
+.vditor {
+    border: none !important;
+    background-color: transparent !important;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 锁定中间层的高度，防止它被文本无限撑开导致被外层裁剪 */
+.vditor-content {
+    border: none !important;
+    background-color: transparent !important;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden !important;
+}
+
+/* 🌟 核心修复：开启文本核心层的独立滚动条！ */
+.vditor-ir {
+    border: none !important;
+    background-color: transparent !important;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow-y: auto !important; /* 这行魔法代码让文本区可以无限制向下滚动 */
+}
+
+/* --- 下面的工具栏、输入区等代码保持不变 --- */
+
+/* 改造工具栏，去掉下划线和背景 */
+.vditor-toolbar {
+    border-bottom: 1px solid var(--nt-border) !important;
+    background-color: var(--nt-bg) !important;
+    padding: 0 16px !important;
+}
+
+/* 统一输入区的字体 */
+.vditor-ir pre.vditor-reset {
+    background-color: transparent !important;
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 10px 0 40px 0 !important;
+    font-size: 16px !important;
+    line-height: 1.7 !important;
+    font-family: var(--nt-font) !important;
+    color: var(--nt-text-main) !important;
+}
+
+/* 优化表格样式 */
+.vditor-reset table {
+    border-collapse: collapse !important;
+    font-size: 14px !important;
+}
+
+    .vditor-reset table th {
+        background-color: var(--nt-sidebar) !important;
+        color: var(--nt-text-gray) !important;
+    }

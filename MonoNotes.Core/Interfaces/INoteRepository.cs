@@ -16,5 +16,8 @@ namespace MonoNotes.Core.Interfaces
         Task<List<string>> GetAllFoldersAsync();
         // 🌟 新增：在指定的父文件夹下创建一个新文件夹
         Task CreateFolderAsync(string parentFolderPath, string newFolderName);
+
+        // 新增：重命名物理文件夹
+        Task RenameFolderAsync(string oldFolderPath, string newFolderName);
     }
 }
