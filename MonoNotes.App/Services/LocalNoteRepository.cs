@@ -139,7 +139,15 @@ namespace MonoNotes.App.Services
 
             foreach (var dir in directories)
             {
+                // 🌟 核心拦截：屏蔽以 . 开头的隐藏文件夹（如 .assets）
+                var dirName = new DirectoryInfo(dir).Name;
+                if (dirName.StartsWith(".")) continue;
+
                 var relativePath = Path.GetRelativePath(_storageDirectory, dir).Replace("\\", "/");
+
+                // 双重保险：如果路径层级中包含隐藏文件夹，也跳过
+                if (relativePath.StartsWith(".") || relativePath.Contains("/.")) continue;
+
                 folderPaths.Add(relativePath);
             }
 
@@ -258,6 +266,40 @@ namespace MonoNotes.App.Services
             // 返回保存好的文件名
             return fileName;
         }
+
+        public async Task DeleteFolderAsync(string folderPath, bool moveNotesToTrash)
+        {
+            // 🛡️ 绝对防御：未分类或空路径不可删除
+            if (string.IsNullOrWhiteSpace(folderPath) || folderPath == "notes") return;
+
+            var fullPath = Path.Combine(_storageDirectory, folderPath);
+            if (!Directory.Exists(fullPath)) return;
+
+            // 🚫 级联限制：包含子文件夹时，拒绝物理删除（双重保险）
+            if (Directory.GetDirectories(fullPath).Length > 0)
+            {
+                throw new InvalidOperationException("包含子文件夹，无法直接删除。");
+            }
+
+            // 1. 获取该文件夹下的所有笔记
+            var allNotes = await GetAllNotesAsync();
+            var notesInFolder = allNotes.Where(n => n.Folder == folderPath).ToList();
+
+            // 2. 金蝉脱壳：把笔记转移到未分类并打上标签，生成新的物理文件
+            foreach (var note in notesInFolder)
+            {
+                note.Folder = "notes"; // 统一移至未分类
+                if (moveNotesToTrash)
+                {
+                    note.IsDeleted = true; // 软删除
+                }
+                await SaveNoteAsync(note); // 这会在 notes(根目录) 生成全新的 .md 文件
+            }
+
+            // 3. 物理清场：直接抹除旧文件夹及其内部残留的旧 .md 文件
+            Directory.Delete(fullPath, true);
+        }
+
         // 内部 DTO：专门用来映射 YAML 头部的结构
         private class NoteMetadata
         {

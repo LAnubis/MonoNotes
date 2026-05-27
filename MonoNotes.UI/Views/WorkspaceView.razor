@@ -3,6 +3,7 @@
 @using MonoNotes.Core.Models
 @inject INoteRepository NoteRepository
 @implements IDisposable
+@inject IJSRuntime JSRuntime
 
 <div class="notion-workspace" @onclick="CloseContextMenu">
     <aside class="sidebar">
@@ -178,6 +179,8 @@
                 {
                     <div class="menu-item" @onclick="ShowNewSubFolderInput">📁 新建子文件夹</div>
                 }
+                <div class="menu-divider"></div>
+                <div class="menu-item" style="color: #ff4d4f;" @onclick="TryDeleteFolder">🗑️ 删除文件夹</div>
                 <div class="menu-item" @onclick="ShowRenameFolderInput">✏️ 重命名</div>
             }
         </div>
@@ -230,6 +233,73 @@
             </div>
         </div>
     }
+
+    @if (_showFolderDeleteConfirm && _contextMenuTarget != null)
+    {
+        <div class="modal-overlay" @onclick="() => _showFolderDeleteConfirm = false">
+            <div class="modal-content" style="width: 400px;" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <span style="font-weight: 600; color: #ff4d4f;">⚠️ 删除文件夹</span>
+                    <button class="icon-btn" @onclick="() => _showFolderDeleteConfirm = false">×</button>
+                </div>
+                <div class="modal-body" style="padding: 20px 16px;">
+                    <p style="margin: 0 0 12px 0; font-size: 14px; color: var(--nt-text-main);">
+                        即将删除文件夹 <strong>@_contextMenuTarget.Name</strong>。
+                    </p>
+                    @if (_notesInFolderCount > 0)
+                    {
+                        <p style="margin: 0; font-size: 13px; color: var(--nt-text-gray);">
+                            该文件夹包含 <strong>@_notesInFolderCount</strong> 篇笔记，你想如何处理这些笔记？
+                        </p>
+                    }
+                    else
+                    {
+                        <p style="margin: 0; font-size: 13px; color: var(--nt-text-gray);">
+                            该文件夹目前是空的，确定要删除吗？
+                        </p>
+                    }
+                </div>
+                <div class="modal-footer" style="flex-direction: column; gap: 8px; align-items: stretch; border-top: none; padding-top: 0;">
+                    @if (_notesInFolderCount > 0)
+                    {
+                        <button class="btn-cancel" style="background: var(--nt-bg); border: 1px solid var(--nt-border); padding: 8px;" @onclick="() => ConfirmDeleteFolder(false)">
+                            📁 保留笔记并移至未分类
+                        </button>
+                        <button class="btn-primary" style="background: #ff4d4f; color: white; border: none; padding: 8px;" @onclick="() => ConfirmDeleteFolder(true)">
+                            🗑️ 连同笔记一起移至回收站
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn-primary" style="background: #ff4d4f; color: white; border: none; padding: 8px;" @onclick="() => ConfirmDeleteFolder(false)">
+                            🗑️ 确认删除
+                        </button>
+                    }
+                    <button class="btn-cancel" style="border: none; background: transparent; margin-top: 4px;" @onclick="() => _showFolderDeleteConfirm = false">取消</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_showWarningDialog)
+    {
+        <div class="modal-overlay" @onclick="() => _showWarningDialog = false">
+            <div class="modal-content" style="width: 320px;" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <span style="font-weight: 600; color: #faad14;">⚠️ 提示</span>
+                    <button class="icon-btn" @onclick="() => _showWarningDialog = false">×</button>
+                </div>
+                <div class="modal-body" style="padding: 20px 16px;">
+                    <p style="margin: 0; font-size: 14px; color: var(--nt-text-main);">
+                        @_warningMessage
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-primary" style="background: #2eaadc; color: white; border: none; padding: 6px 16px;" @onclick="() => _showWarningDialog = false">我知道了</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -275,6 +345,14 @@
     private bool _isArchiveFilterActive = false;
     // 🌟 新增：回收站视图激活状态
     private bool _isTrashFilterActive = false;
+
+    // === 🌟 文件夹删除功能状态 ===
+    private bool _showFolderDeleteConfirm = false;
+    private int _notesInFolderCount = 0;
+
+    // === 🌟 通用警告弹窗状态 ===
+    private bool _showWarningDialog = false;
+    private string _warningMessage = string.Empty;
 
     private void ShowTrash()
     {
@@ -800,5 +878,61 @@
             SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
             StateHasChanged();
         }
+    }
+
+    private async Task TryDeleteFolder()
+    {
+        if (_contextMenuTarget == null || _contextMenuTarget.FullPath == "notes") return;
+
+        // 1. 拦截包含子文件夹的情况
+        if (_contextMenuTarget.Children.Any())
+        {
+            // 🌟 修复：不再使用丑陋的 alert，而是调用漂亮的居中弹窗
+            _warningMessage = "该文件夹下包含子文件夹，请先删除底层的子文件夹。";
+            _showWarningDialog = true;
+            CloseContextMenu();
+            return;
+        }
+
+        // 2. 统计笔记数量 (不包含已经在回收站的)
+        _notesInFolderCount = Notes.Count(n => n.Folder == _contextMenuTarget.FullPath && !n.IsDeleted);
+
+        // 3. 弹出选项 A 确认框
+        _showFolderDeleteConfirm = true;
+        CloseContextMenu();
+    }
+
+    private async Task ConfirmDeleteFolder(bool moveNotesToTrash)
+    {
+        if (_contextMenuTarget == null) return;
+
+        // 1. 调用底层物理删除与转移
+        await NoteRepository.DeleteFolderAsync(_contextMenuTarget.FullPath, moveNotesToTrash);
+
+        // 2. 更新内存数据，保持 UI 瞬间同步
+        foreach (var note in Notes.Where(n => n.Folder == _contextMenuTarget.FullPath))
+        {
+            note.Folder = "notes";
+            if (moveNotesToTrash) note.IsDeleted = true;
+        }
+
+        // 3. 重新刷新左侧文件夹树
+        var rawFolders = await NoteRepository.GetAllFoldersAsync();
+        BuildFolderTree(rawFolders);
+
+        // 4. 如果被删的文件夹正好是当前选中的，跳回“未分类”
+        if (_selectedFolderPath == _contextMenuTarget.FullPath)
+        {
+            _selectedFolderPath = "notes";
+            RefreshSelection();
+        }
+
+        _showFolderDeleteConfirm = false;
+        StateHasChanged();
+    }
+    // === 🌟 辅助刷新方法（解决 CS0103 RefreshSelection 不存在的问题） ===
+    private void RefreshSelection()
+    {
+        SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
 }

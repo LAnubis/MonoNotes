@@ -21,5 +21,7 @@ namespace MonoNotes.Core.Interfaces
         Task RenameFolderAsync(string oldFolderPath, string newFolderName);
 
         Task<string> SaveAssetAsync(byte[] fileData, string extension);
+
+        Task DeleteFolderAsync(string folderPath, bool moveNotesToTrash);
     }
 }
