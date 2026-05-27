@@ -4,6 +4,12 @@ namespace MonoNotes.Core.Interfaces
 {
     public interface INoteRepository
     {
+        // 🌟 新增：多库管理相关属性和方法
+        string CurrentWorkspace { get; }
+        Task<List<string>> GetAllWorkspacesAsync();
+        Task SwitchWorkspaceAsync(string workspaceName);
+        Task CreateWorkspaceAsync(string workspaceName);
+
         // 获取所有笔记
         Task<List<MonoNote>> GetAllNotesAsync();
 
@@ -14,10 +20,11 @@ namespace MonoNotes.Core.Interfaces
         Task DeleteNoteAsync(string id);
 
         Task<List<string>> GetAllFoldersAsync();
-        // 🌟 新增：在指定的父文件夹下创建一个新文件夹
+
+        // 在指定的父文件夹下创建一个新文件夹
         Task CreateFolderAsync(string parentFolderPath, string newFolderName);
 
-        // 新增：重命名物理文件夹
+        // 重命名物理文件夹
         Task RenameFolderAsync(string oldFolderPath, string newFolderName);
 
         Task<string> SaveAssetAsync(byte[] fileData, string extension);

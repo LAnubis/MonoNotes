@@ -3,44 +3,86 @@ using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using MonoNotes.Core.Interfaces;
 using MonoNotes.Core.Models;
-using System.Text.RegularExpressions; // 🌟 新增：用于解析图片链接
+using System.Text.RegularExpressions;
 
 namespace MonoNotes.App.Services
 {
     public class LocalNoteRepository : INoteRepository
     {
-        private readonly string _storageDirectory;
+        // 🌟 核心升级：将根目录、当前库目录分开管理
+        private readonly string _rootDirectory;
+        private string _storageDirectory;
+        public string CurrentWorkspace { get; private set; } = "默认库";
+
         private readonly ISerializer _yamlSerializer;
         private readonly IDeserializer _yamlDeserializer;
 
         public LocalNoteRepository()
         {
-            var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            _storageDirectory = Path.Combine(documentsPath, "MonoNotes", "Data");
+            // 提升到 MonoNotes 根目录
+            _rootDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MonoNotes");
+            if (!Directory.Exists(_rootDirectory)) Directory.CreateDirectory(_rootDirectory);
 
-            if (!Directory.Exists(_storageDirectory))
+            // 读取上次打开的库配置
+            var configPath = Path.Combine(_rootDirectory, "workspace.txt");
+            if (File.Exists(configPath))
             {
-                Directory.CreateDirectory(_storageDirectory);
+                CurrentWorkspace = File.ReadAllText(configPath).Trim();
             }
+            if (string.IsNullOrEmpty(CurrentWorkspace)) CurrentWorkspace = "默认库";
 
-            // 初始化 YAML 序列化器，使用驼峰命名法
+            _storageDirectory = Path.Combine(_rootDirectory, "Workspaces", CurrentWorkspace);
+            EnsureDirectories();
+
             _yamlSerializer = new SerializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .Build();
 
-            // 初始化 YAML 反序列化器，忽略未知的属性以防报错
             _yamlDeserializer = new DeserializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .IgnoreUnmatchedProperties()
                 .Build();
         }
 
-        // 获取所有笔记（支持无限层级子文件夹）
+        // 🌟 辅助方法：确保当前库的基础文件夹存在
+        private void EnsureDirectories()
+        {
+            if (!Directory.Exists(_storageDirectory)) Directory.CreateDirectory(_storageDirectory);
+            var assetsPath = Path.Combine(_storageDirectory, ".assets");
+            if (!Directory.Exists(assetsPath)) Directory.CreateDirectory(assetsPath);
+        }
+
+        // 🌟 新增：获取所有知识库
+        public async Task<List<string>> GetAllWorkspacesAsync()
+        {
+            var wsPath = Path.Combine(_rootDirectory, "Workspaces");
+            if (!Directory.Exists(wsPath)) Directory.CreateDirectory(wsPath);
+
+            var dirs = Directory.GetDirectories(wsPath);
+            return dirs.Select(d => new DirectoryInfo(d).Name).ToList();
+        }
+
+        // 🌟 新增：切换知识库
+        public async Task SwitchWorkspaceAsync(string workspaceName)
+        {
+            CurrentWorkspace = workspaceName;
+            _storageDirectory = Path.Combine(_rootDirectory, "Workspaces", CurrentWorkspace);
+            EnsureDirectories();
+            // 记住用户的选择
+            await File.WriteAllTextAsync(Path.Combine(_rootDirectory, "workspace.txt"), CurrentWorkspace);
+        }
+
+        // 🌟 新增：新建知识库
+        public async Task CreateWorkspaceAsync(string workspaceName)
+        {
+            var newPath = Path.Combine(_rootDirectory, "Workspaces", workspaceName);
+            if (!Directory.Exists(newPath)) Directory.CreateDirectory(newPath);
+            await SwitchWorkspaceAsync(workspaceName);
+        }
+
         public async Task<List<MonoNote>> GetAllNotesAsync()
         {
             var notes = new List<MonoNote>();
-
-            // 深入所有子文件夹寻找 .md 文件
             var files = Directory.GetFiles(_storageDirectory, "*.md", SearchOption.AllDirectories);
 
             foreach (var file in files)
@@ -55,15 +97,14 @@ namespace MonoNotes.App.Services
                         {
                             var yaml = parts[1];
                             var content = parts[2].TrimStart('\r', '\n');
-                            // 🌟 读取时拦截：把相对路径替换成虚拟域名，让 WebView2 能渲染
-                            content = content.Replace("./.assets/", "https://mononotes.local/.assets/");
+
+                            // 🌟 动态还原：给相对路径加上当前库的虚拟前缀
+                            content = content.Replace("./.assets/", $"https://mononotes.local/Workspaces/{CurrentWorkspace}/.assets/");
+
                             var meta = _yamlDeserializer.Deserialize<NoteMetadata>(yaml);
 
-                            // 计算相对路径
                             var fileDir = Path.GetDirectoryName(file) ?? _storageDirectory;
                             var relativePath = Path.GetRelativePath(_storageDirectory, fileDir);
-
-                            // 如果在根目录，使用默认的 "notes"，否则保持相对路径统一格式
                             relativePath = relativePath == "." ? "notes" : relativePath.Replace("\\", "/");
 
                             notes.Add(new MonoNote
@@ -74,7 +115,6 @@ namespace MonoNotes.App.Services
                                 UpdatedAt = meta.UpdatedAt != default ? meta.UpdatedAt : File.GetLastWriteTime(file),
                                 Content = content,
                                 Folder = relativePath,
-                                // 🌟 核心修改 1：读取时赋值状态
                                 IsPinned = meta.IsPinned,
                                 IsFavorite = meta.IsFavorite,
                                 IsArchived = meta.IsArchived,
@@ -88,18 +128,15 @@ namespace MonoNotes.App.Services
             return notes.OrderByDescending(n => n.UpdatedAt).ToList();
         }
 
-        // 保存笔记（自动创建不存在的物理文件夹）
         public async Task SaveNoteAsync(MonoNote note)
         {
             note.UpdatedAt = DateTimeOffset.Now;
 
-            // 解析真实路径（如果 Folder 是默认的 "notes" 或者空，就存根目录）
             var isRoot = string.IsNullOrWhiteSpace(note.Folder) || note.Folder == "notes";
             var targetDirectory = isRoot
                 ? _storageDirectory
                 : Path.Combine(_storageDirectory, note.Folder);
 
-            // 物理创建文件夹
             if (!Directory.Exists(targetDirectory))
             {
                 Directory.CreateDirectory(targetDirectory);
@@ -113,7 +150,6 @@ namespace MonoNotes.App.Services
                 Title = note.Title ?? "无标题笔记",
                 UpdatedAt = note.UpdatedAt,
                 Tags = note.Tags ?? new List<string>(),
-                // 🌟 核心修改 2：保存时赋值状态给 DTO
                 IsPinned = note.IsPinned,
                 IsFavorite = note.IsFavorite,
                 IsArchived = note.IsArchived,
@@ -125,27 +161,25 @@ namespace MonoNotes.App.Services
             sb.AppendLine("---");
             sb.Append(yaml);
             sb.AppendLine("---");
-            sb.AppendLine(note.Content ?? string.Empty);
-            var pureContent = note.Content?.Replace("https://mononotes.local/", "./") ?? string.Empty;
+
+            // 🌟 动态拦截：将当前库的虚拟路径替换回纯洁的 ./ 相对路径
+            var pureContent = note.Content?.Replace($"https://mononotes.local/Workspaces/{CurrentWorkspace}/", "./") ?? string.Empty;
             sb.AppendLine(pureContent);
+
             await File.WriteAllTextAsync(filePath, sb.ToString());
         }
 
-        // 提取系统中所有的文件夹路径
         public async Task<List<string>> GetAllFoldersAsync()
         {
             var directories = Directory.GetDirectories(_storageDirectory, "*", SearchOption.AllDirectories);
-            var folderPaths = new List<string> { "notes" }; // 确保根目录始终存在
+            var folderPaths = new List<string> { "notes" };
 
             foreach (var dir in directories)
             {
-                // 🌟 核心拦截：屏蔽以 . 开头的隐藏文件夹（如 .assets）
                 var dirName = new DirectoryInfo(dir).Name;
                 if (dirName.StartsWith(".")) continue;
 
                 var relativePath = Path.GetRelativePath(_storageDirectory, dir).Replace("\\", "/");
-
-                // 双重保险：如果路径层级中包含隐藏文件夹，也跳过
                 if (relativePath.StartsWith(".") || relativePath.Contains("/.")) continue;
 
                 folderPaths.Add(relativePath);
@@ -156,44 +190,34 @@ namespace MonoNotes.App.Services
 
         public async Task DeleteNoteAsync(string id)
         {
-            // 🌟 修复 Bug：全局搜索文件，确保哪怕笔记在深层子文件夹中也能被找到并删除
             var filePath = Directory.GetFiles(_storageDirectory, $"{id}.md", SearchOption.AllDirectories).FirstOrDefault();
 
             if (filePath != null)
             {
-                // 1. 在删除前，先读取笔记内容
                 var content = await File.ReadAllTextAsync(filePath);
-
-                // 2. 删除物理 Markdown 文件本身
                 File.Delete(filePath);
 
-                // 3. 提取该笔记中所有的图片文件名
-                // 匹配模式：寻找 .assets/ 后面跟着的文件名 (支持 png, jpg, gif, webp, svg 等)
                 var matches = Regex.Matches(content, @"\.assets/([a-zA-Z0-9_-]+\.[a-zA-Z0-9]+)");
                 var assetNamesInDeletedNote = matches.Select(m => m.Groups[1].Value).Distinct().ToList();
 
-                // 4. 🌟 安全清理机制：如果有图片，检查是否被其他笔记“共享”
                 if (assetNamesInDeletedNote.Any())
                 {
-                    // 获取当前硬盘上还剩下的所有笔记
                     var allRemainingFiles = Directory.GetFiles(_storageDirectory, "*.md", SearchOption.AllDirectories);
 
                     foreach (var assetName in assetNamesInDeletedNote)
                     {
                         bool isUsedElsewhere = false;
 
-                        // 扫描其他笔记，看是否包含这个图片名
                         foreach (var otherFile in allRemainingFiles)
                         {
                             var otherContent = await File.ReadAllTextAsync(otherFile);
                             if (otherContent.Contains(assetName))
                             {
                                 isUsedElsewhere = true;
-                                break; // 只要有一个其他笔记在用，就立刻停止扫描，保护该图片
+                                break;
                             }
                         }
 
-                        // 🌟 如果没有任何其他笔记在使用这张图片，安全地将其从硬盘抹除！
                         if (!isUsedElsewhere)
                         {
                             var assetPath = Path.Combine(_storageDirectory, ".assets", assetName);
@@ -209,28 +233,23 @@ namespace MonoNotes.App.Services
 
         public async Task CreateFolderAsync(string parentFolderPath, string newFolderName)
         {
-            // 如果没选中任何文件夹，或者选中的是根目录 notes，就建在根目录下
             var isRoot = string.IsNullOrWhiteSpace(parentFolderPath) || parentFolderPath == "notes";
             var basePath = isRoot
                 ? _storageDirectory
                 : Path.Combine(_storageDirectory, parentFolderPath);
 
-            // 拼接出新文件夹的完整物理路径
             var newFolderPath = Path.Combine(basePath, newFolderName);
 
-            // 真实创建物理文件夹
             if (!Directory.Exists(newFolderPath))
             {
                 Directory.CreateDirectory(newFolderPath);
             }
 
-            // 返回完成状态
             await Task.CompletedTask;
         }
 
         public async Task RenameFolderAsync(string oldFolderPath, string newFolderName)
         {
-            // 保护机制：不允许重命名根目录或未分类
             if (string.IsNullOrWhiteSpace(oldFolderPath) || oldFolderPath == "notes") return;
 
             var oldFullPath = Path.Combine(_storageDirectory, oldFolderPath);
@@ -239,7 +258,6 @@ namespace MonoNotes.App.Services
 
             var newFullPath = Path.Combine(parentPath, newFolderName);
 
-            // 在物理硬盘上真实地移动（重命名）文件夹
             if (Directory.Exists(oldFullPath) && !Directory.Exists(newFullPath))
             {
                 Directory.Move(oldFullPath, newFullPath);
@@ -247,83 +265,69 @@ namespace MonoNotes.App.Services
 
             await Task.CompletedTask;
         }
-        // 🌟 新增：保存附件到 .assets 文件夹
+
         public async Task<string> SaveAssetAsync(byte[] fileData, string extension)
         {
-            // 将所有图片集中存放在根目录的 .assets 隐藏文件夹下
             var assetsPath = Path.Combine(_storageDirectory, ".assets");
             if (!Directory.Exists(assetsPath))
             {
                 Directory.CreateDirectory(assetsPath);
             }
 
-            // 生成极其安全且唯一的物理文件名：时间戳 + 随机数
             var fileName = $"{DateTime.Now:yyyyMMddHHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 4)}{extension}";
             var filePath = Path.Combine(assetsPath, fileName);
 
             await File.WriteAllBytesAsync(filePath, fileData);
 
-            // 返回保存好的文件名
             return fileName;
         }
 
         public async Task DeleteFolderAsync(string folderPath, bool moveNotesToTrash)
         {
-            // 🛡️ 绝对防御：未分类或空路径不可删除
             if (string.IsNullOrWhiteSpace(folderPath) || folderPath == "notes") return;
 
             var fullPath = Path.Combine(_storageDirectory, folderPath);
             if (!Directory.Exists(fullPath)) return;
 
-            // 🚫 级联限制：包含子文件夹时，拒绝物理删除（双重保险）
             if (Directory.GetDirectories(fullPath).Length > 0)
             {
                 throw new InvalidOperationException("包含子文件夹，无法直接删除。");
             }
 
-            // 1. 获取该文件夹下的所有笔记
             var allNotes = await GetAllNotesAsync();
             var notesInFolder = allNotes.Where(n => n.Folder == folderPath).ToList();
 
-            // 2. 金蝉脱壳：把笔记转移到未分类并打上标签，生成新的物理文件
             foreach (var note in notesInFolder)
             {
-                note.Folder = "notes"; // 统一移至未分类
+                note.Folder = "notes";
                 if (moveNotesToTrash)
                 {
-                    note.IsDeleted = true; // 软删除
+                    note.IsDeleted = true;
                 }
-                await SaveNoteAsync(note); // 这会在 notes(根目录) 生成全新的 .md 文件
+                await SaveNoteAsync(note);
             }
 
-            // 3. 物理清场：直接抹除旧文件夹及其内部残留的旧 .md 文件
             Directory.Delete(fullPath, true);
         }
-        // 🌟 全局重命名标签
+
         public async Task RenameTagGlobalAsync(string oldTag, string newTag)
         {
             if (string.IsNullOrWhiteSpace(oldTag) || string.IsNullOrWhiteSpace(newTag) || oldTag == newTag) return;
 
             var allNotes = await GetAllNotesAsync();
-
-            // 筛选出包含旧标签的笔记
             var affectedNotes = allNotes.Where(n => n.Tags != null && n.Tags.Contains(oldTag)).ToList();
 
             foreach (var bookNote in affectedNotes)
             {
                 bookNote.Tags.Remove(oldTag);
-                // 防止新旧标签合并时产生重复
                 if (!bookNote.Tags.Contains(newTag))
                 {
                     bookNote.Tags.Add(newTag);
                 }
-
-                // 将更新后的笔记重新写入物理硬盘
                 await SaveNoteAsync(bookNote);
             }
         }
 
-        // 🌟 全局删除标签
         public async Task DeleteTagGlobalAsync(string targetTag)
         {
             if (string.IsNullOrWhiteSpace(targetTag)) return;
@@ -337,18 +341,15 @@ namespace MonoNotes.App.Services
                 await SaveNoteAsync(bookNote);
             }
         }
-        // 内部 DTO：专门用来映射 YAML 头部的结构
+
         private class NoteMetadata
         {
             public string Id { get; set; }
             public string Title { get; set; }
             public DateTimeOffset UpdatedAt { get; set; }
             public List<string> Tags { get; set; }
-
-            // 🌟 核心修改 3：在映射实体中加入这两个字段
             public bool IsPinned { get; set; }
             public bool IsFavorite { get; set; }
-            // 🌟 核心修改 1：增加归档字段映射
             public bool IsArchived { get; set; }
             public bool IsDeleted { get; set; }
         }

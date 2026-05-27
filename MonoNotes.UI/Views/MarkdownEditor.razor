@@ -37,8 +37,10 @@
         /* 🎨 独立面板视觉美化 */
         background-color: transparent !important;
         border: 1px solid rgba(55, 53, 47, 0.08) !important; /* 极淡的全包围边框 */
-        border-radius: 8px !important; /* 轻微圆角，消除锐利感 */
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02) !important; /* 若有若无的超淡阴影 */
+        border-radius: 8px !important;
+        /* 轻微圆角，消除锐利感 */
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02) !important;
+        /* 若有若无的超淡阴影 */
 
         padding: 16px 12px 24px 12px !important;
         overflow-y: auto !important;
@@ -114,7 +116,6 @@
     [Parameter] public string Content { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> ContentChanged { get; set; }
 
-    // 🌟 接收当前笔记所在的文件夹路径（用于计算相对路径）
     [Parameter] public string CurrentFolder { get; set; } = string.Empty;
 
     private readonly string _editorId = "editor-" + Guid.NewGuid().ToString("N");
@@ -128,7 +129,6 @@
         {
             _dotNetHelper = DotNetObjectReference.Create(this);
             _lastRenderedContent = Content;
-            // 初始化 Vditor，并将 C# 引用传给 JS
             await JSRuntime.InvokeVoidAsync("MonoNotesEditor.initVditor", _editorId, Content, _dotNetHelper);
             _isInitialized = true;
         }
@@ -136,7 +136,6 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        // 当外部切换笔记时，更新编辑器内容
         if (_isInitialized && Content != _lastRenderedContent)
         {
             _lastRenderedContent = Content;
@@ -144,7 +143,6 @@
         }
     }
 
-    // 供 JS 实时回传内容
     [JSInvokable]
     public async Task UpdateContent(string newContent)
     {
@@ -156,7 +154,6 @@
         }
     }
 
-    // 🌟 核心拦截器：供 JS 调用的图片保存接口
     [JSInvokable]
     public async Task<string> UploadImageAsync(string base64Data, string fileName)
     {
@@ -165,12 +162,10 @@
 
         var ext = Path.GetExtension(fileName);
         if (string.IsNullOrEmpty(ext)) ext = ".png";
-
         var savedFileName = await NoteRepository.SaveAssetAsync(bytes, ext);
 
-        // 🌟 降维打击：永远返回虚拟域名的绝对路径
-        // 这样不仅能在 Vditor 中瞬间显示，而且再也不用算 ../../ 了！
-        return $"https://mononotes.local/.assets/{savedFileName}";
+        // 🌟 核心升级：返回当前库的绝对虚拟路径
+        return $"https://mononotes.local/Workspaces/{NoteRepository.CurrentWorkspace}/.assets/{savedFileName}";
     }
 
     public async ValueTask DisposeAsync()

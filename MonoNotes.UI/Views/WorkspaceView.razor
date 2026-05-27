@@ -7,9 +7,9 @@
 
 <div class="notion-workspace" @onclick="CloseContextMenu">
     <aside class="sidebar">
-        <div class="workspace-switcher">
-            <span class="icon">📝</span>
-            <span class="text">My Workspace</span>
+        <div class="workspace-switcher" @onclick="OpenWorkspaceManager" style="cursor:pointer; padding: 12px 16px; display: flex; align-items: center; border-radius: 8px; transition: background 0.2s;">
+            <span class="icon" style="margin-right: 8px;">📝</span>
+            <span class="text" style="font-weight: 600; color: var(--nt-text-main);">@NoteRepository.CurrentWorkspace ▾</span>
         </div>
 
         <div class="nav-menu">
@@ -41,7 +41,6 @@
                     </div>
                 </div>
             }
-
 
             <div style="padding: 0 16px 8px 16px; font-size: 11px; font-weight: 600; color: #999; display: flex; justify-content: space-between; align-items: center;">
                 <span>文件夹</span>
@@ -121,7 +120,6 @@
     </section>
 
     <main class="editor-area" style="display: flex; flex-direction: column;">
-
         <style>
                     .tabs-bar {
                         display: flex;
@@ -136,7 +134,6 @@
                         .tabs-bar::-webkit-scrollbar {
                             display: none;
                         }
-                    /* 隐藏滚动条 */
 
                     .tab-item {
                         display: flex;
@@ -158,7 +155,6 @@
                             background: rgba(55, 53, 47, 0.05);
                         }
 
-                        /* 激活状态：浮起并变成纯白底色 */
                         .tab-item.active {
                             background: #ffffff;
                             color: rgba(55, 53, 47, 0.85);
@@ -456,6 +452,37 @@
             </div>
         </div>
     }
+
+    @if (_showWorkspaceModal)
+    {
+        <div class="modal-overlay" @onclick="() => _showWorkspaceModal = false">
+            <div class="modal-content" style="width: 360px;" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <span style="font-weight: 600;">📚 切换知识库</span>
+                    <button class="icon-btn" @onclick="() => _showWorkspaceModal = false">×</button>
+                </div>
+                <div class="modal-body" style="padding: 12px; max-height: 300px; overflow-y: auto;">
+                    @foreach (var ws in _workspaces)
+                    {
+                        <div class="nav-item" style="padding: 10px 12px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: @(ws == NoteRepository.CurrentWorkspace ? "rgba(46, 170, 220, 0.1)" : "transparent");"
+                             @onclick="() => SwitchWorkspace(ws)">
+                            <span style="font-weight: @(ws == NoteRepository.CurrentWorkspace ? "600" : "400"); color: @(ws == NoteRepository.CurrentWorkspace ? "#2eaadc" : "var(--nt-text-main)");">@ws</span>
+                            @if (ws == NoteRepository.CurrentWorkspace)
+                            {
+                                <span style="color: #2eaadc; font-size: 12px;">✓ 当前</span>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer" style="flex-direction: column; gap: 8px; border-top: 1px solid var(--nt-border); padding: 12px;">
+                    <div style="display: flex; width: 100%; gap: 8px;">
+                        <input @bind="_newWorkspaceName" class="search-box" style="flex: 1; border: 1px solid var(--nt-border);" placeholder="输入新库名称..." />
+                        <button class="btn-primary" style="background: var(--nt-text-main); color: white; border: none; padding: 6px 12px; border-radius: 4px;" @onclick="CreateWorkspace">新建</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -468,23 +495,19 @@
     private List<FolderTree.FolderNode> _folderTree = new();
     private string _selectedFolderPath = "notes";
 
-    // === 🌟 右键菜单状态 ===
     private bool _showContextMenu = false;
     private double _contextMenuX = 0;
     private double _contextMenuY = 0;
     private FolderTree.FolderNode? _contextMenuTarget;
 
-    // === 🌟 统一输入框状态 ===
     private bool _showFolderInput = false;
     private string _folderInputValue = string.Empty;
     private string _folderInputPlaceholder = string.Empty;
-    private int _folderActionType = 0; // 0:主文件夹, 1:子文件夹, 2:重命名
+    private int _folderActionType = 0;
 
-    // === 🌟 标签系统状态 ===
     private string _selectedTag = string.Empty;
     private string _newTagInput = string.Empty;
 
-    // === 🌟 笔记右键菜单与弹窗状态 ===
     private bool _showNoteContextMenu = false;
     private double _noteContextMenuX = 0;
     private double _noteContextMenuY = 0;
@@ -494,33 +517,30 @@
     private bool _isCopyMode = false;
     private string _targetFolder = string.Empty;
 
-    // 🌟 新增：收藏视图激活状态
     private bool _isFavoriteFilterActive = false;
-    // 🌟 新增：归档视图激活状态
     private bool _isArchiveFilterActive = false;
-    // 🌟 新增：回收站视图激活状态
     private bool _isTrashFilterActive = false;
 
-    // === 🌟 文件夹删除功能状态 ===
     private bool _showFolderDeleteConfirm = false;
     private int _notesInFolderCount = 0;
 
-    // === 🌟 通用警告弹窗状态 ===
     private bool _showWarningDialog = false;
     private string _warningMessage = string.Empty;
 
-    // === 🌟 核心修改 3：标签管理状态与逻辑 ===
     private bool _showTagManagerDialog = false;
     private List<string> _allUniqueTags = new();
     private string _editingTag = string.Empty;
     private string _newTagName = string.Empty;
 
-    // === 在标签管理状态下，新增删除确认相关的变量 ===
     private bool _showTagDeleteConfirm = false;
     private string _tagToDelete = string.Empty;
 
-    // === 🌟 多标签页管理状态 ===
     private List<string> _openTabs = new();
+
+    // === 🌟 新增：多库管理状态 ===
+    private bool _showWorkspaceModal = false;
+    private List<string> _workspaces = new();
+    private string _newWorkspaceName = string.Empty;
 
     private void ShowTrash()
     {
@@ -530,18 +550,16 @@
         _selectedFolderPath = string.Empty;
         _selectedTag = string.Empty;
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
-        StateHasChanged(); // 强制刷新 UI
+        StateHasChanged();
     }
 
-    // 动态计算系统中所有的唯一标签，并按字母排序
     private List<string> AllTags => Notes
-      .Where(n => !n.IsDeleted && n.Tags != null)
+        .Where(n => !n.IsDeleted && n.Tags != null)
         .SelectMany(n => n.Tags)
         .Distinct()
         .OrderBy(t => t)
         .ToList();
 
-    // 🌟 激活收藏视图
     private void ShowFavorites()
     {
         _isFavoriteFilterActive = true;
@@ -564,34 +582,32 @@
 
     private void OnFolderSelectedHandler(string path)
     {
-        _isFavoriteFilterActive = false; // 切换时取消收藏视图
+        _isFavoriteFilterActive = false;
         _isArchiveFilterActive = false;
         _isTrashFilterActive = false;
         _selectedFolderPath = path;
-        _selectedTag = string.Empty; // 🌟 核心：选中文件夹时，清空标签过滤
+        _selectedTag = string.Empty;
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
 
-    // 🌟 新增：点击标签时的处理逻辑
     private void SelectTag(string tag)
     {
-        _isFavoriteFilterActive = false; // 切换时取消收藏视图
+        _isFavoriteFilterActive = false;
         _isArchiveFilterActive = false;
         _isTrashFilterActive = false;
         if (_selectedTag == tag)
         {
-            _selectedTag = string.Empty; // 再次点击取消选中
-            _selectedFolderPath = "notes"; // 默认回到未分类
+            _selectedTag = string.Empty;
+            _selectedFolderPath = "notes";
         }
         else
         {
             _selectedTag = tag;
-            _selectedFolderPath = string.Empty; // 🌟 核心：开启全局标签搜索，无视文件夹
+            _selectedFolderPath = string.Empty;
         }
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
 
-    // 🌟 处理子组件传来的右键事件
     private void HandleTreeContextMenu((Microsoft.AspNetCore.Components.Web.MouseEventArgs e, FolderTree.FolderNode node) args)
     {
         _contextMenuTarget = args.node;
@@ -606,7 +622,6 @@
         _showNoteContextMenu = false;
     }
 
-    // 🌟 三种模式的输入框唤起方法
     private void ShowNewMainFolderInput()
     {
         CloseContextMenu();
@@ -653,26 +668,16 @@
             }
 
             _showFolderInput = false;
-
-            // 🌟 修复 1：重新拉取最新的文件夹结构并构建树
             var rawFolders = await NoteRepository.GetAllFoldersAsync();
             BuildFolderTree(rawFolders);
 
-            // 🌟 修复 2：重新拉取所有笔记！(确保内存中的 Note.Folder 属性是最新的)
             Notes = await NoteRepository.GetAllNotesAsync();
-
-            // 🌟 修复 3：如果是重命名，自动计算新路径，并让左侧菜单重新选中它
             if (_folderActionType == 2 && _contextMenuTarget != null)
             {
-                // 计算父级路径
                 var parentPath = _contextMenuTarget.FullPath.Contains('/')
                     ? _contextMenuTarget.FullPath.Substring(0, _contextMenuTarget.FullPath.LastIndexOf('/'))
                     : "";
-
-                // 拼接出重命名后的新路径
                 _selectedFolderPath = string.IsNullOrEmpty(parentPath) ? val : $"{parentPath}/{val}";
-
-                // 默认选中该文件夹下的第一篇笔记
                 SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
             }
 
@@ -687,8 +692,6 @@
     private async Task CreateNoteInContextFolder()
     {
         if (_contextMenuTarget == null) return;
-
-        // 🌟 右键新建前同样拦截
         if (_openTabs.Count >= 7)
         {
             _warningMessage = "最多只能同时打开 7 个标签页，请先关闭一些不常用的笔记再新建。";
@@ -709,18 +712,16 @@
         Notes.Insert(0, newNote);
         SelectedNoteId = newNote.Id;
         _selectedFolderPath = _contextMenuTarget.FullPath;
-        OpenInTab(newNote.Id); // 确保新笔记进入 Tab
+        OpenInTab(newNote.Id);
         await NoteRepository.SaveNoteAsync(newNote);
 
         CloseContextMenu();
         StateHasChanged();
     }
 
-    // 🌟 树状结构构建算法
     private void BuildFolderTree(List<string> rawPaths)
     {
         _folderTree.Clear();
-
         foreach (var path in rawPaths)
         {
             var parts = path.Split('/');
@@ -739,7 +740,6 @@
                     {
                         Name = currentFullPath == "notes" ? "未分类" : part,
                         FullPath = currentFullPath,
-                        // 🌟 只展开第一级 (i == 0)
                         IsExpanded = i == 0
                     };
                     currentLevel.Add(existingNode);
@@ -748,7 +748,6 @@
             }
         }
 
-        // 🌟 重新排序：让未分类永远在第一位
         _folderTree = _folderTree
             .OrderByDescending(n => n.FullPath == "notes")
             .ThenBy(n => n.Name)
@@ -768,7 +767,7 @@
         if (FilteredNotes.Any())
         {
             SelectedNoteId = FilteredNotes.First().Id;
-            OpenInTab(SelectedNoteId); // 🌟 新增：启动时默认打开进 Tab
+            OpenInTab(SelectedNoteId);
         }
         else await CreateNewNote();
 
@@ -786,20 +785,14 @@
             }
             else
             {
-                // 🌟 常规视图，绝对不能显示已删除的笔记
                 result = result.Where(n => !n.IsDeleted);
-
-                // 🌟 核心拦截 1：如果处于“归档视图”，只显示已归档的笔记
                 if (_isArchiveFilterActive)
                 {
                     result = result.Where(n => n.IsArchived);
                 }
                 else
                 {
-                    // 🌟 核心拦截 2：如果处于“常规视图”，必须强制过滤掉所有已归档的笔记！
                     result = result.Where(n => !n.IsArchived);
-
-                    // 在排除了归档笔记的基础上，继续进行原有的分类过滤
                     if (_isFavoriteFilterActive)
                     {
                         result = result.Where(n => n.IsFavorite);
@@ -815,7 +808,6 @@
                 }
             }
 
-            // 搜索过滤（全局生效）
             if (!string.IsNullOrWhiteSpace(_searchQuery))
             {
                 var query = _searchQuery.ToLower().Trim();
@@ -830,7 +822,6 @@
 
     private async Task CreateNewNote()
     {
-        // 🌟 新建前拦截：如果满了，直接弹窗并终止新建
         if (_openTabs.Count >= 7)
         {
             _warningMessage = "最多只能同时打开 7 个标签页，请先关闭一些不常用的笔记再新建。";
@@ -850,7 +841,7 @@
         Notes.Insert(0, newNote);
 
         SelectedNoteId = newNote.Id;
-        OpenInTab(newNote.Id); // 确保新笔记进入 Tab
+        OpenInTab(newNote.Id);
 
         await NoteRepository.SaveNoteAsync(newNote);
         StateHasChanged();
@@ -862,15 +853,14 @@
         {
             SelectedNote.IsDeleted = true;
             await PerformSaveAsync();
-            var deletedId = SelectedNote.Id; // 先缓存 ID
-            CloseTab(deletedId); // 🌟 核心修复：自动关闭该标签页
+            var deletedId = SelectedNote.Id;
+            CloseTab(deletedId);
             StateHasChanged();
         }
     }
 
     private void SelectNote(string id)
     {
-        // 🌟 只有成功放入 Tab，才允许切换编辑器画面
         if (OpenInTab(id))
         {
             SelectedNoteId = id;
@@ -905,23 +895,21 @@
         return path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Length;
     }
 
-    // 🌟 新增：处理标签输入
     private async Task HandleTagInputKey(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_newTagInput) && SelectedNote != null)
         {
-            var tag = _newTagInput.Trim().TrimStart('#'); // 去掉用户可能多输入的 #
+            var tag = _newTagInput.Trim().TrimStart('#');
             SelectedNote.Tags ??= new List<string>();
             if (!SelectedNote.Tags.Contains(tag))
             {
                 SelectedNote.Tags.Add(tag);
-                await PerformSaveAsync(); // 立即保存到物理文件
+                await PerformSaveAsync();
             }
             _newTagInput = string.Empty;
         }
     }
 
-    // 🌟 新增：删除标签
     private async Task RemoveTag(string tag)
     {
         if (SelectedNote != null && SelectedNote.Tags != null)
@@ -945,7 +933,6 @@
         if (_contextMenuNote != null)
         {
             _contextMenuNote.IsFavorite = !_contextMenuNote.IsFavorite;
-            // 🌟 直接调用底层的 SaveNoteAsync，并传入当前右击的笔记
             await NoteRepository.SaveNoteAsync(_contextMenuNote);
             StateHasChanged();
         }
@@ -957,7 +944,6 @@
         if (_contextMenuNote != null)
         {
             _contextMenuNote.IsPinned = !_contextMenuNote.IsPinned;
-            // 🌟 同样直接调用底层保存方法
             await NoteRepository.SaveNoteAsync(_contextMenuNote);
             StateHasChanged();
         }
@@ -977,10 +963,8 @@
     private async Task ConfirmMoveOrCopy()
     {
         if (_contextMenuNote == null || string.IsNullOrEmpty(_targetFolder)) return;
-
         if (_isCopyMode)
         {
-            // 🌟 复制逻辑：生成新 ID，追加“副本”标识
             var newNote = new MonoNote
             {
                 Id = Guid.NewGuid().ToString("N"),
@@ -994,7 +978,6 @@
         }
         else
         {
-            // 🌟 移动逻辑
             _contextMenuNote.Folder = _targetFolder;
             await NoteRepository.SaveNoteAsync(_contextMenuNote);
         }
@@ -1003,7 +986,6 @@
         StateHasChanged();
     }
 
-    // 🌟 新增：切换归档状态
     private async Task ToggleArchiveContext()
     {
         if (_contextMenuNote != null)
@@ -1015,20 +997,18 @@
         _showNoteContextMenu = false;
     }
 
-    // 右键菜单 -> 软删除
     private async Task SoftDeleteNoteContext()
     {
         if (_contextMenuNote != null)
         {
             _contextMenuNote.IsDeleted = true;
             await NoteRepository.SaveNoteAsync(_contextMenuNote);
-            CloseTab(_contextMenuNote.Id); // 🌟 核心修复：不管它有没有打开，强行从 Tab 移除
+            CloseTab(_contextMenuNote.Id);
             StateHasChanged();
         }
         _showNoteContextMenu = false;
     }
 
-    // 右键菜单 -> 恢复笔记
     private async Task RestoreNoteContext()
     {
         if (_contextMenuNote != null)
@@ -1047,13 +1027,12 @@
         {
             await NoteRepository.DeleteNoteAsync(_contextMenuNote.Id);
             Notes.Remove(_contextMenuNote);
-            CloseTab(_contextMenuNote.Id); // 🌟 核心修复：强行从 Tab 移除
+            CloseTab(_contextMenuNote.Id);
             StateHasChanged();
         }
         _showNoteContextMenu = false;
     }
 
-    // 编辑器头部：置顶切换
     private async Task TogglePin()
     {
         if (SelectedNote != null)
@@ -1064,7 +1043,6 @@
         }
     }
 
-    // 编辑器头部：从回收站恢复
     private async Task RestoreCurrentNote()
     {
         if (SelectedNote != null)
@@ -1079,21 +1057,15 @@
     private async Task TryDeleteFolder()
     {
         if (_contextMenuTarget == null || _contextMenuTarget.FullPath == "notes") return;
-
-        // 1. 拦截包含子文件夹的情况
         if (_contextMenuTarget.Children.Any())
         {
-            // 🌟 修复：不再使用丑陋的 alert，而是调用漂亮的居中弹窗
             _warningMessage = "该文件夹下包含子文件夹，请先删除底层的子文件夹。";
             _showWarningDialog = true;
             CloseContextMenu();
             return;
         }
 
-        // 2. 统计笔记数量 (不包含已经在回收站的)
         _notesInFolderCount = Notes.Count(n => n.Folder == _contextMenuTarget.FullPath && !n.IsDeleted);
-
-        // 3. 弹出选项 A 确认框
         _showFolderDeleteConfirm = true;
         CloseContextMenu();
     }
@@ -1102,24 +1074,20 @@
     {
         if (_contextMenuTarget == null) return;
 
-        // 1. 调用底层物理删除与转移
         await NoteRepository.DeleteFolderAsync(_contextMenuTarget.FullPath, moveNotesToTrash);
-
         foreach (var note in Notes.Where(n => n.Folder == _contextMenuTarget.FullPath))
         {
             note.Folder = "notes";
             if (moveNotesToTrash)
             {
                 note.IsDeleted = true;
-                CloseTab(note.Id); // 🌟 核心修复：如果删除了文件夹连带笔记，必须清理幽灵 Tab
+                CloseTab(note.Id);
             }
         }
 
-        // 3. 重新刷新左侧文件夹树
         var rawFolders = await NoteRepository.GetAllFoldersAsync();
         BuildFolderTree(rawFolders);
 
-        // 4. 如果被删的文件夹正好是当前选中的，跳回“未分类”
         if (_selectedFolderPath == _contextMenuTarget.FullPath)
         {
             _selectedFolderPath = "notes";
@@ -1130,16 +1098,13 @@
         StateHasChanged();
     }
 
-    // === 🌟 辅助刷新方法（解决 CS0103 RefreshSelection 不存在的问题） ===
     private void RefreshSelection()
     {
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
 
-    // === 🌟 核心修改 4：标签管理逻辑实现 ===
     private void OpenTagManager()
     {
-        // 从当前内存中所有未删除的笔记中，实时提取唯一的标签列表
         _allUniqueTags = Notes
             .Where(n => !n.IsDeleted && n.Tags != null)
             .SelectMany(n => n.Tags)
@@ -1171,10 +1136,7 @@
             return;
         }
 
-        // 1. 调用仓储层更新物理文件
         await NoteRepository.RenameTagGlobalAsync(_editingTag, _newTagName);
-
-        // 2. 更新内存数据，保证左侧菜单和当前编辑器瞬间同步
         foreach (var bookNote in Notes.Where(n => n.Tags != null && n.Tags.Contains(_editingTag)))
         {
             bookNote.Tags.Remove(_editingTag);
@@ -1184,7 +1146,6 @@
             }
         }
 
-        // 3. 刷新弹窗内部的标签列表，并退出编辑状态
         _allUniqueTags = _allUniqueTags.Select(t => t == _editingTag ? _newTagName : t).Distinct().OrderBy(t => t).ToList();
         CancelEditTag();
         StateHasChanged();
@@ -1196,32 +1157,23 @@
         _showTagDeleteConfirm = true;
     }
 
-    // 🌟 核心修改：用户在弹窗中点击“确认删除”后，实际执行的方法
     private async Task ExecuteDeleteTag()
     {
         if (string.IsNullOrWhiteSpace(_tagToDelete)) return;
-
         string tag = _tagToDelete;
 
-        // 1. 调用仓储层物理删除
         await NoteRepository.DeleteTagGlobalAsync(tag);
-
-        // 2. 清理内存中关联该标签的数据
         foreach (var bookNote in Notes.Where(n => n.Tags != null && n.Tags.Contains(tag)))
         {
             bookNote.Tags.Remove(tag);
         }
 
-        // 3. 移出列表
         _allUniqueTags.Remove(tag);
-
-        // 4. 如果删除的刚好是左侧正在被筛选的标签，清空筛选条件
         if (_selectedTag == tag)
         {
             _selectedTag = string.Empty;
         }
 
-        // 5. 关掉弹窗，重置状态
         _showTagDeleteConfirm = false;
         _tagToDelete = string.Empty;
         StateHasChanged();
@@ -1230,19 +1182,17 @@
     private bool OpenInTab(string id)
     {
         if (string.IsNullOrEmpty(id)) return false;
-
         if (!_openTabs.Contains(id))
         {
-            // 如果还没打开，且已经满了 7 个，强行拦截！
             if (_openTabs.Count >= 7)
             {
                 _warningMessage = "最多只能同时打开 7 个标签页，请先关闭一些不常用的笔记。";
                 _showWarningDialog = true;
-                return false; // 告诉调用者：打开失败
+                return false;
             }
             _openTabs.Add(id);
         }
-        return true; // 成功打开，或者该笔记本来就在 Tab 里
+        return true;
     }
 
     private void CloseTab(string id)
@@ -1264,5 +1214,45 @@
                 SelectedNoteId = string.Empty;
             }
         }
+    }
+
+    // === 🌟 新增：多库管理逻辑实现 ===
+    private async Task OpenWorkspaceManager()
+    {
+        _workspaces = await NoteRepository.GetAllWorkspacesAsync();
+        _showWorkspaceModal = true;
+    }
+
+    private async Task SwitchWorkspace(string name)
+    {
+        if (name == NoteRepository.CurrentWorkspace) return;
+
+        await NoteRepository.SwitchWorkspaceAsync(name);
+        _showWorkspaceModal = false;
+
+        // 🌟 极其核心：清理当前内存，彻底重新初始化 UI！
+        _openTabs.Clear();
+        SelectedNoteId = string.Empty;
+        _selectedFolderPath = "notes";
+        _selectedTag = string.Empty;
+        await OnInitializedAsync();
+        StateHasChanged();
+    }
+
+    private async Task CreateWorkspace()
+    {
+        if (string.IsNullOrWhiteSpace(_newWorkspaceName)) return;
+
+        await NoteRepository.CreateWorkspaceAsync(_newWorkspaceName.Trim());
+        _newWorkspaceName = string.Empty;
+        _showWorkspaceModal = false;
+
+        // 🌟 同样彻底重启 UI
+        _openTabs.Clear();
+        SelectedNoteId = string.Empty;
+        _selectedFolderPath = "notes";
+        _selectedTag = string.Empty;
+        await OnInitializedAsync();
+        StateHasChanged();
     }
 }
