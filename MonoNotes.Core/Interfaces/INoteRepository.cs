@@ -19,5 +19,7 @@ namespace MonoNotes.Core.Interfaces
 
         // 新增：重命名物理文件夹
         Task RenameFolderAsync(string oldFolderPath, string newFolderName);
+
+        Task<string> SaveAssetAsync(byte[] fileData, string extension);
     }
 }

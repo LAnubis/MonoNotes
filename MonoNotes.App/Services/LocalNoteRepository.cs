@@ -3,6 +3,7 @@ using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using MonoNotes.Core.Interfaces;
 using MonoNotes.Core.Models;
+using System.Text.RegularExpressions; // 🌟 新增：用于解析图片链接
 
 namespace MonoNotes.App.Services
 {
@@ -54,6 +55,8 @@ namespace MonoNotes.App.Services
                         {
                             var yaml = parts[1];
                             var content = parts[2].TrimStart('\r', '\n');
+                            // 🌟 读取时拦截：把相对路径替换成虚拟域名，让 WebView2 能渲染
+                            content = content.Replace("./.assets/", "https://mononotes.local/.assets/");
                             var meta = _yamlDeserializer.Deserialize<NoteMetadata>(yaml);
 
                             // 计算相对路径
@@ -123,7 +126,8 @@ namespace MonoNotes.App.Services
             sb.Append(yaml);
             sb.AppendLine("---");
             sb.AppendLine(note.Content ?? string.Empty);
-
+            var pureContent = note.Content?.Replace("https://mononotes.local/", "./") ?? string.Empty;
+            sb.AppendLine(pureContent);
             await File.WriteAllTextAsync(filePath, sb.ToString());
         }
 
@@ -144,12 +148,55 @@ namespace MonoNotes.App.Services
 
         public async Task DeleteNoteAsync(string id)
         {
-            var filePath = Path.Combine(_storageDirectory, $"{id}.md");
-            if (File.Exists(filePath))
+            // 🌟 修复 Bug：全局搜索文件，确保哪怕笔记在深层子文件夹中也能被找到并删除
+            var filePath = Directory.GetFiles(_storageDirectory, $"{id}.md", SearchOption.AllDirectories).FirstOrDefault();
+
+            if (filePath != null)
             {
+                // 1. 在删除前，先读取笔记内容
+                var content = await File.ReadAllTextAsync(filePath);
+
+                // 2. 删除物理 Markdown 文件本身
                 File.Delete(filePath);
+
+                // 3. 提取该笔记中所有的图片文件名
+                // 匹配模式：寻找 .assets/ 后面跟着的文件名 (支持 png, jpg, gif, webp, svg 等)
+                var matches = Regex.Matches(content, @"\.assets/([a-zA-Z0-9_-]+\.[a-zA-Z0-9]+)");
+                var assetNamesInDeletedNote = matches.Select(m => m.Groups[1].Value).Distinct().ToList();
+
+                // 4. 🌟 安全清理机制：如果有图片，检查是否被其他笔记“共享”
+                if (assetNamesInDeletedNote.Any())
+                {
+                    // 获取当前硬盘上还剩下的所有笔记
+                    var allRemainingFiles = Directory.GetFiles(_storageDirectory, "*.md", SearchOption.AllDirectories);
+
+                    foreach (var assetName in assetNamesInDeletedNote)
+                    {
+                        bool isUsedElsewhere = false;
+
+                        // 扫描其他笔记，看是否包含这个图片名
+                        foreach (var otherFile in allRemainingFiles)
+                        {
+                            var otherContent = await File.ReadAllTextAsync(otherFile);
+                            if (otherContent.Contains(assetName))
+                            {
+                                isUsedElsewhere = true;
+                                break; // 只要有一个其他笔记在用，就立刻停止扫描，保护该图片
+                            }
+                        }
+
+                        // 🌟 如果没有任何其他笔记在使用这张图片，安全地将其从硬盘抹除！
+                        if (!isUsedElsewhere)
+                        {
+                            var assetPath = Path.Combine(_storageDirectory, ".assets", assetName);
+                            if (File.Exists(assetPath))
+                            {
+                                File.Delete(assetPath);
+                            }
+                        }
+                    }
+                }
             }
-            await Task.CompletedTask;
         }
 
         public async Task CreateFolderAsync(string parentFolderPath, string newFolderName)
@@ -192,7 +239,25 @@ namespace MonoNotes.App.Services
 
             await Task.CompletedTask;
         }
+        // 🌟 新增：保存附件到 .assets 文件夹
+        public async Task<string> SaveAssetAsync(byte[] fileData, string extension)
+        {
+            // 将所有图片集中存放在根目录的 .assets 隐藏文件夹下
+            var assetsPath = Path.Combine(_storageDirectory, ".assets");
+            if (!Directory.Exists(assetsPath))
+            {
+                Directory.CreateDirectory(assetsPath);
+            }
 
+            // 生成极其安全且唯一的物理文件名：时间戳 + 随机数
+            var fileName = $"{DateTime.Now:yyyyMMddHHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 4)}{extension}";
+            var filePath = Path.Combine(assetsPath, fileName);
+
+            await File.WriteAllBytesAsync(filePath, fileData);
+
+            // 返回保存好的文件名
+            return fileName;
+        }
         // 内部 DTO：专门用来映射 YAML 头部的结构
         private class NoteMetadata
         {

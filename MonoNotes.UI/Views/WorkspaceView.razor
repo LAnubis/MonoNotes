@@ -159,7 +159,8 @@
 
                 <div class="document-content">
                     <MarkdownEditor Content="@SelectedNote.Content"
-                                    ContentChanged="@((newContent) => { SelectedNote.Content = newContent; OnNoteChanged(); })" />
+                                    ContentChanged="@((newContent) => { SelectedNote.Content = newContent; OnNoteChanged(); })"
+                                    CurrentFolder="@SelectedNote.Folder" />
                 </div>
             </div>
         }

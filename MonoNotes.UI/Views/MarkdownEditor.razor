@@ -1,46 +1,18 @@
 ﻿@using Microsoft.JSInterop
+@using System.IO
 @inject IJSRuntime JSRuntime
 @implements IAsyncDisposable
+@inject MonoNotes.Core.Interfaces.INoteRepository NoteRepository
 
-<div id="@_editorId" class="tui-editor-container" style="height: 100%;"></div>
-
-<style>
-    /* 1. 隐藏编辑器外层丑陋的边框 */
-    .tui-editor-container .toastui-editor-defaultUI {
-        border: none !important;
-    }
-
-    /* 2. 【核心修复】将菜单栏高度大幅压缩，融入背景 */
-    .tui-editor-container .toastui-editor-defaultUI-toolbar {
-        height: 40px !important; /* 原本大概是60px，直接压低 */
-        padding: 0 10px !important;
-        border-bottom: 1px solid rgba(55, 53, 47, 0.09) !important;
-        background: transparent !important;
-    }
-
-    /* 3. 让菜单里的按钮容器贴合高度 */
-    .tui-editor-container .toastui-editor-toolbar-group {
-        height: 40px !important;
-    }
-
-    /* 4. （可选）把里面的工具图标稍微缩小一点，更显精致 */
-    .tui-editor-container .toastui-editor-defaultUI-toolbar button {
-        width: 28px !important;
-        height: 28px !important;
-        margin: 0 2px !important;
-    }
-
-    /* 5. 调整编辑器主体区顶部的间距 */
-    .tui-editor-container .toastui-editor-main {
-        margin-top: 5px !important;
-    }
-</style>
+<div id="@_editorId" class="vditor-container" style="height: 100%;"></div>
 
 @code {
     [Parameter] public string Content { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> ContentChanged { get; set; }
 
-    // 为每个编辑器实例生成唯一 ID
+    // 🌟 接收当前笔记所在的文件夹路径（用于计算相对路径）
+    [Parameter] public string CurrentFolder { get; set; } = string.Empty;
+
     private readonly string _editorId = "editor-" + Guid.NewGuid().ToString("N");
     private DotNetObjectReference<MarkdownEditor>? _dotNetHelper;
     private bool _isInitialized = false;
@@ -52,21 +24,23 @@
         {
             _dotNetHelper = DotNetObjectReference.Create(this);
             _lastRenderedContent = Content;
-            // 将唯一的 ID 传给 JS
-            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.init", _editorId, _dotNetHelper, Content);
+            // 初始化 Vditor，并将 C# 引用传给 JS
+            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.initVditor", _editorId, Content, _dotNetHelper);
             _isInitialized = true;
         }
     }
 
     protected override async Task OnParametersSetAsync()
     {
+        // 当外部切换笔记时，更新编辑器内容
         if (_isInitialized && Content != _lastRenderedContent)
         {
             _lastRenderedContent = Content;
-            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.setContent", _editorId, Content);
+            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.setVditorContent", _editorId, Content);
         }
     }
 
+    // 供 JS 实时回传内容
     [JSInvokable]
     public async Task UpdateContent(string newContent)
     {
@@ -76,6 +50,23 @@
             _lastRenderedContent = newContent;
             await ContentChanged.InvokeAsync(newContent);
         }
+    }
+
+    // 🌟 核心拦截器：供 JS 调用的图片保存接口
+    [JSInvokable]
+    public async Task<string> UploadImageAsync(string base64Data, string fileName)
+    {
+        var base64Span = base64Data.Contains(',') ? base64Data.Split(',')[1] : base64Data;
+        var bytes = Convert.FromBase64String(base64Span);
+
+        var ext = Path.GetExtension(fileName);
+        if (string.IsNullOrEmpty(ext)) ext = ".png";
+
+        var savedFileName = await NoteRepository.SaveAssetAsync(bytes, ext);
+
+        // 🌟 降维打击：永远返回虚拟域名的绝对路径
+        // 这样不仅能在 Vditor 中瞬间显示，而且再也不用算 ../../ 了！
+        return $"https://mononotes.local/.assets/{savedFileName}";
     }
 
     public async ValueTask DisposeAsync()
