@@ -12,7 +12,7 @@ window.MonoNotesEditor = {
             mode: 'ir',
             icon: 'ant',
             outline: {
-                enable: false,
+                enable: true,
                 position: 'right'
             },
             cache: {
