@@ -1,9 +1,10 @@
-﻿using System.Text;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
+﻿using MonoNotes.Core;
 using MonoNotes.Core.Interfaces;
 using MonoNotes.Core.Models;
+using System.Text;
 using System.Text.RegularExpressions;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace MonoNotes.App.Services
 {
@@ -99,7 +100,8 @@ namespace MonoNotes.App.Services
                             var content = parts[2].TrimStart('\r', '\n');
 
                             // 🌟 动态还原：给相对路径加上当前库的虚拟前缀
-                            content = content.Replace("./.assets/", $"https://mononotes.local/Workspaces/{CurrentWorkspace}/.assets/");
+                           // content = content.Replace("./.assets/", $"https://mononotes.local/Workspaces/{CurrentWorkspace}/.assets/");
+                            content = content.Replace("./.assets/", $"{AppConstants.ImageBaseUrl}/Workspaces/{CurrentWorkspace}/.assets/");
 
                             var meta = _yamlDeserializer.Deserialize<NoteMetadata>(yaml);
 
@@ -163,7 +165,8 @@ namespace MonoNotes.App.Services
             sb.AppendLine("---");
 
             // 🌟 动态拦截：将当前库的虚拟路径替换回纯洁的 ./ 相对路径
-            var pureContent = note.Content?.Replace($"https://mononotes.local/Workspaces/{CurrentWorkspace}/", "./") ?? string.Empty;
+            //var pureContent = note.Content?.Replace($"https://mononotes.local/Workspaces/{CurrentWorkspace}/", "./") ?? string.Empty;
+            var pureContent = note.Content?.Replace($"{AppConstants.ImageBaseUrl}/Workspaces/{CurrentWorkspace}/", "./") ?? string.Empty;
             sb.AppendLine(pureContent);
 
             await File.WriteAllTextAsync(filePath, sb.ToString());

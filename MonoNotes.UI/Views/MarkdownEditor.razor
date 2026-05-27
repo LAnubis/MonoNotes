@@ -164,8 +164,8 @@
         if (string.IsNullOrEmpty(ext)) ext = ".png";
         var savedFileName = await NoteRepository.SaveAssetAsync(bytes, ext);
 
-        // 🌟 核心升级：返回当前库的绝对虚拟路径
-        return $"https://mononotes.local/Workspaces/{NoteRepository.CurrentWorkspace}/.assets/{savedFileName}";
+        // 🌟 核心升级：返回跨平台的绝对虚拟路径
+        return $"{MonoNotes.Core.AppConstants.ImageBaseUrl}/Workspaces/{NoteRepository.CurrentWorkspace}/.assets/{savedFileName}";
     }
 
     public async ValueTask DisposeAsync()
