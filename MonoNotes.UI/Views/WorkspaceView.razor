@@ -26,10 +26,17 @@
                     </div>
 
                     <div class="nav-item @(_isArchiveFilterActive ? "active" : "")"
-                         style="padding: 4px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-main);"
+                         style="padding: 4px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-main); margin-top: 10px;"
                          @onclick="ShowArchives">
                         <span style="margin-right: 8px;">🗄️</span>
                         <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">归档</span>
+                    </div>
+
+                    <div class="nav-item @(_isTrashFilterActive ? "active" : "")"
+                         style="padding: 4px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-main); margin-top: 10px;"
+                         @onclick="ShowTrash">
+                        <span style="margin-right: 8px;">🗑️</span>
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">回收站</span>
                     </div>
                 </div>
             }
@@ -117,7 +124,16 @@
             <div class="editor-header">
                 <div class="status-indicator">@_saveStatus</div>
                 <div class="header-actions">
-                    <button class="icon-btn" title="删除" @onclick="DeleteCurrentNote">🗑️</button>
+                    <button class="icon-btn" title="@(SelectedNote.IsPinned ? "取消置顶" : "置顶笔记")" @onclick="TogglePin">@(SelectedNote.IsPinned ? "📌" : "📍")</button>
+
+                    @if (SelectedNote.IsDeleted)
+                    {
+                        <button class="icon-btn" title="恢复笔记" @onclick="RestoreCurrentNote">↩️</button>
+                    }
+                    else
+                    {
+                        <button class="icon-btn" title="移至回收站" @onclick="DeleteCurrentNote">🗑️</button>
+                    }
                     <button class="icon-btn">⋯</button>
                 </div>
             </div>
@@ -171,14 +187,25 @@
     @if (_showNoteContextMenu && _contextMenuNote != null)
     {
         <div class="custom-context-menu" style="left: @(_noteContextMenuX)px; top: @(_noteContextMenuY)px;" @onclick:stopPropagation="true">
-            <div class="menu-item" @onclick="ToggleFavoriteContext">@(_contextMenuNote.IsFavorite ? "⭐ 取消收藏" : "⭐ 收藏")</div>
-            <div class="menu-item" @onclick="TogglePinContext">@(_contextMenuNote.IsPinned ? "📌 取消置顶" : "📌 置顶")</div>
-            <div class="menu-item" @onclick="ToggleArchiveContext">@(_contextMenuNote.IsArchived ? "🗄️ 取消归档" : "🗄️ 归档")</div>
-            <div class="menu-divider"></div>
-            <div class="menu-item" @onclick="() => OpenFolderSelector(false)">📁 移动到...</div>
-            <div class="menu-item" @onclick="() => OpenFolderSelector(true)">📄 复制到...</div>
-            <div class="menu-divider"></div>
-            <div class="menu-item" style="color: #ff4d4f;" @onclick="DeleteNoteContext">🗑️ 删除</div>
+            @if (_contextMenuNote.IsDeleted)
+            {
+                <div class="menu-item" @onclick="RestoreNoteContext">↩️ 恢复笔记</div>
+                <div class="menu-divider"></div>
+                <div class="menu-item" style="color: #ff4d4f;" @onclick="HardDeleteNoteContext">❌ 彻底删除</div>
+            }
+            else
+            {
+                <div class="menu-item" @onclick="ToggleFavoriteContext">@(_contextMenuNote.IsFavorite ? "⭐ 取消收藏" : "⭐ 收藏")</div>
+                <div class="menu-item" @onclick="TogglePinContext">@(_contextMenuNote.IsPinned ? "📌 取消置顶" : "📌 置顶")</div>
+                <div class="menu-item" @onclick="ToggleArchiveContext">@(_contextMenuNote.IsArchived ? "🗄️ 取消归档" : "🗄️ 归档")</div>
+                <div class="menu-divider"></div>
+                <div class="menu-item" @onclick="() => OpenFolderSelector(false)">📁 移动到...</div>
+                <div class="menu-item" @onclick="() => OpenFolderSelector(true)">📄 复制到...</div>
+                <div class="menu-divider"></div>
+                <div class="menu-item" style="color: #ff4d4f;" @onclick="SoftDeleteNoteContext">🗑️ 移至回收站</div>
+                
+            }
+          
         </div>
     }
 
@@ -245,6 +272,21 @@
     private bool _isFavoriteFilterActive = false;
     // 🌟 新增：归档视图激活状态
     private bool _isArchiveFilterActive = false;
+    // 🌟 新增：回收站视图激活状态
+    private bool _isTrashFilterActive = false;
+
+    private void ShowTrash()
+    {
+        _isTrashFilterActive = true;
+        _isArchiveFilterActive = false;
+        _isFavoriteFilterActive = false;
+        _selectedFolderPath = string.Empty;
+        _selectedTag = string.Empty;
+        SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+        StateHasChanged(); // 强制刷新 UI
+    }
+
+    // ⚠️ 注意：请在其他的 ShowFavorites()、ShowArchives()、OnFolderSelectedHandler()、SelectTag() 方法中，都加上一行 _isTrashFilterActive = false; 确保互斥！
     // 动态计算系统中所有的唯一标签，并按字母排序
     private List<string> AllTags => Notes
         .Where(n => n.Tags != null)
@@ -258,6 +300,7 @@
     {
         _isFavoriteFilterActive = true;
         _isArchiveFilterActive = false;
+        _isTrashFilterActive = false;
         _selectedFolderPath = string.Empty;
         _selectedTag = string.Empty;
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
@@ -266,6 +309,7 @@
     {
         _isArchiveFilterActive = true;
         _isFavoriteFilterActive = false;
+        _isTrashFilterActive = false;
         _selectedFolderPath = string.Empty;
         _selectedTag = string.Empty;
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
@@ -274,6 +318,7 @@
     {
         _isFavoriteFilterActive = false; // 切换时取消收藏视图
         _isArchiveFilterActive = false;
+        _isTrashFilterActive = false;
         _selectedFolderPath = path;
         _selectedTag = string.Empty; // 🌟 核心：选中文件夹时，清空标签过滤
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
@@ -283,6 +328,7 @@
     {
         _isFavoriteFilterActive = false; // 切换时取消收藏视图
         _isArchiveFilterActive = false;
+        _isTrashFilterActive = false;
         if (_selectedTag == tag)
         {
             _selectedTag = string.Empty; // 再次点击取消选中
@@ -472,30 +518,40 @@
         {
             IEnumerable<MonoNote> result = Notes;
 
-            // 🌟 核心拦截 1：如果处于“归档视图”，只显示已归档的笔记
-            if (_isArchiveFilterActive)
+            if (_isTrashFilterActive)
             {
-                result = result.Where(n => n.IsArchived);
+                result = result.Where(n => n.IsDeleted);
             }
             else
             {
-                // 🌟 核心拦截 2：如果处于“常规视图”，必须强制过滤掉所有已归档的笔记！
-                result = result.Where(n => !n.IsArchived);
+                // 🌟 常规视图，绝对不能显示已删除的笔记
+                result = result.Where(n => !n.IsDeleted);
+                // 🌟 核心拦截 1：如果处于“归档视图”，只显示已归档的笔记
+                if (_isArchiveFilterActive)
+                {
+                    result = result.Where(n => n.IsArchived);
+                }
+                else
+                {
+                    // 🌟 核心拦截 2：如果处于“常规视图”，必须强制过滤掉所有已归档的笔记！
+                    result = result.Where(n => !n.IsArchived);
 
-                // 在排除了归档笔记的基础上，继续进行原有的分类过滤
-                if (_isFavoriteFilterActive)
-                {
-                    result = result.Where(n => n.IsFavorite);
-                }
-                else if (!string.IsNullOrEmpty(_selectedFolderPath))
-                {
-                    result = result.Where(n => n.Folder == _selectedFolderPath);
-                }
-                else if (!string.IsNullOrEmpty(_selectedTag))
-                {
-                    result = result.Where(n => n.Tags != null && n.Tags.Contains(_selectedTag));
+                    // 在排除了归档笔记的基础上，继续进行原有的分类过滤
+                    if (_isFavoriteFilterActive)
+                    {
+                        result = result.Where(n => n.IsFavorite);
+                    }
+                    else if (!string.IsNullOrEmpty(_selectedFolderPath))
+                    {
+                        result = result.Where(n => n.Folder == _selectedFolderPath);
+                    }
+                    else if (!string.IsNullOrEmpty(_selectedTag))
+                    {
+                        result = result.Where(n => n.Tags != null && n.Tags.Contains(_selectedTag));
+                    }
                 }
             }
+           
 
             // 搜索过滤（全局生效）
             if (!string.IsNullOrWhiteSpace(_searchQuery))
@@ -531,9 +587,9 @@
     {
         if (SelectedNote != null)
         {
-            await NoteRepository.DeleteNoteAsync(SelectedNote.Id);
-            Notes.Remove(SelectedNote);
-            SelectedNoteId = FilteredNotes.Any() ? FilteredNotes.First().Id : string.Empty;
+            SelectedNote.IsDeleted = true;
+            await PerformSaveAsync();
+            SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
             StateHasChanged();
         }
     }
@@ -627,17 +683,6 @@
         _showNoteContextMenu = false;
     }
 
-    private async Task DeleteNoteContext()
-    {
-        if (_contextMenuNote != null)
-        {
-            await NoteRepository.DeleteNoteAsync(_contextMenuNote.Id);
-            Notes.Remove(_contextMenuNote);
-            if (SelectedNoteId == _contextMenuNote.Id) SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
-        }
-        _showNoteContextMenu = false;
-    }
-
     private void OpenFolderSelector(bool isCopy)
     {
         _isCopyMode = isCopy;
@@ -689,5 +734,70 @@
             StateHasChanged();
         }
         _showNoteContextMenu = false;
+    }
+
+    // 右键菜单 -> 软删除
+    private async Task SoftDeleteNoteContext()
+    {
+        if (_contextMenuNote != null)
+        {
+            _contextMenuNote.IsDeleted = true;
+            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+            if (SelectedNoteId == _contextMenuNote.Id) SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+            StateHasChanged();
+        }
+        _showNoteContextMenu = false;
+    }
+
+    // 右键菜单 -> 恢复笔记
+    private async Task RestoreNoteContext()
+    {
+        if (_contextMenuNote != null)
+        {
+            _contextMenuNote.IsDeleted = false;
+            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+            if (SelectedNoteId == _contextMenuNote.Id) SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+            StateHasChanged();
+        }
+        _showNoteContextMenu = false;
+    }
+
+    // 右键菜单 -> 彻底物理删除
+    private async Task HardDeleteNoteContext()
+    {
+        if (_contextMenuNote != null)
+        {
+            // 🌟 物理删除硬盘上的文件
+            await NoteRepository.DeleteNoteAsync(_contextMenuNote.Id);
+            // 从内存列表中彻底抹除
+            Notes.Remove(_contextMenuNote);
+
+            if (SelectedNoteId == _contextMenuNote.Id) SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+            StateHasChanged();
+        }
+        _showNoteContextMenu = false;
+    }
+
+    // 编辑器头部：置顶切换
+    private async Task TogglePin()
+    {
+        if (SelectedNote != null)
+        {
+            SelectedNote.IsPinned = !SelectedNote.IsPinned;
+            await PerformSaveAsync();
+            StateHasChanged();
+        }
+    }
+
+    // 编辑器头部：从回收站恢复
+    private async Task RestoreCurrentNote()
+    {
+        if (SelectedNote != null)
+        {
+            SelectedNote.IsDeleted = false;
+            await PerformSaveAsync();
+            SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+            StateHasChanged();
+        }
     }
 }

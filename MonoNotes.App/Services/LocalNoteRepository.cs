@@ -74,7 +74,8 @@ namespace MonoNotes.App.Services
                                 // 🌟 核心修改 1：读取时赋值状态
                                 IsPinned = meta.IsPinned,
                                 IsFavorite = meta.IsFavorite,
-                                IsArchived = meta.IsArchived
+                                IsArchived = meta.IsArchived,
+                                IsDeleted = meta.IsDeleted
                             });
                         }
                     }
@@ -112,7 +113,8 @@ namespace MonoNotes.App.Services
                 // 🌟 核心修改 2：保存时赋值状态给 DTO
                 IsPinned = note.IsPinned,
                 IsFavorite = note.IsFavorite,
-                IsArchived = note.IsArchived
+                IsArchived = note.IsArchived,
+                IsDeleted = note.IsDeleted
             };
 
             var yaml = _yamlSerializer.Serialize(meta);
@@ -204,6 +206,7 @@ namespace MonoNotes.App.Services
             public bool IsFavorite { get; set; }
             // 🌟 核心修改 1：增加归档字段映射
             public bool IsArchived { get; set; }
+            public bool IsDeleted { get; set; }
         }
     }
 }

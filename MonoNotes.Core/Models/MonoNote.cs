@@ -25,7 +25,7 @@ namespace MonoNotes.Core.Models
         public bool IsPinned { get; set; }
         //归档字段映射
         public bool IsArchived { get; set; }
-
+        public bool IsDeleted { get; set; }
         // 🌟 新增：全局收藏标记
         public bool IsFavorite { get; set; }
         // 摘要，用于在笔记列表中展示前两行内容
