@@ -9,6 +9,8 @@
 @inject IWebDavService WebDavService
 @inject MonoNotes.Core.Interfaces.IWebDavSyncService SyncService
 @inject MonoNotes.Core.Interfaces.ISearchService SearchService
+@inject MonoNotes.UI.Services.VisualEngineService VisualEngine
+@inject MonoNotes.Storage.JsonIndexService IndexService
 
 <div class="notion-workspace" @onclick="CloseContextMenu">
     <aside class="sidebar">
@@ -52,7 +54,7 @@
             </div>
         </div>
         <div class="nav-menu">
-            @if (Notes.Any(n => n.IsFavorite))
+            @if (IndexItems.Any())
             {
                 <div style="padding: 16px 16px 8px 16px; font-size: 11px; font-weight: 600; color: #999;">
                     <span>快捷方式</span>
@@ -132,8 +134,7 @@
     </aside>
 
     <section class="note-list">
-        <div class="list-header" style="display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid rgba(55,53,47,0.09); margin-bottom: 8px;">
-
+        <div class="list-header" style="display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--nt-border); margin-bottom: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div style="font-size: 13px; font-weight: 600; color: var(--nt-text-gray); display: flex; align-items: center; gap: 6px;">
                     @if (_isFavoriteFilterActive)
@@ -172,8 +173,15 @@
                 </div>
 
                 <div style="display: flex; gap: 4px;">
-                    <button class="icon-btn" style="font-size: 14px; opacity: 0.6; padding: 2px 4px;" title="按时间排序">🕒</button>
-                    <button class="icon-btn" style="font-size: 14px; opacity: 0.6; padding: 2px 4px;" title="按标题排序">🔤</button>
+                    <button class="icon-btn" title="按修改时间排序" @onclick="ToggleTimeSort"
+                            style="font-size: 14px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; opacity: @(_sortMode == 0 || _sortMode == 1 ? "1" : "0.4"); background: @(_sortMode == 0 || _sortMode == 1 ? "rgba(46,170,220,0.1)" : "transparent");">
+                        @(_sortMode == 0 ? "🕒↓" : "🕒↑")
+                    </button>
+
+                    <button class="icon-btn" title="按标题拼音/字母排序" @onclick="ToggleTitleSort"
+                            style="font-size: 14px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; opacity: @(_sortMode == 2 || _sortMode == 3 ? "1" : "0.4"); background: @(_sortMode == 2 || _sortMode == 3 ? "rgba(46,170,220,0.1)" : "transparent");">
+                        @(_sortMode == 2 ? "🔤↓" : "🔤↑")
+                    </button>
                 </div>
             </div>
 
@@ -223,8 +231,8 @@
 
                     .tabs-bar {
                         display: flex;
-                        background-color: #fbfbfa;
-                        border-bottom: 1px solid rgba(55, 53, 47, 0.09);
+                        background-color: var(--nt-bg-sidebar);
+                        border-bottom: 1px solid var(--nt-border);
                         padding: 8px 12px 0 12px;
                         gap: 4px;
                         overflow-x: auto;
@@ -244,7 +252,7 @@
                         font-size: 13px;
                         max-width: 180px;
                         min-width: 120px;
-                        color: rgba(55, 53, 47, 0.6);
+                        color: var(--nt-text-gray);
                         background: transparent;
                         border: 1px solid transparent;
                         border-bottom: none;
@@ -252,14 +260,14 @@
                     }
 
                         .tab-item:hover {
-                            background: rgba(55, 53, 47, 0.05);
+                            background: var(--nt-bg-hover);
                         }
 
                         .tab-item.active {
-                            background: #ffffff;
-                            color: rgba(55, 53, 47, 0.85);
+                            background: var(--nt-bg-main);
+                            color: var(--nt-text-main);
                             font-weight: 500;
-                            border-color: rgba(55, 53, 47, 0.09);
+                            border-color: var(--nt-border);
                             box-shadow: 0 -2px 6px rgba(0,0,0,0.02);
                         }
 
@@ -278,7 +286,7 @@
 
                     .tab-close-btn:hover {
                         opacity: 1 !important;
-                        background: rgba(55, 53, 47, 0.1);
+                        background: var(--nt-bg-hover);
                         color: #ff4d4f;
                     }
         </style>
@@ -286,7 +294,7 @@
         <div class="tabs-bar">
             @foreach (var tabId in _openTabs)
             {
-                var tabNote = Notes.FirstOrDefault(n => n.Id == tabId);
+                var tabNote = IndexItems.FirstOrDefault(n => n.Id == tabId);
                 if (tabNote != null)
                 {
                     <div class="tab-item @(tabId == SelectedNoteId ? "active" : "")" @onclick="() => SelectNote(tabId)">
@@ -305,7 +313,6 @@
                 <div class="status-indicator">@_saveStatus</div>
                 <div class="header-actions">
                     <button class="icon-btn" title="@(SelectedNote.IsPinned ? "取消置顶" : "置顶笔记")" @onclick="TogglePin">@(SelectedNote.IsPinned ? "📌" : "📍")</button>
-
                     @if (SelectedNote.IsDeleted)
                     {
                         <button class="icon-btn" title="恢复笔记" @onclick="RestoreCurrentNote">↩️</button>
@@ -346,7 +353,7 @@
         }
         else
         {
-            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #ffffff;">
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--nt-bg-main);">
                 <span style="font-size: 48px; filter: grayscale(1) opacity(0.2); margin-bottom: 16px;">📝</span>
                 <p style="color: rgba(55,53,47,0.4); font-size: 14px; letter-spacing: 1px;">选择或新建一篇笔记以开始编写</p>
             </div>
@@ -586,54 +593,93 @@
 
     @if (_showSettingsDialog)
     {
-        <div class="modal-overlay" @onclick="CloseSettingsDialog">
-            <div class="modal-content" style="width: 720px; min-height: 500px; display: flex; flex-direction: row; padding: 0;" @onclick:stopPropagation="true">
-                <div style="width: 160px; background: #fbfbfa; border-right: 1px solid var(--nt-border); padding: 20px 12px; border-radius: 8px 0 0 8px;">
-                    <div style="font-size: 11px; font-weight: 600; color: #999; padding-left: 8px; margin-bottom: 12px;">用户设置</div>
-                    <div class="nav-item active" style="padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;">
+        <div class="modal-overlay" @onclick="CancelSettings">
+            <div class="modal-content" style="width: 720px; min-height: 500px; display: flex; flex-direction: row; padding: 0; background: var(--nt-bg-main); color: var(--nt-text-main);" @onclick:stopPropagation="true">
+                <div style="width: 160px; background: var(--nt-bg-sidebar); border-right: 1px solid var(--nt-border); padding: 20px 12px; border-radius: 8px 0 0 8px;">
+                    <div style="font-size: 11px; font-weight: 600; color: var(--nt-text-gray); padding-left: 8px; margin-bottom: 12px;">用户设置</div>
+
+                    <div class="nav-item @(_settingsActiveTab == "sync" ? "active" : "")"
+                         style="padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;"
+                         @onclick="@(() => _settingsActiveTab = "sync")">
                         ☁️ 同步 (WebDAV)
                     </div>
-                    <div class="nav-item" style="padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--nt-text-gray);">
+
+                    <div class="nav-item @(_settingsActiveTab == "appearance" ? "active" : "")"
+                         style="padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; margin-top: 4px;"
+                         @onclick="@(() => _settingsActiveTab = "appearance")">
                         🎨 外观与行为
                     </div>
                 </div>
 
                 <div style="flex: 1; padding: 32px; display: flex; flex-direction: column;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
-                        <h3 style="margin: 0; font-size: 18px; font-weight: 600;">WebDAV 同步配置</h3>
-                        <button class="icon-btn" @onclick="CloseSettingsDialog">×</button>
+                        <h3 style="margin: 0; font-size: 18px; font-weight: 600;">
+                            @(_settingsActiveTab == "sync" ? "WebDAV 同步配置" : "外观与行为")
+                        </h3>
+                        <button class="icon-btn" style="color: var(--nt-text-gray);" @onclick="CancelSettings">×</button>
                     </div>
 
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--nt-border);">
-                        <div>
-                            <div style="font-size: 14px; font-weight: 500;">开启后台自动同步</div>
-                            <div style="font-size: 12px; color: var(--nt-text-gray); margin-top: 6px;">开启后，应用会在后台静默比对并合并云端数据。</div>
+                    @if (_settingsActiveTab == "sync")
+                    {
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--nt-border);">
+                            <div>
+                                <div style="font-size: 14px; font-weight: 500;">开启后台自动同步</div>
+                                <div style="font-size: 12px; color: var(--nt-text-gray); margin-top: 6px;">开启后，应用会在后台静默比提示并合并云端数据。</div>
+                            </div>
+                            <input type="checkbox" @bind="_appSettings.EnableWebDavSync" style="width: 18px; height: 18px; cursor: pointer;" />
                         </div>
-                        <input type="checkbox" @bind="_appSettings.EnableWebDavSync" style="width: 18px; height: 18px; cursor: pointer;" />
-                    </div>
 
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">服务器地址 (Server URL)</label>
-                        <input type="text" class="search-box" @bind="_appSettings.WebDavUrl" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px;" placeholder="https://dav.jianguoyun.com/dav/" />
-                        <div style="font-size: 12px; color: #999; margin-top: 6px;">推荐使用坚果云。只填根目录即可，应用会在同步时自动创建子文件夹。</div>
-                    </div>
-
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">账号 (Username)</label>
-                        <input type="text" class="search-box" @bind="_appSettings.WebDavUsername" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px;" placeholder="例如：your-email@example.com" />
-                    </div>
-
-                    <div style="margin-bottom: 32px;">
-                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">应用授权密码 (App Password)</label>
-                        <input type="password" class="search-box" @bind="_webDavPassword" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px;" placeholder="请填入坚果云的第三方应用授权密码" />
-                        <div style="font-size: 12px; color: #faad14; margin-top: 8px; line-height: 1.5;">
-                            ⚠️ 绝不上传服务器。密码将调用底层的 DPAPI/Keychain 进行硬件级加密保护。
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">服务器地址 (Server URL)</label>
+                            <input type="text" class="search-box" @bind="_appSettings.WebDavUrl" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px; background: transparent; color: inherit;" placeholder="https://dav.jianguoyun.com/dav/" />
+                            <div style="font-size: 12px; color: var(--nt-text-gray); opacity: 0.8; margin-top: 6px;">推荐使用坚果云。只填根目录即可，应用会在同步时自动创建子文件夹。</div>
                         </div>
-                    </div>
+
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">账号 (Username)</label>
+                            <input type="text" class="search-box" @bind="_appSettings.WebDavUsername" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px; background: transparent; color: inherit;" placeholder="例如：your-email@example.com" />
+                        </div>
+
+                        <div style="margin-bottom: 32px;">
+                            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">应用授权密码 (App Password)</label>
+                            <input type="password" class="search-box" @bind="_webDavPassword" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px; background: transparent; color: inherit;" placeholder="请填入坚果云的第三方应用授权密码" />
+                            <div style="font-size: 12px; color: #faad14; margin-top: 8px; line-height: 1.5;">
+                                ⚠️ 绝不上传服务器。密码将调用底层的 DPAPI/Keychain 进行硬件级加密保护。
+                            </div>
+                        </div>
+                    }
+
+                    @if (_settingsActiveTab == "appearance")
+                    {
+                        <div style="margin-bottom: 32px;">
+                            <div style="font-size: 14px; font-weight: 600; color: var(--nt-text-main); margin-bottom: 12px;">主题模式 (Theme)</div>
+                            <select class="search-box" style="width: 200px; padding: 8px 12px; background: transparent; color: var(--nt-text-main); border: 1px solid var(--nt-border); border-radius: 6px; outline: none; cursor: pointer;"
+                                    @bind="_appSettings.Theme" @bind:after="ApplyVisualPreview">
+                                <option value="System" style="color: black;">💻 跟随系统</option>
+                                <option value="Light" style="color: black;">☀️ 浅色模式</option>
+                                <option value="Dark" style="color: black;">🌙 深色模式</option>
+                            </select>
+                        </div>
+
+                        <div style="margin-bottom: 32px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <div style="font-size: 14px; font-weight: 600; color: var(--nt-text-main);">界面缩放 (Zoom)</div>
+                                <div style="font-size: 13px; color: var(--nt-accent); font-weight: 600;">@Math.Round(_appSettings.ZoomLevel * 100)%</div>
+                            </div>
+
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <span style="font-size: 12px; color: var(--nt-text-gray);">A</span>
+                                <input type="range" min="0.8" max="1.3" step="0.05" style="flex: 1; cursor: pointer;"
+                                       @bind="_appSettings.ZoomLevel" @bind:event="oninput" @bind:after="ApplyVisualPreview" />
+                                <span style="font-size: 18px; color: var(--nt-text-gray);">A</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--nt-text-gray); margin-top: 8px;">全局放大或缩小界面的字体与元素大小。</div>
+                        </div>
+                    }
 
                     <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 20px; border-top: 1px solid var(--nt-border);">
                         <div>
-                            @if (!string.IsNullOrEmpty(_connectionTestResult))
+                            @if (_settingsActiveTab == "sync" && !string.IsNullOrEmpty(_connectionTestResult))
                             {
                                 <span style="font-size: 13px; font-weight: 500; color: @(_connectionTestSuccess ? "#52c41a" : "#ff4d4f");">
                                     @_connectionTestResult
@@ -641,11 +687,14 @@
                             }
                         </div>
                         <div style="display: flex; gap: 12px;">
-                            <button class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; border-radius: 6px; font-weight: 500;" @onclick="TestWebDavConnection" disabled="@_isTestingConnection">
-                                @(_isTestingConnection ? "正在连接..." : "🔌 测试连接")
-                            </button>
-                            <button class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; border-radius: 6px;" @onclick="CloseSettingsDialog">取消</button>
-                            <button class="btn-primary" style="padding: 8px 20px; border: none; background: #2eaadc; color: white; border-radius: 6px; font-weight: 500;" @onclick="SaveSettings">💾 保存配置</button>
+                            @if (_settingsActiveTab == "sync")
+                            {
+                                <button class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; color: var(--nt-text-main); border-radius: 6px; font-weight: 500;" @onclick="TestWebDavConnection" disabled="@_isTestingConnection">
+                                    @(_isTestingConnection ? "正在连接..." : "🔌 测试连接")
+                                </button>
+                            }
+                            <button class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; color: var(--nt-text-main); border-radius: 6px;" @onclick="CancelSettings">取消</button>
+                            <button class="btn-primary" style="padding: 8px 20px; border: none; background: var(--nt-accent); color: white; border-radius: 6px; font-weight: 500;" @onclick="SaveSettings">💾 保存配置</button>
                         </div>
                     </div>
                 </div>
@@ -751,11 +800,19 @@
 </div>
 
 @code {
-    private List<MonoNote> Notes = new();
+    // 🌟 核心修改 1：双层缓存架构！
+    // 列表使用轻量级索引，内存极小，毫秒级响应
+    private List<NoteIndexItem> IndexItems = new();
+
+    // 编辑器使用完整笔记缓存，只加载打开的标签页
+    private List<MonoNote> _openNotesCache = new();
+
     private string SelectedNoteId = string.Empty;
     private string _searchQuery = string.Empty;
     private string _currentNav = "all";
-    private MonoNote? SelectedNote => Notes.FirstOrDefault(n => n.Id == SelectedNoteId);
+
+    // 🌟 核心修改 2：编辑器从已打开的缓存中取数据
+    private MonoNote? SelectedNote => _openNotesCache.FirstOrDefault(n => n.Id == SelectedNoteId);
 
     private List<FolderTree.FolderNode> _folderTree = new();
     private string _selectedFolderPath = "notes";
@@ -776,11 +833,12 @@
     private bool _showNoteContextMenu = false;
     private double _noteContextMenuX = 0;
     private double _noteContextMenuY = 0;
-    private MonoNote? _contextMenuNote;
+    private NoteIndexItem? _contextMenuNote; // 🌟 上下文菜单现在针对的是 IndexItem
 
     private bool _showFolderSelector = false;
     private bool _isCopyMode = false;
     private string _targetFolder = string.Empty;
+
     private bool _isFavoriteFilterActive = false;
     private bool _isArchiveFilterActive = false;
     private bool _isTrashFilterActive = false;
@@ -814,7 +872,7 @@
     private bool _connectionTestSuccess = false;
 
     // === 🌟 后台同步与冲突处理 ===
-    private Timer _bgSyncTimer = new Timer(30000); // 30秒静默同步一次
+    private Timer _bgSyncTimer = new Timer(30000);
     private bool _isSyncingUI = false;
     private bool _showConflictCenter = false;
     private List<string> _conflictFiles = new();
@@ -824,27 +882,68 @@
     private string _superSearchQuery = string.Empty;
     private List<SearchResultItem> _searchResults = new();
 
+    // === ⚙️ 设置面板控制状态 ===
+    private string _settingsActiveTab = "sync";
+    private string _originalTheme = "System";
+    private double _originalZoom = 1.0;
+
     protected override async Task OnInitializedAsync()
     {
-        Notes = await NoteRepository.GetAllNotesAsync();
-        var rawFolders = await NoteRepository.GetAllFoldersAsync();
+        // 1. 加载现有的 JSON 索引
+        IndexItems = await IndexService.LoadIndexAsync();
 
+        // 🌟 2. 终极自愈机制：全盘对齐本地文件！
+        // 从底层仓储直接读取硬盘里所有的真实 .md 文件
+        var allNotes = await NoteRepository.GetAllNotesAsync();
+
+        foreach (var note in allNotes)
+        {
+            // 如果硬盘里的文件，没有在内存索引里登记，立刻强制补录！
+            if (!IndexItems.Any(idx => idx.Id == note.Id))
+            {
+                var newIdx = new NoteIndexItem
+                {
+                    Id = note.Id,
+                    Title = string.IsNullOrWhiteSpace(note.Title) ? "无标题" : note.Title,
+                    // 确保旧笔记的空文件夹路径被规范化为 "notes" (未分类)
+                    Folder = string.IsNullOrWhiteSpace(note.Folder) ? "notes" : note.Folder,
+                    UpdatedAt = note.UpdatedAt,
+                    CreatedAt = note.UpdatedAt,
+                    IsPinned = note.IsPinned,
+                    IsFavorite = note.IsFavorite,
+                    IsDeleted = note.IsDeleted,
+                    IsArchived = note.IsArchived,
+                    Tags = note.Tags ?? new List<string>()
+                };
+
+                IndexItems.Add(newIdx);
+                IndexService.UpsertItem(newIdx); // 触发底层防抖写入 index.json
+            }
+        }
+
+        // 3. 构建左侧树状图
+        var rawFolders = await NoteRepository.GetAllFoldersAsync();
         BuildFolderTree(rawFolders);
 
+        // 4. 决定启动时选中的笔记
         if (FilteredNotes.Any())
         {
             SelectedNoteId = FilteredNotes.First().Id;
-            OpenInTab(SelectedNoteId);
+            await OpenInTabAsync(SelectedNoteId);
         }
-        else await CreateNewNote();
+        else if (!allNotes.Any())
+        {
+            // 🌟 只有在硬盘里真的一篇笔记都没有的时候，才允许新建空白笔记
+            await CreateNewNote();
+        }
 
+        // 5. 启动后台服务
         _autoSaveTimer.Elapsed += async (sender, e) => await PerformSaveAsync();
 
-        // 启动后台定时器
         _bgSyncTimer.Elapsed += async (sender, e) => await TriggerBackgroundSync();
         _bgSyncTimer.Start();
 
-        ScanForConflicts(); // 启动时查一次冲突
+        ScanForConflicts();
     }
 
     public void Dispose()
@@ -857,7 +956,6 @@
     {
         if (_isSyncingUI) return;
 
-        // 🌟 优化：提前拦截并给用户友好的弹窗提示
         var settings = await SettingsService.GetSettingsAsync();
         if (!settings.EnableWebDavSync)
         {
@@ -869,17 +967,15 @@
         _isSyncingUI = true;
         await InvokeAsync(StateHasChanged);
 
-        // 执行底层的无限递归同步
         await SyncService.SyncAsync();
 
-        // 🌟 优化：如果没有发生冲突，说明同步顺利完成了，给个轻提示
         if (!SyncService.HasConflictsInLastSync)
         {
             _saveStatus = "云端同步完成";
         }
 
-        // 同步完成后刷新UI，并扫描冲突
-        Notes = await NoteRepository.GetAllNotesAsync();
+        // 同步完成后刷新UI
+        IndexItems = await IndexService.LoadIndexAsync(); // 🌟 从 JSON 引擎重载
         var rawFolders = await NoteRepository.GetAllFoldersAsync();
         BuildFolderTree(rawFolders);
         ScanForConflicts();
@@ -887,7 +983,6 @@
         _isSyncingUI = false;
         await InvokeAsync(StateHasChanged);
 
-        // 3秒后把状态栏的字恢复成"已保存"
         await Task.Delay(3000);
         if (_saveStatus == "云端同步完成") _saveStatus = "已保存";
         await InvokeAsync(StateHasChanged);
@@ -897,7 +992,7 @@
     {
         try
         {
-            var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MonoNotes", "Data");
+            var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MonoNotes", "Workspaces", NoteRepository.CurrentWorkspace);
             if (Directory.Exists(dataDir))
             {
                 _conflictFiles = Directory.GetFiles(dataDir, "*冲突副本*.md", SearchOption.AllDirectories).ToList();
@@ -926,11 +1021,11 @@
             }
 
             ScanForConflicts();
-            Notes = await NoteRepository.GetAllNotesAsync();
+            IndexItems = await IndexService.LoadIndexAsync(); // 🌟 重载索引
             var rawFolders = await NoteRepository.GetAllFoldersAsync();
             BuildFolderTree(rawFolders);
 
-            _ = SyncService.SyncAsync(); // 后台传回云端
+            _ = SyncService.SyncAsync();
         }
         catch { }
     }
@@ -946,7 +1041,8 @@
         StateHasChanged();
     }
 
-    private List<string> AllTags => Notes
+    // 🌟 从轻量级索引中提取全局标签
+    private List<string> AllTags => IndexItems
         .Where(n => !n.IsDeleted && n.Tags != null)
         .SelectMany(n => n.Tags)
         .Distinct()
@@ -1064,7 +1160,8 @@
             var rawFolders = await NoteRepository.GetAllFoldersAsync();
             BuildFolderTree(rawFolders);
 
-            Notes = await NoteRepository.GetAllNotesAsync();
+            IndexItems = await IndexService.LoadIndexAsync(); // 🌟 重载索引
+
             if (_folderActionType == 2 && _contextMenuTarget != null)
             {
                 var parentPath = _contextMenuTarget.FullPath.Contains('/')
@@ -1099,13 +1196,19 @@
             Title = "",
             Content = "",
             UpdatedAt = DateTimeOffset.Now,
-            Folder = _contextMenuTarget.FullPath
+            Folder = _contextMenuTarget.FullPath,
+            Tags = new List<string>()
         };
 
-        Notes.Insert(0, newNote);
+        // 🌟 分别写入 索引缓存 和 完整笔记缓存
+        var idxItem = new NoteIndexItem { Id = newNote.Id, Title = "", Folder = newNote.Folder, UpdatedAt = newNote.UpdatedAt, CreatedAt = newNote.UpdatedAt };
+        IndexItems.Insert(0, idxItem);
+        IndexService.UpsertItem(idxItem);
+        _openNotesCache.Add(newNote);
+
         SelectedNoteId = newNote.Id;
         _selectedFolderPath = _contextMenuTarget.FullPath;
-        OpenInTab(newNote.Id);
+        await OpenInTabAsync(newNote.Id);
         await NoteRepository.SaveNoteAsync(newNote);
 
         CloseContextMenu();
@@ -1150,64 +1253,43 @@
     private Timer _autoSaveTimer = new Timer(1000) { AutoReset = false };
     private string _saveStatus = "已保存";
 
-    private IEnumerable<MonoNote> FilteredNotes
+    // 🌟 完全适配 JSON 索引的极速过滤属性
+    private IEnumerable<NoteIndexItem> FilteredNotes
     {
         get
         {
-            // 1. 保留你原有的严谨过滤逻辑
-            IEnumerable<MonoNote> result = Notes;
-            if (_isTrashFilterActive)
-            {
-                result = result.Where(n => n.IsDeleted);
-            }
+            IEnumerable<NoteIndexItem> result = IndexItems;
+
+            if (_isTrashFilterActive) { result = result.Where(n => n.IsDeleted); }
             else
             {
                 result = result.Where(n => !n.IsDeleted);
-                if (_isArchiveFilterActive)
-                {
-                    result = result.Where(n => n.IsArchived);
-                }
+                if (_isArchiveFilterActive) { result = result.Where(n => n.IsArchived); }
                 else
                 {
                     result = result.Where(n => !n.IsArchived);
-                    if (_isFavoriteFilterActive)
-                    {
-                        result = result.Where(n => n.IsFavorite);
-                    }
-                    else if (!string.IsNullOrEmpty(_selectedFolderPath))
-                    {
-                        result = result.Where(n => n.Folder == _selectedFolderPath);
-                    }
-                    else if (!string.IsNullOrEmpty(_selectedTag))
-                    {
-                        result = result.Where(n => n.Tags != null && n.Tags.Contains(_selectedTag));
-                    }
+                    if (_isFavoriteFilterActive) { result = result.Where(n => n.IsFavorite); }
+                    else if (!string.IsNullOrEmpty(_selectedFolderPath)) { result = result.Where(n => n.Folder == _selectedFolderPath); }
+                    else if (!string.IsNullOrEmpty(_selectedTag)) { result = result.Where(n => n.Tags != null && n.Tags.Contains(_selectedTag)); }
                 }
             }
 
             if (!string.IsNullOrWhiteSpace(_searchQuery))
             {
                 var query = _searchQuery.ToLower().Trim();
-                result = result.Where(n => (n.Title?.ToLower().Contains(query) ?? false) || (n.Content?.ToLower().Contains(query) ?? false));
+                result = result.Where(n => (n.Title?.ToLower().Contains(query) ?? false) ||
+                                           (n.Tags != null && n.Tags.Any(t => t.ToLower().Contains(query))));
             }
 
-            // 2. 🌟 嫁接动态排序引擎
-            // 置顶的笔记永远排在最上面
             var orderedResult = result.OrderByDescending(n => n.IsPinned);
 
-            // 根据 _sortMode 决定第二排序条件
             switch (_sortMode)
             {
-                case 0: // 时间降序 (最新修改)
-                    return orderedResult.ThenByDescending(n => n.UpdatedAt);
-                case 1: // 时间升序 (最旧修改)
-                    return orderedResult.ThenBy(n => n.UpdatedAt);
-                case 2: // 标题 A-Z
-                    return orderedResult.ThenBy(n => n.Title ?? "");
-                case 3: // 标题 Z-A
-                    return orderedResult.ThenByDescending(n => n.Title ?? "");
-                default:
-                    return orderedResult.ThenByDescending(n => n.UpdatedAt);
+                case 0: return orderedResult.ThenByDescending(n => n.UpdatedAt);
+                case 1: return orderedResult.ThenBy(n => n.UpdatedAt);
+                case 2: return orderedResult.ThenBy(n => n.Title ?? "");
+                case 3: return orderedResult.ThenByDescending(n => n.Title ?? "");
+                default: return orderedResult.ThenByDescending(n => n.UpdatedAt);
             }
         }
     }
@@ -1228,12 +1310,18 @@
             Title = "",
             Content = "",
             UpdatedAt = DateTimeOffset.Now,
-            Folder = targetFolder
+            Folder = targetFolder,
+            Tags = new List<string>()
         };
-        Notes.Insert(0, newNote);
+
+        // 🌟 写入双端缓存
+        var idxItem = new NoteIndexItem { Id = newNote.Id, Title = "", Folder = newNote.Folder, UpdatedAt = newNote.UpdatedAt, CreatedAt = newNote.UpdatedAt };
+        IndexItems.Insert(0, idxItem);
+        IndexService.UpsertItem(idxItem);
+        _openNotesCache.Add(newNote);
 
         SelectedNoteId = newNote.Id;
-        OpenInTab(newNote.Id);
+        await OpenInTabAsync(newNote.Id);
 
         await NoteRepository.SaveNoteAsync(newNote);
         StateHasChanged();
@@ -1251,12 +1339,14 @@
         }
     }
 
-    private void SelectNote(string id)
+    // 🌟 将 SelectNote 改为异步，以支持从磁盘加载正文
+    private async Task SelectNote(string id)
     {
-        if (OpenInTab(id))
+        if (await OpenInTabAsync(id))
         {
             SelectedNoteId = id;
             _saveStatus = "已保存";
+            StateHasChanged();
         }
     }
 
@@ -1265,6 +1355,18 @@
     private void OnNoteChanged()
     {
         _saveStatus = "正在保存...";
+
+        // 🌟 修复2：实现“所见即所得”的实时双向绑定
+        // 在打字的瞬间，同步更新左侧列表的索引数据，打破 1 秒的保存延迟
+        if (SelectedNote != null)
+        {
+            var idx = IndexItems.FirstOrDefault(i => i.Id == SelectedNote.Id);
+            if (idx != null && idx.Title != SelectedNote.Title)
+            {
+                idx.Title = SelectedNote.Title;
+            }
+        }
+
         _autoSaveTimer.Stop(); _autoSaveTimer.Start();
         StateHasChanged();
     }
@@ -1273,7 +1375,24 @@
     {
         if (SelectedNote != null)
         {
+            // 1. 保存到本地磁盘
             await NoteRepository.SaveNoteAsync(SelectedNote);
+
+            // 🌟 2. 核心补丁：同步修改 JSON 缓存引擎中的数据
+            var indexItem = IndexItems.FirstOrDefault(i => i.Id == SelectedNote.Id);
+            if (indexItem != null)
+            {
+                indexItem.Title = SelectedNote.Title;
+                indexItem.Folder = SelectedNote.Folder;
+                indexItem.UpdatedAt = SelectedNote.UpdatedAt;
+                indexItem.Tags = SelectedNote.Tags ?? new List<string>();
+                indexItem.IsPinned = SelectedNote.IsPinned;
+                indexItem.IsFavorite = SelectedNote.IsFavorite;
+                indexItem.IsDeleted = SelectedNote.IsDeleted;
+                indexItem.IsArchived = SelectedNote.IsArchived;
+                IndexService.UpsertItem(indexItem); // 触发防抖写入
+            }
+
             _saveStatus = "已保存";
             await InvokeAsync(StateHasChanged);
         }
@@ -1309,7 +1428,8 @@
         }
     }
 
-    private void ShowNoteContextMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, MonoNote note)
+    // 🌟 上下文菜单现在传递的是 NoteIndexItem
+    private void ShowNoteContextMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, NoteIndexItem note)
     {
         CloseContextMenu();
         _contextMenuNote = note;
@@ -1323,7 +1443,16 @@
         if (_contextMenuNote != null)
         {
             _contextMenuNote.IsFavorite = !_contextMenuNote.IsFavorite;
-            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+            IndexService.UpsertItem(_contextMenuNote);
+
+            // 从本地加载完整笔记并同步状态
+            var allNotes = await NoteRepository.GetAllNotesAsync();
+            var realNote = allNotes.FirstOrDefault(n => n.Id == _contextMenuNote.Id);
+            if (realNote != null)
+            {
+                realNote.IsFavorite = _contextMenuNote.IsFavorite;
+                await NoteRepository.SaveNoteAsync(realNote);
+            }
             StateHasChanged();
         }
         _showNoteContextMenu = false;
@@ -1334,7 +1463,11 @@
         if (_contextMenuNote != null)
         {
             _contextMenuNote.IsPinned = !_contextMenuNote.IsPinned;
-            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+            IndexService.UpsertItem(_contextMenuNote);
+
+            var allNotes = await NoteRepository.GetAllNotesAsync();
+            var realNote = allNotes.FirstOrDefault(n => n.Id == _contextMenuNote.Id);
+            if (realNote != null) { realNote.IsPinned = _contextMenuNote.IsPinned; await NoteRepository.SaveNoteAsync(realNote); }
             StateHasChanged();
         }
         _showNoteContextMenu = false;
@@ -1349,26 +1482,40 @@
     }
 
     private void CloseFolderSelector() => _showFolderSelector = false;
+
     private async Task ConfirmMoveOrCopy()
     {
         if (_contextMenuNote == null || string.IsNullOrEmpty(_targetFolder)) return;
+
+        var allNotes = await NoteRepository.GetAllNotesAsync();
+        var realNote = allNotes.FirstOrDefault(n => n.Id == _contextMenuNote.Id);
+        if (realNote == null) return;
+
         if (_isCopyMode)
         {
             var newNote = new MonoNote
             {
                 Id = Guid.NewGuid().ToString("N"),
-                Title = _contextMenuNote.Title + " - 副本",
-                Content = _contextMenuNote.Content,
+                Title = realNote.Title + " - 副本",
+                Content = realNote.Content,
                 Folder = _targetFolder,
-                UpdatedAt = DateTimeOffset.Now
+                UpdatedAt = DateTimeOffset.Now,
+                Tags = realNote.Tags?.ToList() ?? new List<string>()
             };
-            Notes.Insert(0, newNote);
+
+            var idx = new NoteIndexItem { Id = newNote.Id, Title = newNote.Title, Folder = newNote.Folder, UpdatedAt = newNote.UpdatedAt, CreatedAt = newNote.UpdatedAt, Tags = newNote.Tags };
+            IndexItems.Insert(0, idx);
+            IndexService.UpsertItem(idx);
+
             await NoteRepository.SaveNoteAsync(newNote);
         }
         else
         {
             _contextMenuNote.Folder = _targetFolder;
-            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+            IndexService.UpsertItem(_contextMenuNote);
+
+            realNote.Folder = _targetFolder;
+            await NoteRepository.SaveNoteAsync(realNote);
         }
 
         _showFolderSelector = false;
@@ -1380,7 +1527,11 @@
         if (_contextMenuNote != null)
         {
             _contextMenuNote.IsArchived = !_contextMenuNote.IsArchived;
-            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+            IndexService.UpsertItem(_contextMenuNote);
+
+            var allNotes = await NoteRepository.GetAllNotesAsync();
+            var realNote = allNotes.FirstOrDefault(n => n.Id == _contextMenuNote.Id);
+            if (realNote != null) { realNote.IsArchived = _contextMenuNote.IsArchived; await NoteRepository.SaveNoteAsync(realNote); }
             StateHasChanged();
         }
         _showNoteContextMenu = false;
@@ -1391,7 +1542,12 @@
         if (_contextMenuNote != null)
         {
             _contextMenuNote.IsDeleted = true;
-            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+            IndexService.UpsertItem(_contextMenuNote);
+
+            var allNotes = await NoteRepository.GetAllNotesAsync();
+            var realNote = allNotes.FirstOrDefault(n => n.Id == _contextMenuNote.Id);
+            if (realNote != null) { realNote.IsDeleted = true; await NoteRepository.SaveNoteAsync(realNote); }
+
             CloseTab(_contextMenuNote.Id);
             StateHasChanged();
         }
@@ -1403,7 +1559,12 @@
         if (_contextMenuNote != null)
         {
             _contextMenuNote.IsDeleted = false;
-            await NoteRepository.SaveNoteAsync(_contextMenuNote);
+            IndexService.UpsertItem(_contextMenuNote);
+
+            var allNotes = await NoteRepository.GetAllNotesAsync();
+            var realNote = allNotes.FirstOrDefault(n => n.Id == _contextMenuNote.Id);
+            if (realNote != null) { realNote.IsDeleted = false; await NoteRepository.SaveNoteAsync(realNote); }
+
             if (SelectedNoteId == _contextMenuNote.Id) SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
             StateHasChanged();
         }
@@ -1415,7 +1576,9 @@
         if (_contextMenuNote != null)
         {
             await NoteRepository.DeleteNoteAsync(_contextMenuNote.Id);
-            Notes.Remove(_contextMenuNote);
+            IndexItems.Remove(_contextMenuNote);
+            IndexService.RemoveItem(_contextMenuNote.Id);
+
             CloseTab(_contextMenuNote.Id);
             StateHasChanged();
         }
@@ -1454,7 +1617,7 @@
             return;
         }
 
-        _notesInFolderCount = Notes.Count(n => n.Folder == _contextMenuTarget.FullPath && !n.IsDeleted);
+        _notesInFolderCount = IndexItems.Count(n => n.Folder == _contextMenuTarget.FullPath && !n.IsDeleted);
         _showFolderDeleteConfirm = true;
         CloseContextMenu();
     }
@@ -1463,13 +1626,21 @@
     {
         if (_contextMenuTarget == null) return;
         await NoteRepository.DeleteFolderAsync(_contextMenuTarget.FullPath, moveNotesToTrash);
-        foreach (var note in Notes.Where(n => n.Folder == _contextMenuTarget.FullPath))
+
+        var allNotes = await NoteRepository.GetAllNotesAsync();
+
+        foreach (var idx in IndexItems.Where(n => n.Folder == _contextMenuTarget.FullPath).ToList())
         {
-            note.Folder = "notes";
-            if (moveNotesToTrash)
+            idx.Folder = "notes";
+            if (moveNotesToTrash) { idx.IsDeleted = true; CloseTab(idx.Id); }
+            IndexService.UpsertItem(idx);
+
+            var realNote = allNotes.FirstOrDefault(n => n.Id == idx.Id);
+            if (realNote != null)
             {
-                note.IsDeleted = true;
-                CloseTab(note.Id);
+                realNote.Folder = "notes";
+                if (moveNotesToTrash) realNote.IsDeleted = true;
+                await NoteRepository.SaveNoteAsync(realNote);
             }
         }
 
@@ -1493,7 +1664,7 @@
 
     private void OpenTagManager()
     {
-        _allUniqueTags = Notes
+        _allUniqueTags = IndexItems
             .Where(n => !n.IsDeleted && n.Tags != null)
             .SelectMany(n => n.Tags)
             .Distinct()
@@ -1524,12 +1695,20 @@
         }
 
         await NoteRepository.RenameTagGlobalAsync(_editingTag, _newTagName);
-        foreach (var bookNote in Notes.Where(n => n.Tags != null && n.Tags.Contains(_editingTag)))
+        var allNotes = await NoteRepository.GetAllNotesAsync();
+
+        foreach (var idx in IndexItems.Where(n => n.Tags != null && n.Tags.Contains(_editingTag)).ToList())
         {
-            bookNote.Tags.Remove(_editingTag);
-            if (!bookNote.Tags.Contains(_newTagName))
+            idx.Tags.Remove(_editingTag);
+            if (!idx.Tags.Contains(_newTagName)) idx.Tags.Add(_newTagName);
+            IndexService.UpsertItem(idx);
+
+            var bookNote = allNotes.FirstOrDefault(n => n.Id == idx.Id);
+            if (bookNote != null && bookNote.Tags != null)
             {
-                bookNote.Tags.Add(_newTagName);
+                bookNote.Tags.Remove(_editingTag);
+                if (!bookNote.Tags.Contains(_newTagName)) bookNote.Tags.Add(_newTagName);
+                await NoteRepository.SaveNoteAsync(bookNote);
             }
         }
 
@@ -1550,23 +1729,31 @@
         string tag = _tagToDelete;
 
         await NoteRepository.DeleteTagGlobalAsync(tag);
-        foreach (var bookNote in Notes.Where(n => n.Tags != null && n.Tags.Contains(tag)))
+        var allNotes = await NoteRepository.GetAllNotesAsync();
+
+        foreach (var idx in IndexItems.Where(n => n.Tags != null && n.Tags.Contains(tag)).ToList())
         {
-            bookNote.Tags.Remove(tag);
+            idx.Tags.Remove(tag);
+            IndexService.UpsertItem(idx);
+
+            var bookNote = allNotes.FirstOrDefault(n => n.Id == idx.Id);
+            if (bookNote != null && bookNote.Tags != null)
+            {
+                bookNote.Tags.Remove(tag);
+                await NoteRepository.SaveNoteAsync(bookNote);
+            }
         }
 
         _allUniqueTags.Remove(tag);
-        if (_selectedTag == tag)
-        {
-            _selectedTag = string.Empty;
-        }
+        if (_selectedTag == tag) _selectedTag = string.Empty;
 
         _showTagDeleteConfirm = false;
         _tagToDelete = string.Empty;
         StateHasChanged();
     }
 
-    private bool OpenInTab(string id)
+    // 🌟 核心修改 3：支持按需加载的标签页打开方法
+    private async Task<bool> OpenInTabAsync(string id)
     {
         if (string.IsNullOrEmpty(id)) return false;
         if (!_openTabs.Contains(id))
@@ -1579,6 +1766,16 @@
             }
             _openTabs.Add(id);
         }
+
+        // 确保打开的内容已经被放入正文缓存中
+        if (!_openNotesCache.Any(n => n.Id == id))
+        {
+            // 通过获取全局列表拉取单篇笔记（如果仓储有 GetNoteAsync，可以后续优化为只读单文件）
+            var allNotes = await NoteRepository.GetAllNotesAsync();
+            var targetNote = allNotes.FirstOrDefault(n => n.Id == id);
+            if (targetNote != null) _openNotesCache.Add(targetNote);
+        }
+
         return true;
     }
 
@@ -1588,6 +1785,9 @@
         if (index == -1) return;
 
         _openTabs.RemoveAt(index);
+
+        // 🌟 关闭标签页时，及时释放内存！
+        _openNotesCache.RemoveAll(n => n.Id == id);
 
         if (SelectedNoteId == id)
         {
@@ -1616,9 +1816,11 @@
         _showWorkspaceModal = false;
 
         _openTabs.Clear();
+        _openNotesCache.Clear(); // 清空旧库的内存
         SelectedNoteId = string.Empty;
         _selectedFolderPath = "notes";
         _selectedTag = string.Empty;
+
         await OnInitializedAsync();
         StateHasChanged();
     }
@@ -1631,9 +1833,11 @@
         _showWorkspaceModal = false;
 
         _openTabs.Clear();
+        _openNotesCache.Clear();
         SelectedNoteId = string.Empty;
         _selectedFolderPath = "notes";
         _selectedTag = string.Empty;
+
         await OnInitializedAsync();
         StateHasChanged();
     }
@@ -1642,6 +1846,11 @@
     {
         _appSettings = await SettingsService.GetSettingsAsync();
         _webDavPassword = await SettingsService.GetSecurePasswordAsync("MonoNotes_WebDav_Password");
+
+        _originalTheme = _appSettings.Theme;
+        _originalZoom = _appSettings.ZoomLevel;
+
+        _settingsActiveTab = "sync";
         _showSettingsDialog = true;
     }
 
@@ -1662,7 +1871,8 @@
             SettingsService.RemoveSecurePassword("MonoNotes_WebDav_Password");
         }
 
-        _warningMessage = "设置保存成功！密码已完成硬件级加密。";
+        await VisualEngine.ApplySettingsAsync(_appSettings);
+        _warningMessage = "设置保存成功！";
         _showWarningDialog = true;
         _showSettingsDialog = false;
         StateHasChanged();
@@ -1722,32 +1932,50 @@
             return;
         }
 
-        // 调用我们刚刚写的极速毫秒级搜索引擎
-        _searchResults = await SearchService.SearchAsync(_superSearchQuery, Notes);
+        // 🌟 超级搜索需要全文检索，所以从 Repository 加载全部正文文件
+        var allNotes = await NoteRepository.GetAllNotesAsync();
+        _searchResults = await SearchService.SearchAsync(_superSearchQuery, allNotes);
         StateHasChanged();
     }
 
     private void JumpToSearchResult(string noteId)
     {
         CloseSuperSearch();
-        SelectNote(noteId); // 调用已有的打开标签页方法
+        SelectNote(noteId);
     }
 
-    // === 📊 列表排序状态 ===
-    // 0: 更新时间降序(最新), 1: 更新时间升序(最旧), 2: 标题 A-Z, 3: 标题 Z-A
     private int _sortMode = 0;
-
     private void ToggleTimeSort()
     {
-        // 如果当前是时间降序，就切换为升序，否则重置为降序
         _sortMode = _sortMode == 0 ? 1 : 0;
-        RefreshSelection(); // 排序后保持选中项的显示
+        RefreshSelection();
     }
 
     private void ToggleTitleSort()
     {
-        // 如果当前是A-Z，就切换为Z-A，否则重置为A-Z
         _sortMode = _sortMode == 2 ? 3 : 2;
         RefreshSelection();
+    }
+
+    private async Task ApplyVisualPreview()
+    {
+        await VisualEngine.ApplySettingsAsync(_appSettings);
+    }
+
+    private async Task CancelSettings()
+    {
+        _appSettings.Theme = _originalTheme;
+        _appSettings.ZoomLevel = _originalZoom;
+        await VisualEngine.ApplySettingsAsync(_appSettings);
+        _showSettingsDialog = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var settings = await SettingsService.GetSettingsAsync();
+            await VisualEngine.ApplySettingsAsync(settings);
+        }
     }
 }

@@ -1,0 +1,138 @@
+﻿/* === 🌟 默认/浅色模式 (Light Mode) === */
+:root {
+    /* 1. 颜色系统 */
+    --nt-bg-main: #ffffff;
+    --nt-bg-sidebar: #fbfbfa;
+    --nt-bg-hover: rgba(55, 53, 47, 0.08);
+    --nt-text-main: #37352f;
+    --nt-text-gray: rgba(55, 53, 47, 0.6);
+    --nt-border: rgba(55, 53, 47, 0.09);
+    --nt-accent: #2eaadc;
+    /* 2. 排版与字体系统 (默认值，可被 JS 动态覆盖) */
+    --nt-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif;
+    --nt-font-size-base: 14px;
+    --nt-line-height: 1.6;
+    /* 3. 布局与缩放系统 */
+    --nt-zoom-level: 1.0;
+    --nt-sidebar-width: 260px;
+    --nt-list-item-padding: 8px 12px;
+}
+
+/* === 🌙 深色模式 (Dark Mode) === */
+html[data-theme="dark"] {
+    /* 覆写颜色系统为暗色调 */
+    --nt-bg-main: #191919;
+    --nt-bg-sidebar: #202020;
+    --nt-bg-hover: rgba(255, 255, 255, 0.05);
+    --nt-text-main: rgba(255, 255, 255, 0.9);
+    --nt-text-gray: rgba(255, 255, 255, 0.5);
+    --nt-border: rgba(255, 255, 255, 0.1);
+    --nt-accent: #2eaadc; /* 强调色保持不变或微调 */
+}
+
+/* 全局基础设置 */
+body {
+    background-color: var(--nt-bg-main);
+    color: var(--nt-text-main);
+    font-family: var(--nt-font-family);
+    font-size: calc(var(--nt-font-size-base) * var(--nt-zoom-level));
+    line-height: var(--nt-line-height);
+    transition: background-color 0.3s ease, color 0.3s ease; /* 丝滑的模式切换动画 */
+}
+/* === 🚀 全局 UI 组件强制适配深色模式 === */
+.sidebar {
+    background-color: var(--nt-bg-sidebar) !important;
+    border-right: 1px solid var(--nt-border) !important;
+}
+
+.note-list {
+    background-color: var(--nt-bg-main) !important;
+    border-right: 1px solid var(--nt-border) !important;
+}
+
+.editor-area {
+    background-color: var(--nt-bg-main) !important;
+}
+
+.note-card:hover, .note-card.selected {
+    background-color: var(--nt-bg-hover) !important;
+}
+
+.custom-context-menu {
+    background-color: var(--nt-bg-main) !important;
+    color: var(--nt-text-main) !important;
+    border: 1px solid var(--nt-border) !important;
+}
+/* 输入框标题文字适配 */
+.document-title {
+    color: var(--nt-text-main) !important;
+    background-color: transparent !important;
+}
+
+/* ========================================================= */
+/* 🚀 终极深色模式渗透：强制接管所有子组件的写死颜色 */
+/* ========================================================= */
+
+/* 1. 弹窗与提示框 (Modals & Dialogs) */
+.modal-content {
+    background-color: var(--nt-bg-main) !important;
+    color: var(--nt-text-main) !important;
+    border: 1px solid var(--nt-border) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3) !important;
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--nt-border) !important;
+}
+
+.modal-footer {
+    border-top: 1px solid var(--nt-border) !important;
+}
+
+.btn-cancel {
+    color: var(--nt-text-main) !important;
+    border-color: var(--nt-border) !important;
+    background: transparent !important;
+}
+
+/* 2. 大纲与文件夹树 (Outline & Folder Tree) */
+.folder-tree, .tree-node, summary, .nav-item {
+    color: var(--nt-text-main) !important;
+}
+
+    .nav-item:hover {
+        background-color: var(--nt-bg-hover) !important;
+    }
+
+/* 3. 输入框、搜索框与标签 (Inputs & Tags) */
+input, textarea, select, .search-box, .tag-input {
+    background-color: transparent !important;
+    color: var(--nt-text-main) !important;
+}
+
+    input::placeholder, textarea::placeholder, .search-box::placeholder {
+        color: var(--nt-text-gray) !important;
+        opacity: 0.6 !important;
+    }
+
+.tag-pill {
+    background-color: var(--nt-bg-hover) !important;
+    color: var(--nt-text-main) !important;
+    border: 1px solid var(--nt-border) !important;
+}
+
+/* 4. 编辑器区域 (Editor) */
+.editor-body, .document-content {
+    background-color: var(--nt-bg-main) !important;
+    color: var(--nt-text-main) !important;
+}
+/* 强行接管 Markdown 组件内部可能自带的白底黑字 */
+.markdown-body, .markdown-editor, .CodeMirror, .toastui-editor-defaultUI {
+    background-color: transparent !important;
+    color: var(--nt-text-main) !important;
+}
+/* 如果编辑器内有代码块或引用，也稍微压暗 */
+blockquote, pre, code {
+    background-color: var(--nt-bg-hover) !important;
+    border-color: var(--nt-border) !important;
+}

@@ -18,6 +18,7 @@
 	</ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MonoNotes.Core\MonoNotes.Core.csproj" />
+    <ProjectReference Include="..\MonoNotes.Storage\MonoNotes.Storage.csproj" />
   </ItemGroup>
 
 

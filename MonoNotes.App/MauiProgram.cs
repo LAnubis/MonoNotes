@@ -28,6 +28,9 @@ namespace MonoNotes.App
             builder.Services.AddSingleton<IWebDavSyncService, WebDavSyncService>();
             // 🌟 注册全局搜索引擎
             builder.Services.AddSingleton<ISearchService, LocalSearchService>();
+            builder.Services.AddScoped<MonoNotes.UI.Services.VisualEngineService>();
+            // 🌟 注册本地 JSON 索引缓存引擎 (单例，确保全局只有一个内存实例)
+            builder.Services.AddSingleton<MonoNotes.Storage.JsonIndexService>();
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();

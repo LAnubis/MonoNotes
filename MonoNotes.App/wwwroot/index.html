@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="MonoNotes.App.styles.css" />
     <link rel="stylesheet" href="js/editor.bundle.css" />
+    <link href="css/theme.css" rel="stylesheet" />
 </head>
 
 <body>
@@ -38,7 +39,30 @@
                     console.error("Blazor 启动失败:", e);
                 }
             });
+}
+
+window.visualEngine = {
+    // 切换深浅模式
+    setTheme: function (themeStr) {
+        if (themeStr === 'Dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else if (themeStr === 'Light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+        } else {
+            // System (跟随操作系统)
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
         }
+    },
+
+    // 动态修改 CSS 变量 (如缩放、行高、字体)
+    setCssVariable: function (name, value) {
+        document.documentElement.style.setProperty(name, value);
+    }
+};
     </script>
 </body>
 </html>
