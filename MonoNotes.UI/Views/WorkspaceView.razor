@@ -1,4 +1,5 @@
-﻿@using System.Timers
+﻿@using System.IO
+@using System.Timers
 @using MonoNotes.Core.Interfaces
 @using MonoNotes.Core.Models
 @inject INoteRepository NoteRepository
@@ -6,12 +7,35 @@
 @inject IJSRuntime JSRuntime
 @inject ISettingsService SettingsService
 @inject IWebDavService WebDavService
+@inject MonoNotes.Core.Interfaces.IWebDavSyncService SyncService
 
 <div class="notion-workspace" @onclick="CloseContextMenu">
     <aside class="sidebar">
-        <div class="workspace-switcher" @onclick="OpenWorkspaceManager" style="cursor:pointer; padding: 12px 16px; display: flex; align-items: center; border-radius: 8px; transition: background 0.2s;">
-            <span class="icon" style="margin-right: 8px;">📝</span>
-            <span class="text" style="font-weight: 600; color: var(--nt-text-main);">@NoteRepository.CurrentWorkspace ▾</span>
+        <div class="workspace-switcher" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;">
+            <div @onclick="OpenWorkspaceManager" style="cursor:pointer; display: flex; align-items: center; border-radius: 8px; transition: background 0.2s;">
+                <span class="icon" style="margin-right: 8px;">📝</span>
+                <span class="text" style="font-weight: 600; color: var(--nt-text-main);">@NoteRepository.CurrentWorkspace ▾</span>
+            </div>
+
+            <div style="display: flex; gap: 8px; align-items: center;" @onclick:stopPropagation="true">
+                <div style="position: relative; display: inline-block;">
+                    <button class="icon-btn" title="冲突处理中心" @onclick="() => _showConflictCenter = true"
+                            style="font-size: 14px; opacity: @(_conflictFiles.Any() ? "1" : "0.3"); transition: opacity 0.3s;">
+                        🔔
+                    </button>
+                    @if (_conflictFiles.Any())
+                    {
+                        <span style="position: absolute; top: -2px; right: -2px; background: #ff4d4f; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 10px; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                            @_conflictFiles.Count
+                        </span>
+                    }
+                </div>
+
+                <button class="icon-btn" title="立即同步" @onclick="TriggerBackgroundSync" disabled="@_isSyncingUI"
+                        style="font-size: 14px; opacity: 0.7; @(_isSyncingUI ? "animation: spin 1s linear infinite;" : "")">
+                    🔄
+                </button>
+            </div>
         </div>
 
         <div class="nav-menu">
@@ -130,6 +154,12 @@
 
     <main class="editor-area" style="display: flex; flex-direction: column;">
         <style>
+                    @@keyframes spin {
+                        100% {
+                            transform: rotate(360deg);
+                        }
+                    }
+
                     .tabs-bar {
                         display: flex;
                         background-color: #fbfbfa;
@@ -497,7 +527,6 @@
     {
         <div class="modal-overlay" @onclick="CloseSettingsDialog">
             <div class="modal-content" style="width: 720px; min-height: 500px; display: flex; flex-direction: row; padding: 0;" @onclick:stopPropagation="true">
-
                 <div style="width: 160px; background: #fbfbfa; border-right: 1px solid var(--nt-border); padding: 20px 12px; border-radius: 8px 0 0 8px;">
                     <div style="font-size: 11px; font-weight: 600; color: #999; padding-left: 8px; margin-bottom: 12px;">用户设置</div>
                     <div class="nav-item active" style="padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;">
@@ -542,7 +571,6 @@
                     </div>
 
                     <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 20px; border-top: 1px solid var(--nt-border);">
-
                         <div>
                             @if (!string.IsNullOrEmpty(_connectionTestResult))
                             {
@@ -551,7 +579,6 @@
                                 </span>
                             }
                         </div>
-
                         <div style="display: flex; gap: 12px;">
                             <button class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; border-radius: 6px; font-weight: 500;" @onclick="TestWebDavConnection" disabled="@_isTestingConnection">
                                 @(_isTestingConnection ? "正在连接..." : "🔌 测试连接")
@@ -560,8 +587,51 @@
                             <button class="btn-primary" style="padding: 8px 20px; border: none; background: #2eaadc; color: white; border-radius: 6px; font-weight: 500;" @onclick="SaveSettings">💾 保存配置</button>
                         </div>
                     </div>
-
                 </div>
+            </div>
+        </div>
+    }
+
+    @if (_showConflictCenter)
+    {
+        <div class="modal-overlay" @onclick="() => _showConflictCenter = false">
+            <div class="modal-content" style="width: 540px; max-height: 80vh; display: flex; flex-direction: column;" @onclick:stopPropagation="true">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 600;">🚨 冲突处理中心</h3>
+                    <button class="icon-btn" @onclick="() => _showConflictCenter = false">×</button>
+                </div>
+
+                @if (!_conflictFiles.Any())
+                {
+                    <div style="text-align: center; padding: 40px 0; color: var(--nt-text-gray);">
+                        <div style="font-size: 24px; margin-bottom: 12px;">🎉</div>
+                        <div>一切顺利，当前没有任何文件冲突。</div>
+                    </div>
+                }
+                else
+                {
+                    <div style="font-size: 13px; color: var(--nt-text-gray); margin-bottom: 16px;">
+                        以下文件在本地和云端同时发生了修改。请选择要保留的版本：
+                    </div>
+                    <div style="flex: 1; overflow-y: auto; border: 1px solid var(--nt-border); border-radius: 6px;">
+                        @foreach (var conflictPath in _conflictFiles)
+                        {
+                            var cName = Path.GetFileName(conflictPath);
+                            var oName = System.Text.RegularExpressions.Regex.Replace(cName, @"\s\(冲突副本.*?\)", "");
+
+                            <div style="padding: 12px; border-bottom: 1px solid var(--nt-border); display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-size: 14px; font-weight: 500;">📄 @oName</div>
+                                    <div style="font-size: 11px; color: #faad14;">冲突副本: @cName</div>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="btn-cancel" style="padding: 4px 8px; font-size: 12px; border: 1px solid var(--nt-border);" @onclick="() => ResolveConflict(conflictPath, true)">采纳本地</button>
+                                    <button class="btn-primary" style="padding: 4px 8px; font-size: 12px; background: #2eaadc; color: white; border: none; border-radius: 4px;" @onclick="() => ResolveConflict(conflictPath, false)">采纳云端</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
     }
@@ -598,7 +668,6 @@
     private bool _showFolderSelector = false;
     private bool _isCopyMode = false;
     private string _targetFolder = string.Empty;
-
     private bool _isFavoriteFilterActive = false;
     private bool _isArchiveFilterActive = false;
     private bool _isTrashFilterActive = false;
@@ -619,20 +688,134 @@
 
     private List<string> _openTabs = new();
 
-    // === 🌟 新增：多库管理状态 ===
     private bool _showWorkspaceModal = false;
     private List<string> _workspaces = new();
     private string _newWorkspaceName = string.Empty;
 
-    // === 🌟 设置与同步系统状态 ===
     private bool _showSettingsDialog = false;
     private AppSettings _appSettings = new();
     private string _webDavPassword = string.Empty;
 
-    // === 🌟 WebDAV 测试逻辑 ===
     private bool _isTestingConnection = false;
     private string _connectionTestResult = string.Empty;
     private bool _connectionTestSuccess = false;
+
+    // === 🌟 后台同步与冲突处理 ===
+    private Timer _bgSyncTimer = new Timer(30000); // 30秒静默同步一次
+    private bool _isSyncingUI = false;
+    private bool _showConflictCenter = false;
+    private List<string> _conflictFiles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Notes = await NoteRepository.GetAllNotesAsync();
+        var rawFolders = await NoteRepository.GetAllFoldersAsync();
+
+        BuildFolderTree(rawFolders);
+
+        if (FilteredNotes.Any())
+        {
+            SelectedNoteId = FilteredNotes.First().Id;
+            OpenInTab(SelectedNoteId);
+        }
+        else await CreateNewNote();
+
+        _autoSaveTimer.Elapsed += async (sender, e) => await PerformSaveAsync();
+
+        // 启动后台定时器
+        _bgSyncTimer.Elapsed += async (sender, e) => await TriggerBackgroundSync();
+        _bgSyncTimer.Start();
+
+        ScanForConflicts(); // 启动时查一次冲突
+    }
+
+    public void Dispose()
+    {
+        _autoSaveTimer.Dispose();
+        _bgSyncTimer.Dispose();
+    }
+
+    private async Task TriggerBackgroundSync()
+    {
+        if (_isSyncingUI) return;
+
+        // 🌟 优化：提前拦截并给用户友好的弹窗提示
+        var settings = await SettingsService.GetSettingsAsync();
+        if (!settings.EnableWebDavSync)
+        {
+            _warningMessage = "请先在左下角设置中开启【后台自动同步】开关！";
+            _showWarningDialog = true;
+            return;
+        }
+
+        _isSyncingUI = true;
+        await InvokeAsync(StateHasChanged);
+
+        // 执行底层的无限递归同步
+        await SyncService.SyncAsync();
+
+        // 🌟 优化：如果没有发生冲突，说明同步顺利完成了，给个轻提示
+        if (!SyncService.HasConflictsInLastSync)
+        {
+            _saveStatus = "云端同步完成";
+        }
+
+        // 同步完成后刷新UI，并扫描冲突
+        Notes = await NoteRepository.GetAllNotesAsync();
+        var rawFolders = await NoteRepository.GetAllFoldersAsync();
+        BuildFolderTree(rawFolders);
+        ScanForConflicts();
+
+        _isSyncingUI = false;
+        await InvokeAsync(StateHasChanged);
+
+        // 3秒后把状态栏的字恢复成"已保存"
+        await Task.Delay(3000);
+        if (_saveStatus == "云端同步完成") _saveStatus = "已保存";
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ScanForConflicts()
+    {
+        try
+        {
+            var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MonoNotes", "Data");
+            if (Directory.Exists(dataDir))
+            {
+                _conflictFiles = Directory.GetFiles(dataDir, "*冲突副本*.md", SearchOption.AllDirectories).ToList();
+            }
+        }
+        catch { }
+    }
+
+    private async Task ResolveConflict(string conflictFilePath, bool keepLocal)
+    {
+        try
+        {
+            var conflictFileName = Path.GetFileName(conflictFilePath);
+            var dir = Path.GetDirectoryName(conflictFilePath);
+            var originalFileName = System.Text.RegularExpressions.Regex.Replace(conflictFileName, @"\s\(冲突副本.*?\)", "");
+            var originalFilePath = Path.Combine(dir, originalFileName);
+
+            if (keepLocal)
+            {
+                if (File.Exists(conflictFilePath)) File.Delete(conflictFilePath);
+            }
+            else
+            {
+                if (File.Exists(originalFilePath)) File.Delete(originalFilePath);
+                if (File.Exists(conflictFilePath)) File.Move(conflictFilePath, originalFilePath);
+            }
+
+            ScanForConflicts();
+            Notes = await NoteRepository.GetAllNotesAsync();
+            var rawFolders = await NoteRepository.GetAllFoldersAsync();
+            BuildFolderTree(rawFolders);
+
+            _ = SyncService.SyncAsync(); // 后台传回云端
+        }
+        catch { }
+    }
 
     private void ShowTrash()
     {
@@ -849,23 +1032,6 @@
     private Timer _autoSaveTimer = new Timer(1000) { AutoReset = false };
     private string _saveStatus = "已保存";
 
-    protected override async Task OnInitializedAsync()
-    {
-        Notes = await NoteRepository.GetAllNotesAsync();
-        var rawFolders = await NoteRepository.GetAllFoldersAsync();
-
-        BuildFolderTree(rawFolders);
-
-        if (FilteredNotes.Any())
-        {
-            SelectedNoteId = FilteredNotes.First().Id;
-            OpenInTab(SelectedNoteId);
-        }
-        else await CreateNewNote();
-
-        _autoSaveTimer.Elapsed += async (sender, e) => await PerformSaveAsync();
-    }
-
     private IEnumerable<MonoNote> FilteredNotes
     {
         get
@@ -979,8 +1145,6 @@
         }
     }
 
-    public void Dispose() { _autoSaveTimer.Dispose(); }
-
     private int GetCurrentFolderDepth(string path)
     {
         if (string.IsNullOrWhiteSpace(path)) return 1;
@@ -1051,7 +1215,6 @@
     }
 
     private void CloseFolderSelector() => _showFolderSelector = false;
-
     private async Task ConfirmMoveOrCopy()
     {
         if (_contextMenuNote == null || string.IsNullOrEmpty(_targetFolder)) return;
@@ -1165,7 +1328,6 @@
     private async Task ConfirmDeleteFolder(bool moveNotesToTrash)
     {
         if (_contextMenuTarget == null) return;
-
         await NoteRepository.DeleteFolderAsync(_contextMenuTarget.FullPath, moveNotesToTrash);
         foreach (var note in Notes.Where(n => n.Folder == _contextMenuTarget.FullPath))
         {
@@ -1203,7 +1365,6 @@
             .Distinct()
             .OrderBy(t => t)
             .ToList();
-
         _showTagManagerDialog = true;
         CancelEditTag();
     }
@@ -1308,7 +1469,6 @@
         }
     }
 
-    // === 🌟 新增：多库管理逻辑实现 ===
     private async Task OpenWorkspaceManager()
     {
         _workspaces = await NoteRepository.GetAllWorkspacesAsync();
@@ -1318,11 +1478,9 @@
     private async Task SwitchWorkspace(string name)
     {
         if (name == NoteRepository.CurrentWorkspace) return;
-
         await NoteRepository.SwitchWorkspaceAsync(name);
         _showWorkspaceModal = false;
 
-        // 🌟 极其核心：清理当前内存，彻底重新初始化 UI！
         _openTabs.Clear();
         SelectedNoteId = string.Empty;
         _selectedFolderPath = "notes";
@@ -1334,12 +1492,10 @@
     private async Task CreateWorkspace()
     {
         if (string.IsNullOrWhiteSpace(_newWorkspaceName)) return;
-
         await NoteRepository.CreateWorkspaceAsync(_newWorkspaceName.Trim());
         _newWorkspaceName = string.Empty;
         _showWorkspaceModal = false;
 
-        // 🌟 同样彻底重启 UI
         _openTabs.Clear();
         SelectedNoteId = string.Empty;
         _selectedFolderPath = "notes";
@@ -1350,12 +1506,8 @@
 
     private async Task OpenSettingsDialog()
     {
-        // 1. 加载包含自动保存等设置在内的完整基础配置
         _appSettings = await SettingsService.GetSettingsAsync();
-
-        // 2. 从底层的加密钥匙串中读取密码
         _webDavPassword = await SettingsService.GetSecurePasswordAsync("MonoNotes_WebDav_Password");
-
         _showSettingsDialog = true;
     }
 
@@ -1366,10 +1518,7 @@
 
     private async Task SaveSettings()
     {
-        // 1. 保存所有常规设置到 json 文件
         await SettingsService.SaveSettingsAsync(_appSettings);
-
-        // 2. 将敏感密码送入军工级保险箱加密（绝不进 json）
         if (!string.IsNullOrWhiteSpace(_webDavPassword))
         {
             await SettingsService.SaveSecurePasswordAsync("MonoNotes_WebDav_Password", _webDavPassword.Trim());
@@ -1379,7 +1528,6 @@
             SettingsService.RemoveSecurePassword("MonoNotes_WebDav_Password");
         }
 
-        // 提示保存成功
         _warningMessage = "设置保存成功！密码已完成硬件级加密。";
         _showWarningDialog = true;
         _showSettingsDialog = false;
@@ -1388,16 +1536,12 @@
 
     private async Task TestWebDavConnection()
     {
-        // 必须先保存当前面板里填写的配置，才能让底层引擎读到最新数据去测试
         await SaveSettingsSilently();
-
         _isTestingConnection = true;
         _connectionTestResult = "正在向云端发送握手请求...";
         StateHasChanged();
 
-        // 调用刚才写的底层引擎，发出 PROPFIND 握手
         _connectionTestSuccess = await WebDavService.TestConnectionAsync();
-
         if (_connectionTestSuccess)
         {
             _connectionTestResult = "✅ 连接成功！服务器响应正常。";
@@ -1411,7 +1555,6 @@
         StateHasChanged();
     }
 
-    // 辅助方法：静默保存配置（不弹成功提示窗），专供测试按钮使用
     private async Task SaveSettingsSilently()
     {
         await SettingsService.SaveSettingsAsync(_appSettings);

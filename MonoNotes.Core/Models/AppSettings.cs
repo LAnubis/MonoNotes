@@ -30,5 +30,8 @@ namespace MonoNotes.Core.Models
         // 默认填入坚果云的 WebDAV 地址
         public string WebDavUrl { get; set; } = "https://dav.jianguoyun.com/dav/";
         public string WebDavUsername { get; set; } = string.Empty;
+
+        // 🌟 核心基准线：上一次成功完成全局同步的时间
+        public DateTimeOffset LastSyncTimeUtc { get; set; } = DateTimeOffset.MinValue;
     }
 }

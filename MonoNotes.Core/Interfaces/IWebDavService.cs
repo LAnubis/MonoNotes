@@ -14,7 +14,7 @@
         // 从云端下载文件到本地
         Task<bool> DownloadFileAsync(string remotePath, string localFilePath);
 
-        // 获取云端目录下的所有文件名
-        Task<List<string>> GetRemoteFilesAsync(string remotePath);
+        // 获取云端目录下的所有文件信息（包含时间戳和类型）
+        Task<List<MonoNotes.Core.Models.WebDavItem>> GetRemoteItemsAsync(string remotePath);
     }
 }

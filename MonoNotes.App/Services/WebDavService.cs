@@ -132,10 +132,10 @@ namespace MonoNotes.App.Services
             }
         }
 
-        // 5. 获取远程文件列表
-        public async Task<List<string>> GetRemoteFilesAsync(string remotePath)
+        // 5. 🌟 高精度获取远程文件列表 (解析 XML 响应)
+        public async Task<List<MonoNotes.Core.Models.WebDavItem>> GetRemoteItemsAsync(string remotePath)
         {
-            var fileNames = new List<string>();
+            var items = new List<MonoNotes.Core.Models.WebDavItem>();
             try
             {
                 var settings = await _settingsService.GetSettingsAsync();
@@ -145,21 +145,46 @@ namespace MonoNotes.App.Services
                 request.Headers.Add("Depth", "1"); // 查当前目录及下一层
 
                 var response = await _httpClient.SendAsync(request);
-                if (!response.IsSuccessStatusCode) return fileNames;
+                if (!response.IsSuccessStatusCode) return items;
 
-                // 简单解析 XML 响应 (这里用极其轻量的文本匹配，避免引入重型 XML 库)
-                var content = await response.Content.ReadAsStringAsync();
-                var matches = System.Text.RegularExpressions.Regex.Matches(content, @"<[a-zA-Z0-9:]*href>(.*?)</[a-zA-Z0-9:]*href>");
+                var xmlString = await response.Content.ReadAsStringAsync();
+                var doc = System.Xml.Linq.XDocument.Parse(xmlString);
+                System.Xml.Linq.XNamespace d = "DAV:";
 
-                foreach (System.Text.RegularExpressions.Match match in matches)
+                var requestedFolderName = remotePath.TrimEnd('/').Split('/').LastOrDefault() ?? "";
+
+                foreach (var responseNode in doc.Descendants(d + "response"))
                 {
-                    var href = Uri.UnescapeDataString(match.Groups[1].Value);
-                    if (href.EndsWith("/")) continue; // 排除文件夹
-                    fileNames.Add(Path.GetFileName(href));
+                    var href = Uri.UnescapeDataString(responseNode.Element(d + "href")?.Value ?? "");
+                    var propstat = responseNode.Element(d + "propstat");
+                    var prop = propstat?.Element(d + "prop");
+
+                    if (string.IsNullOrEmpty(href) || prop == null) continue;
+
+                    var name = href.TrimEnd('/').Split('/').Last();
+
+                    // 排除父目录自身
+                    if (string.IsNullOrEmpty(name) || name == requestedFolderName) continue;
+
+                    var isFolder = prop.Element(d + "resourcetype")?.Element(d + "collection") != null;
+
+                    var lastModifiedStr = prop.Element(d + "getlastmodified")?.Value;
+                    DateTimeOffset lastModified = DateTimeOffset.MinValue;
+                    if (DateTimeOffset.TryParse(lastModifiedStr, out var parsedDate))
+                    {
+                        lastModified = parsedDate;
+                    }
+
+                    items.Add(new MonoNotes.Core.Models.WebDavItem
+                    {
+                        Name = name,
+                        IsFolder = isFolder,
+                        LastModified = lastModified
+                    });
                 }
             }
             catch { }
-            return fileNames;
+            return items;
         }
     }
 }

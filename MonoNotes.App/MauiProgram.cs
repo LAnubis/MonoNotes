@@ -23,6 +23,7 @@ namespace MonoNotes.App
             builder.Services.AddSingleton<ISettingsService, LocalSettingsService>();
             // 🌟 注册 WebDAV 通讯引擎
             builder.Services.AddSingleton<IWebDavService, WebDavService>();
+            builder.Services.AddSingleton<IWebDavSyncService, WebDavSyncService>();
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();
