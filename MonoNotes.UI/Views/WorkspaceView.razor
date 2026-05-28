@@ -690,12 +690,12 @@
                         <div style="display: flex; gap: 12px;">
                             @if (_settingsActiveTab == "sync")
                             {
-                                <button class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; color: var(--nt-text-main); border-radius: 6px; font-weight: 500;" @onclick="TestWebDavConnection" disabled="@_isTestingConnection">
+                                <button type="button" class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; color: var(--nt-text-main); border-radius: 6px; font-weight: 500;" @onclick="TestWebDavConnection" disabled="@_isTestingConnection">
                                     @(_isTestingConnection ? "正在连接..." : "🔌 测试连接")
                                 </button>
                             }
-                            <button class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; color: var(--nt-text-main); border-radius: 6px;" @onclick="CancelSettings">取消</button>
-                            <button class="btn-primary" style="padding: 8px 20px; border: none; background: var(--nt-accent); color: white; border-radius: 6px; font-weight: 500;" @onclick="SaveSettings">💾 保存配置</button>
+                            <button type="button" class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; color: var(--nt-text-main); border-radius: 6px;" @onclick="CancelSettings">取消</button>
+                            <button type="button" class="btn-primary" style="padding: 8px 20px; border: none; background: var(--nt-accent); color: white; border-radius: 6px; font-weight: 500;" @onclick="SaveSettings">💾 保存配置</button>
                         </div>
                     </div>
                 </div>
