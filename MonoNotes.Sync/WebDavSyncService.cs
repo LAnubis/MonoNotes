@@ -1,7 +1,7 @@
 ﻿using MonoNotes.Core.Interfaces;
 using System.Text.RegularExpressions;
 
-namespace MonoNotes.App.Services
+namespace MonoNotes.Sync
 {
     public class WebDavSyncService : IWebDavSyncService
     {

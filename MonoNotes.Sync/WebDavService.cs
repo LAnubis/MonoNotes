@@ -2,7 +2,7 @@
 using System.Text;
 using MonoNotes.Core.Interfaces;
 
-namespace MonoNotes.App.Services
+namespace MonoNotes.Sync
 {
     public class WebDavService : IWebDavService
     {

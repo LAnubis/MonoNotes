@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using MonoNotes.App.Services;
 using MonoNotes.Core.Interfaces;
+using MonoNotes.Sync;
 
 namespace MonoNotes.App
 {
