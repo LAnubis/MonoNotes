@@ -1,6 +1,7 @@
-﻿using System.Net.Http.Headers;
+﻿using MonoNotes.Core.Interfaces;
+using System.Net.Http.Headers;
+using System.Runtime;
 using System.Text;
-using MonoNotes.Core.Interfaces;
 
 namespace MonoNotes.Sync
 {
@@ -185,6 +186,43 @@ namespace MonoNotes.Sync
             }
             catch { }
             return items;
+        }
+        public async Task<bool> DeleteItemAsync(string remotePath)
+        {
+            try
+            {
+                // 1. 每次请求前，必须实时获取最新的配置
+                var settings = await _settingsService.GetSettingsAsync();
+                var pwd = await _settingsService.GetSecurePasswordAsync("MonoNotes_WebDav_Password");
+
+                // 确保 URL、账号、密码都不为空
+                if (string.IsNullOrEmpty(settings.WebDavUrl) || string.IsNullOrEmpty(settings.WebDavUsername) || string.IsNullOrEmpty(pwd))
+                    return false;
+
+                // 2. 获取坚果云的基础 URL（去除末尾多余的斜杠防拼接错误）
+                var baseUrl = settings.WebDavUrl.TrimEnd('/');
+
+                // 3. 构建相对路径 (不能带有尾部斜杠，且需要 URL 编码)
+                var encodedRelativePath = string.Join("/", remotePath.TrimStart('/').Split('/').Select(Uri.EscapeDataString));
+
+                // 🌟 核心修复：拼接出完整的绝对 URI 
+                var fullAbsoluteUrl = $"{baseUrl}/{encodedRelativePath}";
+
+                var request = new HttpRequestMessage(HttpMethod.Delete, fullAbsoluteUrl);
+
+                // 4. 强制压入 Basic Auth 认证头
+                var authBytes = System.Text.Encoding.ASCII.GetBytes($"{settings.WebDavUsername}:{pwd}");
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(authBytes));
+
+                var response = await _httpClient.SendAsync(request);
+
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"WebDAV 删除异常: {ex.Message}");
+                return false;
+            }
         }
     }
 }

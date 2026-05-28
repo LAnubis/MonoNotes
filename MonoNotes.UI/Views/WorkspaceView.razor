@@ -312,6 +312,7 @@
             <div class="editor-header">
                 <div class="status-indicator">@_saveStatus</div>
                 <div class="header-actions">
+                    <button class="icon-btn" title="将正文中的远程图片下载到本地" @onclick="LocalizeRemoteImagesAsync">⬇️</button>
                     <button class="icon-btn" title="@(SelectedNote.IsPinned ? "取消置顶" : "置顶笔记")" @onclick="TogglePin">@(SelectedNote.IsPinned ? "📌" : "📍")</button>
                     @if (SelectedNote.IsDeleted)
                     {
@@ -1153,6 +1154,15 @@
             }
             else if (_folderActionType == 2 && _contextMenuTarget != null)
             {
+                // 🌟 核心修复 2：重命名时，先把云端的旧文件夹干掉，防止旧文件夹作为幽灵复活
+                try
+                {
+                    string oldRemote = $"MonoNotes/{NoteRepository.CurrentWorkspace}/{_contextMenuTarget.FullPath}";
+                    string encodedOld = string.Join("/", oldRemote.Split('/').Select(Uri.EscapeDataString));
+                    await WebDavService.DeleteItemAsync(encodedOld);
+                }
+                catch { }
+
                 await NoteRepository.RenameFolderAsync(_contextMenuTarget.FullPath, val);
             }
 
@@ -1160,7 +1170,7 @@
             var rawFolders = await NoteRepository.GetAllFoldersAsync();
             BuildFolderTree(rawFolders);
 
-            IndexItems = await IndexService.LoadIndexAsync(); // 🌟 重载索引
+            IndexItems = await IndexService.LoadIndexAsync();
 
             if (_folderActionType == 2 && _contextMenuTarget != null)
             {
@@ -1625,6 +1635,19 @@
     private async Task ConfirmDeleteFolder(bool moveNotesToTrash)
     {
         if (_contextMenuTarget == null) return;
+
+        // 🌟 1. 先尝试在云端执行“物理超度”
+        string remotePath = $"MonoNotes/{NoteRepository.CurrentWorkspace}/{_contextMenuTarget.FullPath}";
+        bool cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
+
+        if (!cloudDeleted)
+        {
+            // 如果云端没删掉，提前报警，避免静默复活
+            _warningMessage = "本地文件夹已删除，但云端数据销毁失败（可能是网络波动或授权过期）。这可能会导致它在下次同步时复活，建议稍后去坚果云网页端手动清理。";
+            _showWarningDialog = true;
+        }
+
+        // 🌟 2. 云端处理完后，再执行本地删除
         await NoteRepository.DeleteFolderAsync(_contextMenuTarget.FullPath, moveNotesToTrash);
 
         var allNotes = await NoteRepository.GetAllNotesAsync();
@@ -1976,6 +1999,85 @@
         {
             var settings = await SettingsService.GetSettingsAsync();
             await VisualEngine.ApplySettingsAsync(settings);
+        }
+    }
+
+    // 🌟 一键将 Markdown 中的远程图片下载到本地 .assets 文件夹
+    private async Task LocalizeRemoteImagesAsync()
+    {
+        if (SelectedNote == null || string.IsNullOrWhiteSpace(SelectedNote.Content)) return;
+
+        // 正则匹配标准的 Markdown 图片语法：![alt](http...)
+        var regex = new System.Text.RegularExpressions.Regex(@"\!\[(.*?)\]\((http.*?)\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var matches = regex.Matches(SelectedNote.Content);
+
+        if (matches.Count == 0)
+        {
+            _warningMessage = "当前笔记中没有发现远程图片链接。";
+            _showWarningDialog = true;
+            return;
+        }
+
+        _saveStatus = "正在下载图片...";
+        StateHasChanged();
+
+        var content = SelectedNote.Content;
+        bool hasChanges = false;
+
+        // 确保当前知识库的 .assets 文件夹存在
+        var workspacePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MonoNotes", "Workspaces", NoteRepository.CurrentWorkspace);
+        var assetsPath = Path.Combine(workspacePath, ".assets");
+        if (!Directory.Exists(assetsPath)) Directory.CreateDirectory(assetsPath);
+
+        using var httpClient = new HttpClient();
+        httpClient.Timeout = TimeSpan.FromSeconds(15); // 防止个别死链卡住
+
+        foreach (System.Text.RegularExpressions.Match match in matches)
+        {
+            var fullMatch = match.Value;
+            var altText = match.Groups[1].Value;
+            var remoteUrl = match.Groups[2].Value;
+
+            try
+            {
+                // 下载图片字节流
+                var imageBytes = await httpClient.GetByteArrayAsync(remoteUrl);
+
+                // 尝试从 URL 提取扩展名（忽略 ? 后的参数），如果没有就默认给个 .png
+                var extension = Path.GetExtension(remoteUrl).Split('?')[0];
+                if (string.IsNullOrEmpty(extension) || extension.Length > 5) extension = ".png";
+
+                // 生成唯一文件名并保存
+                var fileName = Guid.NewGuid().ToString("N") + extension;
+                var localFilePath = Path.Combine(assetsPath, fileName);
+                await File.WriteAllBytesAsync(localFilePath, imageBytes);
+
+                // 将原 Markdown 中的外链替换为本地相对路径
+                var newImageTag = $"![{altText}](.assets/{fileName})";
+                content = content.Replace(fullMatch, newImageTag);
+                hasChanges = true;
+            }
+            catch
+            {
+                // 如果单张图片下载失败（防盗链/404），捕获异常，跳过它，保留原外链
+                continue;
+            }
+        }
+
+        if (hasChanges)
+        {
+            SelectedNote.Content = content;
+            await PerformSaveAsync();
+            _saveStatus = "图片已全部本地化";
+
+            // 🌟 通知编辑器组件重新渲染
+            StateHasChanged();
+        }
+        else
+        {
+            _saveStatus = "已保存";
+            _warningMessage = "部分图片因网络或防盗链原因下载失败，已保留原链接。";
+            _showWarningDialog = true;
         }
     }
 }

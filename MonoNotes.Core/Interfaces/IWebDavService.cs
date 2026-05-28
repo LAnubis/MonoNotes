@@ -16,5 +16,6 @@
 
         // 获取云端目录下的所有文件信息（包含时间戳和类型）
         Task<List<MonoNotes.Core.Models.WebDavItem>> GetRemoteItemsAsync(string remotePath);
+        Task<bool> DeleteItemAsync(string remotePath);
     }
 }
