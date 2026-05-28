@@ -8,6 +8,7 @@
 @inject ISettingsService SettingsService
 @inject IWebDavService WebDavService
 @inject MonoNotes.Core.Interfaces.IWebDavSyncService SyncService
+@inject MonoNotes.Core.Interfaces.ISearchService SearchService
 
 <div class="notion-workspace" @onclick="CloseContextMenu">
     <aside class="sidebar">
@@ -32,12 +33,24 @@
                 </div>
 
                 <button class="icon-btn" title="立即同步" @onclick="TriggerBackgroundSync" disabled="@_isSyncingUI"
-                        style="font-size: 14px; opacity: 0.7; @(_isSyncingUI ? "animation: spin 1s linear infinite;" : "")">
-                    🔄
+                        style="width: 28px; height: 28px; border-radius: 50%; padding: 0; display: flex; justify-content: center; align-items: center; opacity: 0.85; background: rgba(55,53,47,0.06); box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: background-color 0.2s;">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"
+                         style="transform-origin: center; @(_isSyncingUI ? "animation: spin 1s linear infinite;" : "")">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
                 </button>
             </div>
         </div>
-
+        <div style="padding: 12px 16px 4px 16px;">
+            <div class="nav-item" style="padding: 6px 12px; cursor: pointer; display: flex; align-items: center; border-radius: 6px; background: rgba(55,53,47,0.05); color: var(--nt-text-gray); font-size: 13px;"
+                 @onclick="OpenSuperSearch">
+                <span style="margin-right: 8px;">🔍</span>
+                <span style="flex: 1;">搜索...</span>
+                <span style="font-size: 11px; opacity: 0.6; background: rgba(55,53,47,0.1); padding: 2px 6px; border-radius: 4px;">Ctrl+P</span>
+            </div>
+        </div>
         <div class="nav-menu">
             @if (Notes.Any(n => n.IsFavorite))
             {
@@ -119,9 +132,57 @@
     </aside>
 
     <section class="note-list">
-        <div class="list-header">
-            <input type="text" class="search-box" placeholder="搜索..."
-                   @bind="_searchQuery" @bind:event="oninput" />
+        <div class="list-header" style="display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid rgba(55,53,47,0.09); margin-bottom: 8px;">
+
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 13px; font-weight: 600; color: var(--nt-text-gray); display: flex; align-items: center; gap: 6px;">
+                    @if (_isFavoriteFilterActive)
+                    {
+                        <span>⭐ 收藏夹</span>
+                    }
+                    else if (_isArchiveFilterActive)
+                    {
+
+                        <span>🗄️ 归档</span>
+                    }
+                    else if (_isTrashFilterActive)
+                    {
+
+                        <span>🗑️ 回收站</span>
+                    }
+                    else if (!string.IsNullOrEmpty(_selectedTag))
+                    {
+
+                        <span># @_selectedTag</span>
+                    }
+                    else if (!string.IsNullOrEmpty(_selectedFolderPath))
+                    {
+
+                        <span>📁 @Path.GetFileName(_selectedFolderPath)</span>
+                    }
+                    else
+                    {
+
+                        <span>📝 全部笔记</span>
+                    }
+
+                    <span style="font-size: 11px; font-weight: 400; opacity: 0.6; background: rgba(55,53,47,0.08); padding: 2px 6px; border-radius: 10px;">
+                        @FilteredNotes.Count()
+                    </span>
+                </div>
+
+                <div style="display: flex; gap: 4px;">
+                    <button class="icon-btn" style="font-size: 14px; opacity: 0.6; padding: 2px 4px;" title="按时间排序">🕒</button>
+                    <button class="icon-btn" style="font-size: 14px; opacity: 0.6; padding: 2px 4px;" title="按标题排序">🔤</button>
+                </div>
+            </div>
+
+            <div style="position: relative;">
+                <span style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 12px; opacity: 0.4;">⚲</span>
+                <input type="text" class="search-box" style="width: 100%; font-size: 12px; padding: 6px 8px 6px 24px; background: rgba(55,53,47,0.04); border: 1px solid transparent; transition: all 0.2s; border-radius: 6px;"
+                       placeholder="过滤当前列表..."
+                       @bind="_searchQuery" @bind:event="oninput" />
+            </div>
         </div>
 
         @foreach (var note in FilteredNotes)
@@ -635,6 +696,58 @@
             </div>
         </div>
     }
+
+    @if (_showSuperSearch)
+    {
+        <div class="modal-overlay" style="align-items: flex-start; padding-top: 10vh;" @onclick="CloseSuperSearch">
+            <div class="modal-content" style="width: 640px; padding: 0; background: var(--nt-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 16px 48px rgba(0,0,0,0.12);" @onclick:stopPropagation="true">
+
+                <div style="display: flex; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--nt-border);">
+                    <span style="font-size: 20px; margin-right: 12px; opacity: 0.5;">🔍</span>
+                    <input type="text" style="flex: 1; border: none; outline: none; font-size: 18px; background: transparent; color: var(--nt-text-main);"
+                           placeholder="输入关键词搜索全局笔记..."
+                           @bind="_superSearchQuery" @bind:event="oninput" @onkeyup="ExecuteSuperSearch" autofocus />
+                    <button class="icon-btn" style="font-size: 12px; border: 1px solid var(--nt-border); padding: 4px 8px; border-radius: 6px;" @onclick="CloseSuperSearch">ESC</button>
+                </div>
+
+                <div style="max-height: 50vh; overflow-y: auto; padding: 8px;">
+                    @if (!string.IsNullOrWhiteSpace(_superSearchQuery) && !_searchResults.Any())
+                    {
+                        <div style="padding: 32px; text-align: center; color: var(--nt-text-gray); font-size: 14px;">没有找到匹配的笔记...</div>
+                    }
+
+                    @foreach (var result in _searchResults)
+                    {
+                        <div style="padding: 12px 16px; border-radius: 8px; cursor: pointer; transition: background 0.1s;"
+                             class="search-result-item"
+                             @onclick="() => JumpToSearchResult(result.NoteId)">
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <div style="font-size: 15px; font-weight: 600; color: var(--nt-text-main);">📄 @result.Title</div>
+                                <div style="font-size: 12px; color: #999;">📁 @result.Folder</div>
+                            </div>
+
+                            @if (result.Snippets.Any())
+                            {
+                                <div style="font-size: 12px; color: var(--nt-text-gray); line-height: 1.6;">
+                                    @foreach (var snippet in result.Snippets)
+                                    {
+                                        <div style="margin-bottom: 4px;">@((MarkupString)snippet)</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <style>
+                .search-result-item:hover {
+                    background-color: rgba(55, 53, 47, 0.05);
+                }
+        </style>
+    }
 </div>
 
 @code {
@@ -705,6 +818,11 @@
     private bool _isSyncingUI = false;
     private bool _showConflictCenter = false;
     private List<string> _conflictFiles = new();
+
+    // === 🔍 超级搜索系统状态 ===
+    private bool _showSuperSearch = false;
+    private string _superSearchQuery = string.Empty;
+    private List<SearchResultItem> _searchResults = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -1036,6 +1154,7 @@
     {
         get
         {
+            // 1. 保留你原有的严谨过滤逻辑
             IEnumerable<MonoNote> result = Notes;
             if (_isTrashFilterActive)
             {
@@ -1072,9 +1191,24 @@
                 result = result.Where(n => (n.Title?.ToLower().Contains(query) ?? false) || (n.Content?.ToLower().Contains(query) ?? false));
             }
 
-            return result
-                .OrderByDescending(n => n.IsPinned)
-                .ThenByDescending(n => n.UpdatedAt);
+            // 2. 🌟 嫁接动态排序引擎
+            // 置顶的笔记永远排在最上面
+            var orderedResult = result.OrderByDescending(n => n.IsPinned);
+
+            // 根据 _sortMode 决定第二排序条件
+            switch (_sortMode)
+            {
+                case 0: // 时间降序 (最新修改)
+                    return orderedResult.ThenByDescending(n => n.UpdatedAt);
+                case 1: // 时间升序 (最旧修改)
+                    return orderedResult.ThenBy(n => n.UpdatedAt);
+                case 2: // 标题 A-Z
+                    return orderedResult.ThenBy(n => n.Title ?? "");
+                case 3: // 标题 Z-A
+                    return orderedResult.ThenByDescending(n => n.Title ?? "");
+                default:
+                    return orderedResult.ThenByDescending(n => n.UpdatedAt);
+            }
         }
     }
 
@@ -1566,5 +1700,54 @@
         {
             SettingsService.RemoveSecurePassword("MonoNotes_WebDav_Password");
         }
+    }
+
+    private void OpenSuperSearch()
+    {
+        _showSuperSearch = true;
+        _superSearchQuery = string.Empty;
+        _searchResults.Clear();
+    }
+
+    private void CloseSuperSearch()
+    {
+        _showSuperSearch = false;
+    }
+
+    private async Task ExecuteSuperSearch(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CloseSuperSearch();
+            return;
+        }
+
+        // 调用我们刚刚写的极速毫秒级搜索引擎
+        _searchResults = await SearchService.SearchAsync(_superSearchQuery, Notes);
+        StateHasChanged();
+    }
+
+    private void JumpToSearchResult(string noteId)
+    {
+        CloseSuperSearch();
+        SelectNote(noteId); // 调用已有的打开标签页方法
+    }
+
+    // === 📊 列表排序状态 ===
+    // 0: 更新时间降序(最新), 1: 更新时间升序(最旧), 2: 标题 A-Z, 3: 标题 Z-A
+    private int _sortMode = 0;
+
+    private void ToggleTimeSort()
+    {
+        // 如果当前是时间降序，就切换为升序，否则重置为降序
+        _sortMode = _sortMode == 0 ? 1 : 0;
+        RefreshSelection(); // 排序后保持选中项的显示
+    }
+
+    private void ToggleTitleSort()
+    {
+        // 如果当前是A-Z，就切换为Z-A，否则重置为A-Z
+        _sortMode = _sortMode == 2 ? 3 : 2;
+        RefreshSelection();
     }
 }

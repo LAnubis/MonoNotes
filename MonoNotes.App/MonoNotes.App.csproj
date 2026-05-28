@@ -90,6 +90,7 @@
     <ItemGroup>
       <ProjectReference Include="..\MonoNotes.Core\MonoNotes.Core.csproj" />
       <ProjectReference Include="..\MonoNotes.Platform\MonoNotes.Platform.csproj" />
+      <ProjectReference Include="..\MonoNotes.Search\MonoNotes.Search.csproj" />
       <ProjectReference Include="..\MonoNotes.Sync\MonoNotes.Sync.csproj" />
       <ProjectReference Include="..\MonoNotes.UI\MonoNotes.UI.csproj" />
     </ItemGroup>

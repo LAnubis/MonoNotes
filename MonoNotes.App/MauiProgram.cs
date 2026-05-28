@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using MonoNotes.App.Services;
 using MonoNotes.Core.Interfaces;
+using MonoNotes.Search;
 using MonoNotes.Sync;
 
 namespace MonoNotes.App
@@ -25,6 +26,8 @@ namespace MonoNotes.App
             // 🌟 注册 WebDAV 通讯引擎
             builder.Services.AddSingleton<IWebDavService, WebDavService>();
             builder.Services.AddSingleton<IWebDavSyncService, WebDavSyncService>();
+            // 🌟 注册全局搜索引擎
+            builder.Services.AddSingleton<ISearchService, LocalSearchService>();
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();
