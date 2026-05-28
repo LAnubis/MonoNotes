@@ -7,6 +7,9 @@
 		<TargetFrameworks>net10.0-maccatalyst</TargetFrameworks>
 	</PropertyGroup>
 	<PropertyGroup>
+		<GenerateMvcApplicationPartsAssemblyAttributes>false</GenerateMvcApplicationPartsAssemblyAttributes>
+	</PropertyGroup>
+	<PropertyGroup>
 		<!-- 1. 默认包含 Mac 平台 (如果还有 ios/android 也可以写在这里，用分号隔开) -->
 		<!--
 		<TargetFrameworks>net10.0-maccatalyst</TargetFrameworks>

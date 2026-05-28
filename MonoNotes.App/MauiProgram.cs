@@ -19,6 +19,10 @@ namespace MonoNotes.App
             builder.Services.AddMauiBlazorWebView();
             // 新增：注册本地文件仓储为单例服务
             builder.Services.AddSingleton<INoteRepository, LocalNoteRepository>();
+            // 🌟 注册全局设置与加密服务
+            builder.Services.AddSingleton<ISettingsService, LocalSettingsService>();
+            // 🌟 注册 WebDAV 通讯引擎
+            builder.Services.AddSingleton<IWebDavService, WebDavService>();
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();

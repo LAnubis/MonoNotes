@@ -24,5 +24,11 @@ namespace MonoNotes.Core.Models
 
         // 记录最后一次打开的工作区路径，方便下次启动直接加载
         public string LastOpenedWorkspacePath { get; set; } = string.Empty;
+
+        // === 🌟 新增：WebDAV 同步设置 ===
+        public bool EnableWebDavSync { get; set; } = false;
+        // 默认填入坚果云的 WebDAV 地址
+        public string WebDavUrl { get; set; } = "https://dav.jianguoyun.com/dav/";
+        public string WebDavUsername { get; set; } = string.Empty;
     }
 }

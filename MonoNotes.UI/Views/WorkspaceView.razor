@@ -4,6 +4,8 @@
 @inject INoteRepository NoteRepository
 @implements IDisposable
 @inject IJSRuntime JSRuntime
+@inject ISettingsService SettingsService
+@inject IWebDavService WebDavService
 
 <div class="notion-workspace" @onclick="CloseContextMenu">
     <aside class="sidebar">
@@ -83,6 +85,13 @@
         <button class="new-note-btn" @onclick="CreateNewNote">
             <span class="icon">➕</span> 新建页面
         </button>
+        <div style="margin-top: auto; padding: 12px; border-top: 1px solid rgba(55,53,47,0.09);">
+            <div class="nav-item" style="padding: 6px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-gray);"
+                 @onclick="OpenSettingsDialog">
+                <span style="margin-right: 8px;">⚙️</span>
+                <span>设置与同步</span>
+            </div>
+        </div>
     </aside>
 
     <section class="note-list">
@@ -483,6 +492,79 @@
             </div>
         </div>
     }
+
+    @if (_showSettingsDialog)
+    {
+        <div class="modal-overlay" @onclick="CloseSettingsDialog">
+            <div class="modal-content" style="width: 720px; min-height: 500px; display: flex; flex-direction: row; padding: 0;" @onclick:stopPropagation="true">
+
+                <div style="width: 160px; background: #fbfbfa; border-right: 1px solid var(--nt-border); padding: 20px 12px; border-radius: 8px 0 0 8px;">
+                    <div style="font-size: 11px; font-weight: 600; color: #999; padding-left: 8px; margin-bottom: 12px;">用户设置</div>
+                    <div class="nav-item active" style="padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;">
+                        ☁️ 同步 (WebDAV)
+                    </div>
+                    <div class="nav-item" style="padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--nt-text-gray);">
+                        🎨 外观与行为
+                    </div>
+                </div>
+
+                <div style="flex: 1; padding: 32px; display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+                        <h3 style="margin: 0; font-size: 18px; font-weight: 600;">WebDAV 同步配置</h3>
+                        <button class="icon-btn" @onclick="CloseSettingsDialog">×</button>
+                    </div>
+
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--nt-border);">
+                        <div>
+                            <div style="font-size: 14px; font-weight: 500;">开启后台自动同步</div>
+                            <div style="font-size: 12px; color: var(--nt-text-gray); margin-top: 6px;">开启后，应用会在后台静默比对并合并云端数据。</div>
+                        </div>
+                        <input type="checkbox" @bind="_appSettings.EnableWebDavSync" style="width: 18px; height: 18px; cursor: pointer;" />
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">服务器地址 (Server URL)</label>
+                        <input type="text" class="search-box" @bind="_appSettings.WebDavUrl" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px;" placeholder="https://dav.jianguoyun.com/dav/" />
+                        <div style="font-size: 12px; color: #999; margin-top: 6px;">推荐使用坚果云。只填根目录即可，应用会在同步时自动创建子文件夹。</div>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">账号 (Username)</label>
+                        <input type="text" class="search-box" @bind="_appSettings.WebDavUsername" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px;" placeholder="例如：your-email@example.com" />
+                    </div>
+
+                    <div style="margin-bottom: 32px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">应用授权密码 (App Password)</label>
+                        <input type="password" class="search-box" @bind="_webDavPassword" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px;" placeholder="请填入坚果云的第三方应用授权密码" />
+                        <div style="font-size: 12px; color: #faad14; margin-top: 8px; line-height: 1.5;">
+                            ⚠️ 绝不上传服务器。密码将调用底层的 DPAPI/Keychain 进行硬件级加密保护。
+                        </div>
+                    </div>
+
+                    <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 20px; border-top: 1px solid var(--nt-border);">
+
+                        <div>
+                            @if (!string.IsNullOrEmpty(_connectionTestResult))
+                            {
+                                <span style="font-size: 13px; font-weight: 500; color: @(_connectionTestSuccess ? "#52c41a" : "#ff4d4f");">
+                                    @_connectionTestResult
+                                </span>
+                            }
+                        </div>
+
+                        <div style="display: flex; gap: 12px;">
+                            <button class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; border-radius: 6px; font-weight: 500;" @onclick="TestWebDavConnection" disabled="@_isTestingConnection">
+                                @(_isTestingConnection ? "正在连接..." : "🔌 测试连接")
+                            </button>
+                            <button class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; border-radius: 6px;" @onclick="CloseSettingsDialog">取消</button>
+                            <button class="btn-primary" style="padding: 8px 20px; border: none; background: #2eaadc; color: white; border-radius: 6px; font-weight: 500;" @onclick="SaveSettings">💾 保存配置</button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -541,6 +623,16 @@
     private bool _showWorkspaceModal = false;
     private List<string> _workspaces = new();
     private string _newWorkspaceName = string.Empty;
+
+    // === 🌟 设置与同步系统状态 ===
+    private bool _showSettingsDialog = false;
+    private AppSettings _appSettings = new();
+    private string _webDavPassword = string.Empty;
+
+    // === 🌟 WebDAV 测试逻辑 ===
+    private bool _isTestingConnection = false;
+    private string _connectionTestResult = string.Empty;
+    private bool _connectionTestSuccess = false;
 
     private void ShowTrash()
     {
@@ -1254,5 +1346,82 @@
         _selectedTag = string.Empty;
         await OnInitializedAsync();
         StateHasChanged();
+    }
+
+    private async Task OpenSettingsDialog()
+    {
+        // 1. 加载包含自动保存等设置在内的完整基础配置
+        _appSettings = await SettingsService.GetSettingsAsync();
+
+        // 2. 从底层的加密钥匙串中读取密码
+        _webDavPassword = await SettingsService.GetSecurePasswordAsync("MonoNotes_WebDav_Password");
+
+        _showSettingsDialog = true;
+    }
+
+    private void CloseSettingsDialog()
+    {
+        _showSettingsDialog = false;
+    }
+
+    private async Task SaveSettings()
+    {
+        // 1. 保存所有常规设置到 json 文件
+        await SettingsService.SaveSettingsAsync(_appSettings);
+
+        // 2. 将敏感密码送入军工级保险箱加密（绝不进 json）
+        if (!string.IsNullOrWhiteSpace(_webDavPassword))
+        {
+            await SettingsService.SaveSecurePasswordAsync("MonoNotes_WebDav_Password", _webDavPassword.Trim());
+        }
+        else
+        {
+            SettingsService.RemoveSecurePassword("MonoNotes_WebDav_Password");
+        }
+
+        // 提示保存成功
+        _warningMessage = "设置保存成功！密码已完成硬件级加密。";
+        _showWarningDialog = true;
+        _showSettingsDialog = false;
+        StateHasChanged();
+    }
+
+    private async Task TestWebDavConnection()
+    {
+        // 必须先保存当前面板里填写的配置，才能让底层引擎读到最新数据去测试
+        await SaveSettingsSilently();
+
+        _isTestingConnection = true;
+        _connectionTestResult = "正在向云端发送握手请求...";
+        StateHasChanged();
+
+        // 调用刚才写的底层引擎，发出 PROPFIND 握手
+        _connectionTestSuccess = await WebDavService.TestConnectionAsync();
+
+        if (_connectionTestSuccess)
+        {
+            _connectionTestResult = "✅ 连接成功！服务器响应正常。";
+        }
+        else
+        {
+            _connectionTestResult = "❌ 连接失败，请检查账号、授权密码或网络。";
+        }
+
+        _isTestingConnection = false;
+        StateHasChanged();
+    }
+
+    // 辅助方法：静默保存配置（不弹成功提示窗），专供测试按钮使用
+    private async Task SaveSettingsSilently()
+    {
+        await SettingsService.SaveSettingsAsync(_appSettings);
+        if (!string.IsNullOrWhiteSpace(_webDavPassword))
+        {
+            await SettingsService.SaveSecurePasswordAsync("MonoNotes_WebDav_Password", _webDavPassword.Trim());
+        }
+        else
+        {
+            SettingsService.RemoveSecurePassword("MonoNotes_WebDav_Password");
+        }
     }
 }
