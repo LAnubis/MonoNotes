@@ -112,7 +112,7 @@
                 <div style="padding: 0 8px; overflow-y: auto; flex: 1;">
                     @foreach (var tag in AllTags)
                     {
-                        <div class="nav-item @(tag == _selectedTag ? "active" : "")" @onclick="() => SelectTag(tag)">
+                        <div class="nav-item @(_activeTags.Contains(tag) ? "active" : "")" @onclick="() => SelectTag(tag)">
                             <span style="margin-right: 8px; color: #888;">#</span>
                             <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@tag</span>
                         </div>
@@ -151,10 +151,18 @@
 
                         <span>🗑️ 回收站</span>
                     }
-                    else if (!string.IsNullOrEmpty(_selectedTag))
+                    else if (_activeTags.Any())
                     {
-
-                        <span># @_selectedTag</span>
+                        <span style="margin-right: 2px;">🏷️ </span>
+                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            @foreach (var t in _activeTags)
+                            {
+                                <span style="background: rgba(46,170,220,0.15); color: #2eaadc; padding: 2px 8px; border-radius: 6px; font-size: 12px; display: flex; align-items: center; gap: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                                    @t
+                                    <span @onclick="() => RemoveActiveTag(t)" @onclick:stopPropagation="true" style="cursor: pointer; opacity: 0.5; font-size: 10px; padding: 2px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.opacity='1'; this.style.backgroundColor='rgba(46,170,220,0.2)';" onmouseout="this.style.opacity='0.5'; this.style.backgroundColor='transparent';">✖</span>
+                                </span>
+                            }
+                        </div>
                     }
                     else if (!string.IsNullOrEmpty(_selectedFolderPath))
                     {
@@ -177,7 +185,6 @@
                             style="font-size: 14px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; opacity: @(_sortMode == 0 || _sortMode == 1 ? "1" : "0.4"); background: @(_sortMode == 0 || _sortMode == 1 ? "rgba(46,170,220,0.1)" : "transparent");">
                         @(_sortMode == 0 ? "🕒↓" : "🕒↑")
                     </button>
-
                     <button class="icon-btn" title="按标题拼音/字母排序" @onclick="ToggleTitleSort"
                             style="font-size: 14px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; opacity: @(_sortMode == 2 || _sortMode == 3 ? "1" : "0.4"); background: @(_sortMode == 2 || _sortMode == 3 ? "rgba(46,170,220,0.1)" : "transparent");">
                         @(_sortMode == 2 ? "🔤↓" : "🔤↑")
@@ -191,12 +198,20 @@
                        placeholder="过滤当前列表..."
                        @bind="_searchQuery" @bind:event="oninput" />
             </div>
+
+            @if (_isTrashFilterActive && FilteredNotes.Any())
+            {
+                <button style="margin-top: 4px; padding: 6px; background: rgba(255, 77, 79, 0.1); color: #ff4d4f; border: 1px solid rgba(255, 77, 79, 0.2); border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 6px; transition: all 0.2s;"
+                        @onclick="() => _showEmptyTrashConfirm = true">
+                    🚫 一键清空回收站
+                </button>
+            }
         </div>
 
         @foreach (var note in FilteredNotes)
         {
-            <div class="note-card @(note.Id == SelectedNoteId ? "selected" : "")"
-                 @onclick="() => SelectNote(note.Id)"
+            <div class="note-card @(_selectedNoteIds.Contains(note.Id) ? "selected" : "")"
+                 @onclick="(e) => HandleNoteClick(e, note.Id)"
                  @oncontextmenu="(e) => ShowNoteContextMenu(e, note)"
                  @oncontextmenu:preventDefault="true">
 
@@ -228,7 +243,7 @@
                             transform: rotate(360deg);
                         }
                     }
-
+                    /* ... (保留你原有的 tab-bar 等 style 代码) ... */
                     .tabs-bar {
                         display: flex;
                         background-color: var(--nt-bg-sidebar);
@@ -307,7 +322,29 @@
             }
         </div>
 
-        @if (SelectedNote != null)
+        @if (_selectedNoteIds.Count > 1)
+        {
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--nt-bg-main);">
+                <div style="font-size: 72px; margin-bottom: 24px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.1));">🗂️</div>
+                <h2 style="font-size: 24px; font-weight: 600; color: var(--nt-text-main); margin-bottom: 8px;">已选中 @_selectedNoteIds.Count 篇笔记</h2>
+                <p style="color: var(--nt-text-gray); margin-bottom: 32px; font-size: 14px;">你可以对这些笔记进行批量管理</p>
+
+                <div style="display: flex; gap: 16px;">
+                    @if (_isTrashFilterActive)
+                    {
+                        <button class="btn-cancel" style="padding: 10px 24px; font-size: 14px; border-radius: 8px; border: 1px solid var(--nt-border); background: var(--nt-bg);" @onclick="BatchRestore">↩️ 批量恢复</button>
+                        <button class="btn-primary" style="padding: 10px 24px; font-size: 14px; background: #ff4d4f; border: none; color: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(255,77,79,0.3);" @onclick="BatchHardDelete">❌ 彻底删除</button>
+                    }
+                    else
+                    {
+                        <button class="btn-cancel" style="padding: 10px 24px; font-size: 14px; border-radius: 8px; border: 1px solid var(--nt-border); background: var(--nt-bg);" @onclick="() => OpenFolderSelector(false, true)">📁 批量移动到</button>
+                        <button class="btn-cancel" style="padding: 10px 24px; font-size: 14px; border-radius: 8px; border: 1px solid var(--nt-border); background: var(--nt-bg);" @onclick="() => OpenFolderSelector(true, true)">📄 批量复制到</button>
+                        <button class="btn-primary" style="padding: 10px 24px; font-size: 14px; background: #ff4d4f; border: none; color: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(255,77,79,0.3);" @onclick="BatchSoftDelete">🗑️ 移至回收站</button>
+                    }
+                </div>
+            </div>
+        }
+        else if (_selectedNoteIds.Count == 1 && SelectedNote != null)
         {
             <div class="editor-header">
                 <div class="status-indicator">@_saveStatus</div>
@@ -327,9 +364,7 @@
             </div>
 
             <div class="editor-body">
-                <input class="document-title" placeholder="无标题"
-                       @bind="SelectedNote.Title" @bind:event="oninput" @onkeyup="OnNoteChanged" />
-
+                <input class="document-title" placeholder="无标题" @bind="SelectedNote.Title" @bind:event="oninput" @onkeyup="OnNoteChanged" />
                 <div class="note-tags-editor">
                     @if (SelectedNote.Tags != null)
                     {
@@ -341,14 +376,10 @@
                             </span>
                         }
                     }
-                    <input type="text" class="tag-input" placeholder="输入标签并回车..."
-                           @bind="_newTagInput" @bind:event="oninput" @onkeyup="HandleTagInputKey" />
+                    <input type="text" class="tag-input" placeholder="输入标签并回车..." @bind="_newTagInput" @bind:event="oninput" @onkeyup="HandleTagInputKey" />
                 </div>
-
                 <div class="document-content">
-                    <MarkdownEditor Content="@SelectedNote.Content"
-                                    ContentChanged="@((newContent) => { SelectedNote.Content = newContent; OnNoteChanged(); })"
-                                    CurrentFolder="@SelectedNote.Folder" />
+                    <MarkdownEditor Content="@SelectedNote.Content" ContentChanged="@((newContent) => { SelectedNote.Content = newContent; OnNoteChanged(); })" CurrentFolder="@SelectedNote.Folder" />
                 </div>
             </div>
         }
@@ -360,6 +391,25 @@
             </div>
         }
     </main>
+
+    @if (_showEmptyTrashConfirm)
+    {
+        <div class="modal-overlay" @onclick="() => _showEmptyTrashConfirm = false">
+            <div class="modal-content" style="width: 360px;" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <span style="font-weight: 600; color: #ff4d4f;">⚠️ 清空回收站</span>
+                    <button class="icon-btn" @onclick="() => _showEmptyTrashConfirm = false">×</button>
+                </div>
+                <div class="modal-body" style="padding: 20px 16px;">
+                    <p style="margin: 0; font-size: 14px; color: var(--nt-text-main);">此操作将<strong>永久抹除</strong>回收站内的所有文件，且不可恢复。确定要继续吗？</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-cancel" @onclick="() => _showEmptyTrashConfirm = false">取消</button>
+                    <button class="btn-primary" style="background: #ff4d4f; border: none; color: white;" @onclick="ExecuteEmptyTrash">确认清空</button>
+                </div>
+            </div>
+        </div>
+    }
 
     @if (_showContextMenu && _contextMenuTarget != null)
     {
@@ -801,12 +851,16 @@
 </div>
 
 @code {
-    // 🌟 核心修改 1：双层缓存架构！
-    // 列表使用轻量级索引，内存极小，毫秒级响应
+
     private List<NoteIndexItem> IndexItems = new();
 
     // 编辑器使用完整笔记缓存，只加载打开的标签页
     private List<MonoNote> _openNotesCache = new();
+
+    private HashSet<string> _selectedNoteIds = new();
+    private int _lastSelectedNoteIndex = -1; // 记录上一次点击的索引，用于 Shift 连续多选
+    private bool _isBatchOperation = false; // 区分当前是单篇移动还是批量移动
+    private bool _showEmptyTrashConfirm = false; // 清空回收站确认框
 
     private string SelectedNoteId = string.Empty;
     private string _searchQuery = string.Empty;
@@ -828,7 +882,8 @@
     private string _folderInputPlaceholder = string.Empty;
     private int _folderActionType = 0;
 
-    private string _selectedTag = string.Empty;
+    private HashSet<string> _activeTags = new();
+
     private string _newTagInput = string.Empty;
 
     private bool _showNoteContextMenu = false;
@@ -1037,7 +1092,7 @@
         _isArchiveFilterActive = false;
         _isFavoriteFilterActive = false;
         _selectedFolderPath = string.Empty;
-        _selectedTag = string.Empty;
+        _activeTags.Clear();
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
         StateHasChanged();
     }
@@ -1056,7 +1111,7 @@
         _isArchiveFilterActive = false;
         _isTrashFilterActive = false;
         _selectedFolderPath = string.Empty;
-        _selectedTag = string.Empty;
+        _activeTags.Clear();
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
 
@@ -1066,7 +1121,7 @@
         _isFavoriteFilterActive = false;
         _isTrashFilterActive = false;
         _selectedFolderPath = string.Empty;
-        _selectedTag = string.Empty;
+        _activeTags.Clear();
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
 
@@ -1076,7 +1131,7 @@
         _isArchiveFilterActive = false;
         _isTrashFilterActive = false;
         _selectedFolderPath = path;
-        _selectedTag = string.Empty;
+        _activeTags.Clear();
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
     }
 
@@ -1085,17 +1140,20 @@
         _isFavoriteFilterActive = false;
         _isArchiveFilterActive = false;
         _isTrashFilterActive = false;
-        if (_selectedTag == tag)
+        _selectedFolderPath = string.Empty; 
+        if (_activeTags == null) _activeTags = new HashSet<string>();
+
+        if (_activeTags.Contains(tag))
         {
-            _selectedTag = string.Empty;
-            _selectedFolderPath = "notes";
+            _activeTags.Remove(tag); // 如果已存在，再次点击则移除
+            if (!_activeTags.Any()) _selectedFolderPath = "notes"; // 如果标签全关了，回到默认未分类
         }
         else
         {
-            _selectedTag = tag;
-            _selectedFolderPath = string.Empty;
+            _activeTags.Add(tag); // 叠加 AND 条件
         }
-        SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+
+        RefreshSelection();
     }
 
     private void HandleTreeContextMenu((Microsoft.AspNetCore.Components.Web.MouseEventArgs e, FolderTree.FolderNode node) args)
@@ -1278,9 +1336,13 @@
                 else
                 {
                     result = result.Where(n => !n.IsArchived);
-                    if (_isFavoriteFilterActive) { result = result.Where(n => n.IsFavorite); }
+                    if (_activeTags != null && _activeTags.Any())
+                    {
+                        result = result.Where(n => n.Tags != null && _activeTags.Any(t => n.Tags.Contains(t)));
+                    }
+                    else if (_isFavoriteFilterActive) { result = result.Where(n => n.IsFavorite); }
                     else if (!string.IsNullOrEmpty(_selectedFolderPath)) { result = result.Where(n => n.Folder == _selectedFolderPath); }
-                    else if (!string.IsNullOrEmpty(_selectedTag)) { result = result.Where(n => n.Tags != null && n.Tags.Contains(_selectedTag)); }
+
                 }
             }
 
@@ -1349,12 +1411,62 @@
         }
     }
 
-    // 🌟 将 SelectNote 改为异步，以支持从磁盘加载正文
+    private async Task HandleNoteClick(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, string noteId)
+    {
+        var filteredList = FilteredNotes.ToList();
+        int currentIndex = filteredList.FindIndex(n => n.Id == noteId);
+
+        if (e.CtrlKey || e.MetaKey)
+        {
+            // Ctrl/Cmd 点击：跳跃多选/取消选择
+            if (_selectedNoteIds.Contains(noteId)) _selectedNoteIds.Remove(noteId);
+            else _selectedNoteIds.Add(noteId);
+
+            _lastSelectedNoteIndex = currentIndex;
+        }
+        else if (e.ShiftKey && _lastSelectedNoteIndex != -1)
+        {
+            // Shift 点击：连续范围多选
+            int start = Math.Min(_lastSelectedNoteIndex, currentIndex);
+            int end = Math.Max(_lastSelectedNoteIndex, currentIndex);
+
+            _selectedNoteIds.Clear();
+            for (int i = start; i <= end; i++)
+            {
+                _selectedNoteIds.Add(filteredList[i].Id);
+            }
+        }
+        else
+        {
+            // 普通单点：清除其他，只选当前
+            _selectedNoteIds.Clear();
+            _selectedNoteIds.Add(noteId);
+            _lastSelectedNoteIndex = currentIndex;
+        }
+
+        // 渲染策略分配
+        if (_selectedNoteIds.Count == 1)
+        {
+            await SelectNote(_selectedNoteIds.First());
+        }
+        else
+        {
+            // 选了多篇，隐藏编辑器，展示批量操作面板
+            SelectedNoteId = string.Empty;
+            StateHasChanged();
+        }
+    }
+
     private async Task SelectNote(string id)
     {
         if (await OpenInTabAsync(id))
         {
             SelectedNoteId = id;
+            if (!_selectedNoteIds.Contains(id))
+            {
+                _selectedNoteIds.Clear();
+                _selectedNoteIds.Add(id);
+            }
             _saveStatus = "已保存";
             StateHasChanged();
         }
@@ -1483,9 +1595,10 @@
         _showNoteContextMenu = false;
     }
 
-    private void OpenFolderSelector(bool isCopy)
+    private void OpenFolderSelector(bool isCopy, bool isBatch = false)
     {
         _isCopyMode = isCopy;
+        _isBatchOperation = isBatch;
         _targetFolder = string.Empty;
         _showFolderSelector = true;
         _showNoteContextMenu = false;
@@ -1495,40 +1608,51 @@
 
     private async Task ConfirmMoveOrCopy()
     {
-        if (_contextMenuNote == null || string.IsNullOrEmpty(_targetFolder)) return;
+        if (string.IsNullOrEmpty(_targetFolder)) return;
 
         var allNotes = await NoteRepository.GetAllNotesAsync();
-        var realNote = allNotes.FirstOrDefault(n => n.Id == _contextMenuNote.Id);
-        if (realNote == null) return;
+        // 如果是批量，取 Set 里的所有 ID；如果是单选右键，取当前右键菜单的 Note Id
+        var targetIds = _isBatchOperation ? _selectedNoteIds.ToList() : new List<string> { _contextMenuNote?.Id ?? "" };
 
-        if (_isCopyMode)
+        foreach (var tId in targetIds)
         {
-            var newNote = new MonoNote
+            if (string.IsNullOrEmpty(tId)) continue;
+            var realNote = allNotes.FirstOrDefault(n => n.Id == tId);
+            var idxNote = IndexItems.FirstOrDefault(n => n.Id == tId);
+            if (realNote == null || idxNote == null) continue;
+
+            if (_isCopyMode)
             {
-                Id = Guid.NewGuid().ToString("N"),
-                Title = realNote.Title + " - 副本",
-                Content = realNote.Content,
-                Folder = _targetFolder,
-                UpdatedAt = DateTimeOffset.Now,
-                Tags = realNote.Tags?.ToList() ?? new List<string>()
-            };
-
-            var idx = new NoteIndexItem { Id = newNote.Id, Title = newNote.Title, Folder = newNote.Folder, UpdatedAt = newNote.UpdatedAt, CreatedAt = newNote.UpdatedAt, Tags = newNote.Tags };
-            IndexItems.Insert(0, idx);
-            IndexService.UpsertItem(idx);
-
-            await NoteRepository.SaveNoteAsync(newNote);
-        }
-        else
-        {
-            _contextMenuNote.Folder = _targetFolder;
-            IndexService.UpsertItem(_contextMenuNote);
-
-            realNote.Folder = _targetFolder;
-            await NoteRepository.SaveNoteAsync(realNote);
+                var newNote = new MonoNote
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Title = realNote.Title + " - 副本",
+                    Content = realNote.Content,
+                    Folder = _targetFolder,
+                    UpdatedAt = DateTimeOffset.Now,
+                    Tags = realNote.Tags?.ToList() ?? new List<string>()
+                };
+                var newIdx = new NoteIndexItem { Id = newNote.Id, Title = newNote.Title, Folder = newNote.Folder, UpdatedAt = newNote.UpdatedAt, CreatedAt = newNote.UpdatedAt, Tags = newNote.Tags };
+                IndexItems.Insert(0, newIdx);
+                IndexService.UpsertItem(newIdx);
+                await NoteRepository.SaveNoteAsync(newNote);
+            }
+            else
+            {
+                idxNote.Folder = _targetFolder;
+                IndexService.UpsertItem(idxNote);
+                realNote.Folder = _targetFolder;
+                await NoteRepository.SaveNoteAsync(realNote);
+            }
         }
 
         _showFolderSelector = false;
+
+        if (_isBatchOperation)
+        {
+            _selectedNoteIds.Clear();
+            SelectedNoteId = string.Empty;
+        }
         StateHasChanged();
     }
 
@@ -1682,7 +1806,20 @@
 
     private void RefreshSelection()
     {
+        _selectedNoteIds.Clear();
         SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+
+        if (!string.IsNullOrEmpty(SelectedNoteId))
+        {
+            _selectedNoteIds.Add(SelectedNoteId);
+            _ = OpenInTabAsync(SelectedNoteId);
+        }
+        else
+        {
+            _openTabs.Clear();
+        }
+
+        StateHasChanged();
     }
 
     private void OpenTagManager()
@@ -1768,7 +1905,10 @@
         }
 
         _allUniqueTags.Remove(tag);
-        if (_selectedTag == tag) _selectedTag = string.Empty;
+        if (_activeTags.Contains(tag))
+        {
+            _activeTags.Remove(tag); 
+        }
 
         _showTagDeleteConfirm = false;
         _tagToDelete = string.Empty;
@@ -1842,7 +1982,7 @@
         _openNotesCache.Clear(); // 清空旧库的内存
         SelectedNoteId = string.Empty;
         _selectedFolderPath = "notes";
-        _selectedTag = string.Empty;
+        _activeTags.Clear();
 
         await OnInitializedAsync();
         StateHasChanged();
@@ -1859,7 +1999,7 @@
         _openNotesCache.Clear();
         SelectedNoteId = string.Empty;
         _selectedFolderPath = "notes";
-        _selectedTag = string.Empty;
+        _activeTags.Clear();
 
         await OnInitializedAsync();
         StateHasChanged();
@@ -2079,5 +2219,75 @@
             _warningMessage = "部分图片因网络或防盗链原因下载失败，已保留原链接。";
             _showWarningDialog = true;
         }
+    }
+    private async Task BatchSoftDelete()
+    {
+        var allNotes = await NoteRepository.GetAllNotesAsync();
+        foreach (var id in _selectedNoteIds)
+        {
+            var idx = IndexItems.FirstOrDefault(n => n.Id == id);
+            var real = allNotes.FirstOrDefault(n => n.Id == id);
+            if (idx != null) { idx.IsDeleted = true; IndexService.UpsertItem(idx); }
+            if (real != null) { real.IsDeleted = true; await NoteRepository.SaveNoteAsync(real); }
+            CloseTab(id); // 从标签页移除
+        }
+        _selectedNoteIds.Clear();
+        SelectedNoteId = string.Empty;
+        StateHasChanged();
+    }
+
+    private async Task BatchRestore()
+    {
+        var allNotes = await NoteRepository.GetAllNotesAsync();
+        foreach (var id in _selectedNoteIds)
+        {
+            var idx = IndexItems.FirstOrDefault(n => n.Id == id);
+            var real = allNotes.FirstOrDefault(n => n.Id == id);
+            if (idx != null) { idx.IsDeleted = false; IndexService.UpsertItem(idx); }
+            if (real != null) { real.IsDeleted = false; await NoteRepository.SaveNoteAsync(real); }
+        }
+        _selectedNoteIds.Clear();
+        SelectedNoteId = string.Empty;
+        StateHasChanged();
+    }
+
+    private async Task BatchHardDelete()
+    {
+        foreach (var id in _selectedNoteIds)
+        {
+            await NoteRepository.DeleteNoteAsync(id);
+            IndexItems.RemoveAll(n => n.Id == id);
+            IndexService.RemoveItem(id);
+            CloseTab(id);
+        }
+        _selectedNoteIds.Clear();
+        SelectedNoteId = string.Empty;
+        StateHasChanged();
+    }
+
+    private async Task ExecuteEmptyTrash()
+    {
+        var trashIds = IndexItems.Where(n => n.IsDeleted).Select(n => n.Id).ToList();
+        foreach (var id in trashIds)
+        {
+            await NoteRepository.DeleteNoteAsync(id);
+            IndexItems.RemoveAll(n => n.Id == id);
+            IndexService.RemoveItem(id);
+            CloseTab(id);
+        }
+        _selectedNoteIds.Clear();
+        SelectedNoteId = string.Empty;
+        _showEmptyTrashConfirm = false;
+        StateHasChanged();
+    }
+
+    private void RemoveActiveTag(string tag)
+    {
+        if (_activeTags != null)
+        {
+            _activeTags.Remove(tag);
+            if (!_activeTags.Any()) _selectedFolderPath = "notes";
+        }
+        RefreshSelection();
     }
 }
