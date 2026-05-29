@@ -347,28 +347,31 @@
         }
         else if (_selectedNoteIds.Count == 1 && SelectedNote != null)
         {
-            <div class="editor-header">
-                <div class="status-indicator">@_saveStatus</div>
-                <div class="header-actions">
-                    <button class="icon-btn" title="将正文中的远程图片下载到本地" @onclick="LocalizeRemoteImagesAsync">⬇️</button>
-                    <button class="icon-btn" title="@(SelectedNote.IsPinned ? "取消置顶" : "置顶笔记")" @onclick="TogglePin">@(SelectedNote.IsPinned ? "📌" : "📍")</button>
-                    @if (SelectedNote.IsDeleted)
-                    {
-                        <button class="icon-btn" title="恢复笔记" @onclick="RestoreCurrentNote">↩️</button>
-                    }
-                    else
-                    {
-                        <button class="icon-btn" title="移至回收站" @onclick="DeleteCurrentNote">🗑️</button>
-                    }
-                    <button class="icon-btn">⋯</button>
-                </div>
-            </div>
-
             <div class="editor-body" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; position: relative; padding: 16px 24px 0 24px;">
 
-                <input class="document-title" placeholder="无标题" @bind="SelectedNote.Title" @bind:event="oninput" @onkeyup="OnNoteChanged"
-                       style="font-size: 20px; font-weight: 600; border: none; outline: none; background: transparent; color: var(--nt-text-main); margin-bottom: 8px; flex: none; width: calc(100% - 280px);" />
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex: none; width: calc(100% - 280px);">
 
+                    <input class="document-title" placeholder="无标题" @bind="SelectedNote.Title" @bind:event="oninput" @onkeyup="OnNoteChanged"
+                           style="font-size: 20px; font-weight: 600; border: none; outline: none; background: transparent; color: var(--nt-text-main); flex: 1; min-width: 0; margin-right: 16px;" />
+
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div class="status-indicator" style="font-size: 12px; color: var(--nt-text-gray); opacity: 0.6; white-space: nowrap;">
+                            @_saveStatus
+                        </div>
+                        <div class="header-actions" style="display: flex; align-items: center; gap: 4px;">
+                            <button class="icon-btn" title="将正文中的远程图片下载到本地" @onclick="LocalizeRemoteImagesAsync">⬇️</button>
+                            <button class="icon-btn" title="@(SelectedNote.IsPinned ? "取消置顶" : "置顶笔记")" @onclick="TogglePin">@(SelectedNote.IsPinned ? "📌" : "📍")</button>
+                            @if (SelectedNote.IsDeleted)
+                            {
+                                <button class="icon-btn" title="恢复笔记" @onclick="RestoreCurrentNote">↩️</button>
+                            }
+                            else
+                            {
+                                <button class="icon-btn" title="移至回收站" @onclick="DeleteCurrentNote">🗑️</button>
+                            }
+                        </div>
+                    </div>
+                </div>
                 <div class="note-tags-editor" style="flex: none; margin-bottom: 12px; width: calc(100% - 280px);">
                     @if (SelectedNote.Tags != null)
                     {
