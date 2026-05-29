@@ -5,118 +5,32 @@
 @inject MonoNotes.Core.Interfaces.INoteRepository NoteRepository
 
 <div id="@_editorId" class="vditor-container" style="height: 100%;"></div>
-<style>
-    /* ========================================== */
-    /* 🎨 Vditor 大纲：与标题完美平齐的终极形态    */
-    /* ========================================== */
 
-    /* 1. 拆除 Vditor 自带的定位，允许大纲越狱 */
+<style>
+    /* 1. 恢复 Vditor 容器的原生定位，绝不能破坏其结构 */
     .vditor, .vditor-content {
-        position: static !important;
         border: none !important;
+        background: transparent !important;
     }
 
-    /* 2. 编辑器内容区正常滚动 */
+    /* 2. 🌟 核心防穿透：用 Padding 挤压工具栏和正文，让出右侧 260px 空间给我们的自定义双塔面板 */
+    .vditor-toolbar {
+        padding-right: 260px !important;
+    }
+
     .vditor-ir, .vditor-wysiwyg {
         height: 100% !important;
         overflow-y: auto !important;
-    }
-
-    /* 3. 🌟 核心定位：带空隙的独立大纲面板 */
-    .vditor-outline {
-        position: absolute !important;
-        /* 🌟 与上下右边框均留出 20px 的空隙 */
-        top: 20px !important;
-        bottom: 20px !important;
-        right: 20px !important;
-        width: 240px !important;
-        height: auto !important; /* 🌟 放弃固定高度，由 top 和 bottom 自动撑开 */
-
-        display: block !important;
-        z-index: 100 !important;
-        /* 🎨 独立面板视觉美化 */
-        background-color: transparent !important;
-        border: 1px solid rgba(55, 53, 47, 0.08) !important; /* 极淡的全包围边框 */
-        border-radius: 8px !important;
-        /* 轻微圆角，消除锐利感 */
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02) !important;
-        /* 若有若无的超淡阴影 */
-
-        padding: 16px 12px 24px 12px !important;
-        overflow-y: auto !important;
-    }
-        /* 4. 极简视网膜级滚动条 */
-        .vditor-outline::-webkit-scrollbar {
-            width: 4px !important;
-            background: transparent !important;
-        }
-
-        .vditor-outline::-webkit-scrollbar-thumb {
-            background: rgba(55, 53, 47, 0.1) !important;
-            border-radius: 4px !important;
-        }
-
-    /* 5. 顶部“目录”文字美化 */
-    .vditor-outline__title {
-        display: block !important;
-        font-size: 11px !important;
-        font-weight: 600 !important;
-        color: rgba(55, 53, 47, 0.4) !important;
-        margin-bottom: 14px !important;
-        padding-left: 8px !important;
-    }
-
-    /* 6. 多级树状缩进精细调优 */
-    .vditor-outline ul {
-        margin: 0 !important;
-        padding-left: 12px !important;
-        list-style: none !important;
-    }
-
-    .vditor-outline > ul {
-        padding-left: 0 !important;
-    }
-
-    .vditor-outline li {
-        margin: 3px 0 !important;
-    }
-
-    /* 7. 标题文本交互样式 */
-    .vditor-outline ul li > span {
-        color: rgba(55, 53, 47, 0.6) !important;
-        font-size: 13px !important;
-        line-height: 1.5 !important;
-        border-radius: 5px !important;
-        padding: 5px 10px 5px 8px !important;
-        display: block !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        cursor: pointer !important;
-        transition: all 0.15s ease !important;
-        border-left: 3px solid transparent !important;
-    }
-
-        .vditor-outline ul li > span:hover {
-            background-color: rgba(55, 53, 47, 0.04) !important;
-            color: rgba(55, 53, 47, 0.85) !important;
-        }
-
-    /* 8. 🌟 当前阅读进度的高亮指示器 */
-    .vditor-outline ul li.vditor-outline__item--current > span {
-        color: #2eaadc !important;
-        font-weight: 600 !important;
-        background-color: rgba(46, 170, 220, 0.06) !important;
-        border-left: 3px solid #2eaadc !important;
-        border-radius: 0 5px 5px 0 !important;
-        padding-left: 5px !important;
+        padding-right: 260px !important;
     }
 </style>
+
 @code {
     [Parameter] public string Content { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> ContentChanged { get; set; }
-
     [Parameter] public string CurrentFolder { get; set; } = string.Empty;
+    [Parameter] public IEnumerable<MonoNotes.Core.Models.NoteIndexItem> GlobalIndex { get; set; } = Array.Empty<MonoNotes.Core.Models.NoteIndexItem>();
+    [Parameter] public EventCallback<string> OnInternalLinkClick { get; set; }
 
     private readonly string _editorId = "editor-" + Guid.NewGuid().ToString("N");
     private DotNetObjectReference<MarkdownEditor>? _dotNetHelper;
@@ -159,17 +73,44 @@
     {
         var base64Span = base64Data.Contains(',') ? base64Data.Split(',')[1] : base64Data;
         var bytes = Convert.FromBase64String(base64Span);
-
         var ext = Path.GetExtension(fileName);
         if (string.IsNullOrEmpty(ext)) ext = ".png";
         var savedFileName = await NoteRepository.SaveAssetAsync(bytes, ext);
-
-        // 🌟 核心升级：返回跨平台的绝对虚拟路径
         return $"{MonoNotes.Core.AppConstants.ImageBaseUrl}/Workspaces/{NoteRepository.CurrentWorkspace}/.assets/{savedFileName}";
+    }
+
+    [JSInvokable]
+    public Task<List<string>> SearchNoteHints(string keyword)
+    {
+        var query = GlobalIndex.Where(n => !n.IsDeleted && !string.IsNullOrWhiteSpace(n.Title));
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            query = query.Where(n => n.Title!.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        }
+        var results = query.OrderByDescending(n => n.UpdatedAt).Select(n => n.Title!).Take(10).ToList();
+        return Task.FromResult(results);
+    }
+
+    [JSInvokable]
+    public async Task TriggerInternalLink(string targetTitle)
+    {
+        if (OnInternalLinkClick.HasDelegate)
+        {
+            await OnInternalLinkClick.InvokeAsync(targetTitle);
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
         _dotNetHelper?.Dispose();
+    }
+
+    // 🌟 新增：对外暴露的滚动跳转方法
+    public async Task ScrollToHeadingAsync(string headingText)
+    {
+        if (_isInitialized)
+        {
+            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.scrollToHeading", _editorId, headingText);
+        }
     }
 }

@@ -364,9 +364,12 @@
                 </div>
             </div>
 
-            <div class="editor-body">
-                <input class="document-title" placeholder="无标题" @bind="SelectedNote.Title" @bind:event="oninput" @onkeyup="OnNoteChanged" />
-                <div class="note-tags-editor">
+            <div class="editor-body" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; position: relative; padding: 16px 24px 0 24px;">
+
+                <input class="document-title" placeholder="无标题" @bind="SelectedNote.Title" @bind:event="oninput" @onkeyup="OnNoteChanged"
+                       style="font-size: 20px; font-weight: 600; border: none; outline: none; background: transparent; color: var(--nt-text-main); margin-bottom: 8px; flex: none; width: calc(100% - 280px);" />
+
+                <div class="note-tags-editor" style="flex: none; margin-bottom: 12px; width: calc(100% - 280px);">
                     @if (SelectedNote.Tags != null)
                     {
                         @foreach (var tag in SelectedNote.Tags)
@@ -379,8 +382,139 @@
                     }
                     <input type="text" class="tag-input" placeholder="输入标签并回车..." @bind="_newTagInput" @bind:event="oninput" @onkeyup="HandleTagInputKey" />
                 </div>
-                <div class="document-content">
-                    <MarkdownEditor Content="@SelectedNote.Content" ContentChanged="@((newContent) => { SelectedNote.Content = newContent; OnNoteChanged(); })" CurrentFolder="@SelectedNote.Folder" />
+
+                <div class="document-content" style="flex: 1; position: relative; overflow: hidden;">
+                    <MarkdownEditor @ref="_markdownEditor" Content="@SelectedNote.Content"
+                                    ContentChanged="@((newContent) => { SelectedNote.Content = newContent; OnNoteChanged(); })"
+                                    CurrentFolder="@SelectedNote.Folder"
+                                    GlobalIndex="IndexItems"
+                                    OnInternalLinkClick="HandleInternalLinkClick" />
+
+                    @{
+                        // 统一在这里极速提取所有的元数据
+                        var currentTitle = SelectedNote.Title ?? "";
+                        var outLinks = ExtractOutgoingLinks(SelectedNote.Content ?? "");
+                        var backlinks = IndexItems.Where(n => !n.IsDeleted && n.OutgoingLinks != null && n.OutgoingLinks.Contains(currentTitle)).ToList();
+
+                        // 🌟 新增：直接提取大纲标题
+                        var headings = ExtractHeadings(SelectedNote.Content ?? "");
+                    }
+
+                    <div class="custom-outline-panel" style="position: absolute; top: 0px; right: 16px; width: 240px; height: calc(60% - 10px); box-sizing: border-box; background: var(--nt-bg-main); border: 1px solid rgba(55, 53, 47, 0.08); border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02); display: flex; flex-direction: column; overflow: hidden; z-index: 100;">
+                        <div style="padding: 10px 12px; border-bottom: 1px solid rgba(55,53,47,0.06); background: rgba(55,53,47,0.02); flex: none;">
+                            <div style="font-size: 11px; font-weight: 600; color: rgba(55,53,47,0.4); letter-spacing: 0.5px;">
+                                📑 目录 (OUTLINE)
+                            </div>
+                        </div>
+
+                        <div class="hide-scrollbar" style="flex: 1; overflow-y: auto; padding: 12px 12px 24px 12px;">
+                            @if (!headings.Any())
+                            {
+                                <div style="font-size: 11px; color: var(--nt-text-gray); opacity: 0.5; text-align: center; margin-top: 20px;">
+                                    暂无大纲标题
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var h in headings)
+                                {
+                                    <div class="outline-node" @onclick="() => JumpToHeading(h.Text)"
+                                         style="padding-left: @((h.Level - 1) * 12)px; margin-bottom: 4px; flex-shrink: 0; font-size: 12px; color: var(--nt-text-main); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 4px; padding-top: 6px; padding-bottom: 6px; transition: all 0.2s;"
+                                         title="@h.Text">
+                                        @h.Text
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    <div class="knowledge-graph-panel" style="position: absolute; bottom: 20px; right: 16px; width: 240px; height: calc(40% - 20px); box-sizing: border-box; background: var(--nt-bg-main); border: 1px solid rgba(55, 53, 47, 0.08); border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02); display: flex; flex-direction: column; overflow: hidden; z-index: 100;">
+                        <div style="padding: 10px 12px; border-bottom: 1px solid rgba(55,53,47,0.06); background: rgba(55,53,47,0.02); flex: none;">
+                            <div style="font-size: 11px; font-weight: 600; color: rgba(55,53,47,0.4); letter-spacing: 0.5px;">
+                                🕸️ 知识关联 (GRAPH)
+                            </div>
+                        </div>
+                        <div style="flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 16px;">
+                            @if (outLinks.Any())
+                            {
+                                <div>
+                                    <div style="font-size: 11px; font-weight: 600; color: #2eaadc; margin-bottom: 8px; display: flex; align-items: center; gap: 4px;">
+                                        <span>📑</span> 引用了 (@outLinks.Count)
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                                        @foreach (var title in outLinks)
+                                        {
+                                            var linkNote = IndexItems.FirstOrDefault(n => n.Title == title && !n.IsDeleted);
+                                            <div class="graph-card" @onclick="() => { if (linkNote != null) SelectNote(linkNote.Id); }"
+                                                 style="padding: 6px 8px; background: rgba(55,53,47,0.03); border-radius: 4px; font-size: 12px; color: var(--nt-text-main); cursor: @(linkNote != null ? "pointer" : "default"); opacity: @(linkNote != null ? "1" : "0.5"); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: all 0.2s;">
+                                                🔗 @title
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @if (backlinks.Any())
+                            {
+                                <div>
+                                    <div style="font-size: 11px; font-weight: 600; color: #52c41a; margin-bottom: 8px; display: flex; align-items: center; gap: 4px;">
+                                        <span>🔍</span> 被提及 (@backlinks.Count)
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                                        @foreach (var link in backlinks)
+                                        {
+                                            <div class="graph-card" @onclick="() => SelectNote(link.Id)"
+                                                 style="padding: 6px 8px; background: rgba(55,53,47,0.03); border-radius: 4px; font-size: 12px; color: var(--nt-text-main); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: all 0.2s;">
+                                                📄 @link.Title
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <style>
+                                        .outline-node:hover {
+                                            background: rgba(46, 170, 220, 0.08) !important;
+                                            color: #2eaadc !important;
+                                        }
+
+                                        .custom-outline-panel::-webkit-scrollbar {
+                                            width: 4px !important;
+                                            background: transparent !important;
+                                        }
+
+                                        .custom-outline-panel::-webkit-scrollbar-thumb {
+                                            background: rgba(55, 53, 47, 0.1) !important;
+                                            border-radius: 4px !important;
+                                        }
+
+                                        .graph-card:hover {
+                                            background: rgba(46, 170, 220, 0.08) !important;
+                                            color: #2eaadc !important;
+                                        }
+
+                                        .knowledge-graph-panel::-webkit-scrollbar {
+                                            width: 4px !important;
+                                            background: transparent !important;
+                                        }
+
+                                        .knowledge-graph-panel::-webkit-scrollbar-thumb {
+                                            background: rgba(55, 53, 47, 0.1) !important;
+                                            border-radius: 4px !important;
+                                        }
+
+                                        /* 🌟 修复：跨浏览器彻底隐藏滚动条，但保留鼠标滚轮功能 */
+                                        .hide-scrollbar::-webkit-scrollbar {
+                                            display: none !important;
+                                        }
+
+                                        .hide-scrollbar {
+                                            scrollbar-width: none;
+                                            -ms-overflow-style: none;
+                                        }
+                    </style>
                 </div>
             </div>
         }
@@ -944,6 +1078,8 @@
     private string _originalTheme = "System";
     private double _originalZoom = 1.0;
 
+    private bool _isGraphExpanded = false;
+
     protected override async Task OnInitializedAsync()
     {
         // 1. 加载现有的 JSON 索引
@@ -985,8 +1121,7 @@
         // 4. 决定启动时选中的笔记
         if (FilteredNotes.Any())
         {
-            SelectedNoteId = FilteredNotes.First().Id;
-            await OpenInTabAsync(SelectedNoteId);
+            await SelectNote(FilteredNotes.First().Id);
         }
         else if (!allNotes.Any())
         {
@@ -1141,7 +1276,7 @@
         _isFavoriteFilterActive = false;
         _isArchiveFilterActive = false;
         _isTrashFilterActive = false;
-        _selectedFolderPath = string.Empty; 
+        _selectedFolderPath = string.Empty;
         if (_activeTags == null) _activeTags = new HashSet<string>();
 
         if (_activeTags.Contains(tag))
@@ -1515,6 +1650,8 @@
     {
         if (SelectedNote != null)
         {
+            // 🌟 战役四：在保存前，扫描并更新这篇笔记外发的所有双链！
+            SelectedNote.OutgoingLinks = ExtractOutgoingLinks(SelectedNote.Content);
             // 1. 保存到本地磁盘
             await NoteRepository.SaveNoteAsync(SelectedNote);
 
@@ -1530,6 +1667,10 @@
                 indexItem.IsFavorite = SelectedNote.IsFavorite;
                 indexItem.IsDeleted = SelectedNote.IsDeleted;
                 indexItem.IsArchived = SelectedNote.IsArchived;
+
+                // 🌟 核心：将关系网同步给内存索引引擎
+                indexItem.OutgoingLinks = SelectedNote.OutgoingLinks;
+
                 IndexService.UpsertItem(indexItem); // 触发防抖写入
             }
 
@@ -1928,7 +2069,7 @@
         _allUniqueTags.Remove(tag);
         if (_activeTags.Contains(tag))
         {
-            _activeTags.Remove(tag); 
+            _activeTags.Remove(tag);
         }
 
         _showTagDeleteConfirm = false;
@@ -2375,5 +2516,99 @@
         }
 
         StateHasChanged();
+    }
+
+
+    // 🌟 战役四：处理来自编辑器的双向链接点击
+    private async Task HandleInternalLinkClick(string targetTitle)
+    {
+        var targetNote = IndexItems.FirstOrDefault(n => n.Title == targetTitle && !n.IsDeleted);
+        if (targetNote != null)
+        {
+            await SelectNote(targetNote.Id);
+        }
+        else
+        {
+            _warningMessage = $"未找到名为「{targetTitle}」的笔记，它可能已被删除或重命名。";
+            _showWarningDialog = true;
+            StateHasChanged();
+        }
+    }
+
+    // 🌟 战役四：提取 Markdown 正文中的所有双向链接（同时兼容旧版纯文本和新版彩色超链接）
+    private List<string> ExtractOutgoingLinks(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return new List<string>();
+
+        var links = new HashSet<string>();
+
+        // 1. 匹配旧的纯文本格式: [[笔记标题]]
+        var regex1 = new System.Text.RegularExpressions.Regex(@"\[\[(.*?)\]\]");
+        foreach (System.Text.RegularExpressions.Match match in regex1.Matches(content))
+        {
+            var title = match.Groups[1].Value.Trim();
+            if (!string.IsNullOrEmpty(title)) links.Add(title);
+        }
+
+        // 2. 匹配新的高亮超链接格式: [🔗 笔记标题](note://笔记标题)
+        var regex2 = new System.Text.RegularExpressions.Regex(@"\[.*?\]\(note:\/\/(.*?)\)");
+        foreach (System.Text.RegularExpressions.Match match in regex2.Matches(content))
+        {
+            var title = Uri.UnescapeDataString(match.Groups[1].Value.Trim());
+            if (!string.IsNullOrEmpty(title)) links.Add(title);
+        }
+
+        return links.ToList();
+    }
+
+    // 🌟 自制大纲的模型与提取引擎
+    public class HeadingInfo { public int Level { get; set; } public string Text { get; set; } = string.Empty; }
+
+    private List<HeadingInfo> ExtractHeadings(string content)
+    {
+        var list = new List<HeadingInfo>();
+        if (string.IsNullOrWhiteSpace(content)) return list;
+
+        var lines = content.Split('\n');
+        bool isInCodeBlock = false;
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+
+            // 避开代码块里的注释
+            if (trimmed.StartsWith("```"))
+            {
+                isInCodeBlock = !isInCodeBlock;
+                continue;
+            }
+
+            if (!isInCodeBlock && trimmed.StartsWith("#"))
+            {
+                var level = trimmed.TakeWhile(c => c == '#').Count();
+                // 确保是一个合法的标题格式（# 后面必须跟一个空格）
+                if (level > 0 && level <= 6 && trimmed.Length > level && trimmed[level] == ' ')
+                {
+                    var text = trimmed.Substring(level).Trim();
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        list.Add(new HeadingInfo { Level = level, Text = text });
+                    }
+                }
+            }
+        }
+        return list;
+    }
+
+    // 🌟 新增：编辑器组件的引用，用于呼叫滚动
+    private MarkdownEditor? _markdownEditor;
+
+    // 🌟 新增：点击大纲的触发逻辑
+    private async Task JumpToHeading(string text)
+    {
+        if (_markdownEditor != null)
+        {
+            await _markdownEditor.ScrollToHeadingAsync(text);
+        }
     }
 }

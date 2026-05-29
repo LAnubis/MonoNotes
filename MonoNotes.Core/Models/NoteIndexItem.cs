@@ -16,5 +16,6 @@
         public bool IsDeleted { get; set; }
         public bool IsArchived { get; set; }
         public List<string> Tags { get; set; } = new();
+        public List<string> OutgoingLinks { get; set; } = new();
     }
 }
