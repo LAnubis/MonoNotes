@@ -41,7 +41,7 @@
     [Parameter] public string CurrentFolder { get; set; } = string.Empty;
     [Parameter] public IEnumerable<MonoNotes.Core.Models.NoteIndexItem> GlobalIndex { get; set; } = Array.Empty<MonoNotes.Core.Models.NoteIndexItem>();
     [Parameter] public EventCallback<string> OnInternalLinkClick { get; set; }
-
+    [Parameter] public EventCallback OnOpenInsertModal { get; set; }
     private readonly string _editorId = "editor-" + Guid.NewGuid().ToString("N");
     private DotNetObjectReference<MarkdownEditor>? _dotNetHelper;
     private bool _isInitialized = false;
@@ -89,17 +89,6 @@
         return $"{MonoNotes.Core.AppConstants.ImageBaseUrl}/Workspaces/{NoteRepository.CurrentWorkspace}/.assets/{savedFileName}";
     }
 
-    [JSInvokable]
-    public Task<List<string>> SearchNoteHints(string keyword)
-    {
-        var query = GlobalIndex.Where(n => !n.IsDeleted && !string.IsNullOrWhiteSpace(n.Title));
-        if (!string.IsNullOrWhiteSpace(keyword))
-        {
-            query = query.Where(n => n.Title!.Contains(keyword, StringComparison.OrdinalIgnoreCase));
-        }
-        var results = query.OrderByDescending(n => n.UpdatedAt).Select(n => n.Title!).Take(10).ToList();
-        return Task.FromResult(results);
-    }
 
     [JSInvokable]
     public async Task TriggerInternalLink(string targetTitle)
@@ -121,6 +110,25 @@
         if (_isInitialized)
         {
             await JSRuntime.InvokeVoidAsync("MonoNotesEditor.scrollToHeading", _editorId, headingText);
+        }
+    }
+
+    [JSInvokable]
+    public async Task TriggerInsertNoteModal()
+    {
+        Console.WriteLine("【后端 C#】TriggerInsertNoteModal 桥梁方法被触发！");
+        if (OnOpenInsertModal.HasDelegate)
+        {
+            await OnOpenInsertModal.InvokeAsync();
+        }
+    }
+
+    // 2. C# 拿到结果后呼叫 JS 把文字插进光标处
+    public async Task InsertTextAsync(string text)
+    {
+        if (_isInitialized)
+        {
+            await JSRuntime.InvokeVoidAsync("MonoNotesEditor.insertTextAtCursor", _editorId, text);
         }
     }
 }

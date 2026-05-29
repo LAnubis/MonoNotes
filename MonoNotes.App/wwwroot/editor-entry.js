@@ -22,54 +22,36 @@ window.MonoNotesEditor = {
                 'list', 'ordered-list', 'check', 'outdent', 'indent', '|',
                 'quote', 'line', 'code', 'inline-code', 'insert-before', 'insert-after', '|',
                 'table', '|',
+
+                {
+                    name: 'insert-note',
+                    tip: '插入关联笔记',
+                    icon: '<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="22" height="22"><path d="M574 665.4a8.03 8.03 0 0 0-11.3 0L446.5 781.6c-53.8 53.8-144.6 59.5-204 0-59.5-59.5-53.8-150.2 0-204l116.2-116.2c3.1-3.1 3.1-8.2 0-11.3l-39.8-39.8a8.03 8.03 0 0 0-11.3 0L191.4 526.5c-84.6 84.6-84.6 221.5 0 306s221.5 84.6 306 0l116.2-116.2c3.1-3.1 3.1-8.2 0-11.3L574 665.4zm258.6-474c-84.6-84.6-221.5-84.6-306 0L410.3 307.6a8.03 8.03 0 0 0 0 11.3l39.7 39.7c3.1 3.1 8.2 3.1 11.3 0l116.2-116.2c53.8-53.8 144.6-59.5 204 0 59.5 59.5 53.8 150.2 0 204L665.3 562.6a8.03 8.03 0 0 0 0 11.3l39.8 39.8c3.1 3.1 8.2 3.1 11.3 0l116.2-116.2c84.5-84.6 84.5-221.5 0-306.1zM610.1 372.3a8.03 8.03 0 0 0-11.3 0L372.3 598.7a8.03 8.03 0 0 0 0 11.3l39.6 39.6c3.1 3.1 8.2 3.1 11.3 0l226.4-226.4c3.1-3.1 3.1-8.2 0-11.3l-39.5-39.6z"/></svg>',
+
+                    // 🌟 核心替换：使用箭头函数，拦截默认事件，并加上日志
+                    click: (event) => {
+                        if (event) event.preventDefault();
+                        console.log("【前端 JS】插入按钮被点击！准备呼叫 C#...");
+
+                        dotNetHelper.invokeMethodAsync('TriggerInsertNoteModal')
+                            .then(() => console.log("【前端 JS】成功呼叫 C# 方法！"))
+                            .catch(err => console.error("【前端 JS】呼叫 C# 失败：", err));
+                    }
+                },
+                '|',
                 'undo', 'redo', '|',
                 'edit-mode',
                 'outline',
                 'export'
             ],
 
-            // 🌟 1. 改为插入 ==标题== 语法
-            hint: {
-                extend: [
-                    {
-                        key: '[[',
-                        hint: async (value) => {
-                            const hints = await dotNetHelper.invokeMethodAsync('SearchNoteHints', value);
-                            return hints.map(title => {
-                                return {
-                                    // 核心：使用 Vditor 高亮语法，生成 mark 标签，彻底抛弃 a 标签
-                                    value: `《《${title}》》`,
-                                    html: `<div style="display: flex; align-items: center; gap: 8px;">
-                                             <span style="color: #2eaadc;">📄</span> 
-                                             <span style="font-weight: 500;">${title}</span>
-                                           </div>`
-                                };
-                            });
-                        }
-                    }
-                ]
-            },
+            // 注意：这里已经彻底删除了 hint 引擎！
 
             after: () => {
                 window.MonoNotesEditor.instances[elementId] = editor;
 
                 document.getElementById(elementId).addEventListener('click', (e) => {
-
-                    // 🌟 2. 精准拦截我们生成的 mark 标签
-                    let targetMark = e.target.closest('mark');
-                    if (targetMark) {
-                        // 只有按住 Ctrl (Win) 或 Cmd (Mac) 才跳转
-                        if (e.ctrlKey || e.metaKey) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            // 提取文字内容发送给 C#
-                            const title = targetMark.textContent.trim();
-                            dotNetHelper.invokeMethodAsync('TriggerInternalLink', title);
-                        }
-                        return; // 如果没按 Ctrl，光标正常进入文字，允许修改
-                    }
-
-                    // 3. 兼容纯文本的 [[xxx]] (以防你手动打字不选联想词)
+                    // 保留兼容：按住 Ctrl 点击《《xxx》》跳转的功能
                     if (!e.ctrlKey && !e.metaKey) return;
                     const selection = window.getSelection();
                     if (!selection || selection.rangeCount === 0) return;
@@ -85,17 +67,16 @@ window.MonoNotesEditor = {
                             if (offset >= start && offset <= end) {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                dotNetHelper.invokeMethodAsync('TriggerInternalLink', match[1]);
+                                dotNetHelper.invokeMethodAsync('TriggerInternalLink', match[1].trim());
                                 break;
                             }
                         }
                     }
-                }, true); // 🌟 必须为 true
+                }, true);
             },
             input: (value) => {
                 dotNetHelper.invokeMethodAsync('UpdateContent', value);
             },
-
             upload: {
                 accept: 'image/*, .jpg, .png, .gif, .svg, .webp',
                 handler(files) {
@@ -111,39 +92,37 @@ window.MonoNotesEditor = {
                     return "图片正在安全保存到本地...";
                 }
             }
-        }); // ⬅️ Vditor 的初始化在这里结束了！
-    }, // ⬅️ initVditor 方法在这里结束了！
+        });
+    },
 
     setVditorContent: function (elementId, text) {
         const editor = window.MonoNotesEditor.instances[elementId];
         if (editor) {
             editor.setValue(text || "", true);
         }
-    }, // ⬅️ 必须有这个逗号
+    },
 
-    // 🌟 修复：scrollToHeading 被移到了最外层，成为了 MonoNotesEditor 的合法成员！
     scrollToHeading: function (elementId, headingText) {
         const editor = window.MonoNotesEditor.instances[elementId];
         if (!editor) return;
-
         const editElement = editor.vditor.ir.element;
         if (!editElement) return;
-
         const headings = editElement.querySelectorAll('h1, h2, h3, h4, h5, h6');
         for (let i = 0; i < headings.length; i++) {
-            let text = headings[i].textContent
-                .replace(/[\u200B-\u200D\uFEFF]/g, '')
-                .replace(/^#+\s*/, '')
-                .trim();
-
+            let text = headings[i].textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/^#+\s*/, '').trim();
             if (text === headingText.trim()) {
                 const targetOffset = headings[i].offsetTop - 20;
-                editElement.scrollTo({
-                    top: targetOffset,
-                    behavior: 'smooth'
-                });
+                editElement.scrollTo({ top: targetOffset, behavior: 'smooth' });
                 break;
             }
+        }
+    },
+
+    // 🌟 新增：专门暴露给 C# 调用的插入文本 API
+    insertTextAtCursor: function (elementId, text) {
+        const editor = window.MonoNotesEditor.instances[elementId];
+        if (editor) {
+            editor.insertValue(text);
         }
     }
 };
