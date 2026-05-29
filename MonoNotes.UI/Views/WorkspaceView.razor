@@ -1207,7 +1207,6 @@
     private async Task TriggerBackgroundSync()
     {
         if (_isSyncingUI) return;
-
         var settings = await SettingsService.GetSettingsAsync();
         if (!settings.EnableWebDavSync)
         {
@@ -1219,15 +1218,46 @@
         _isSyncingUI = true;
         await InvokeAsync(StateHasChanged);
 
+        // 1. 执行 WebDAV 同步（下载云端新文件到本地磁盘）
         await SyncService.SyncAsync();
 
-        if (!SyncService.HasConflictsInLastSync)
+        // 2. 🌟 核心修复：执行“全量索引自愈”
+        // 同步完成后，无论索引有没有，强制扫描硬盘中所有的 .md 文件
+        var allRealFiles = await NoteRepository.GetAllNotesAsync();
+        bool hasNewFiles = false;
+
+        foreach (var file in allRealFiles)
         {
-            _saveStatus = "云端同步完成";
+            // 如果内存索引里找不到这个文件的 Id，说明它是云端刚刚同步下来的“陌生人”
+            if (!IndexItems.Any(idx => idx.Id == file.Id))
+            {
+                var newIdx = new NoteIndexItem
+                {
+                    Id = file.Id,
+                    Title = string.IsNullOrWhiteSpace(file.Title) ? "无标题" : file.Title,
+                    Folder = string.IsNullOrWhiteSpace(file.Folder) ? "notes" : file.Folder,
+                    UpdatedAt = file.UpdatedAt,
+                    CreatedAt = file.UpdatedAt,
+                    IsPinned = file.IsPinned,
+                    IsFavorite = file.IsFavorite,
+                    IsDeleted = file.IsDeleted,
+                    IsArchived = file.IsArchived,
+                    Tags = file.Tags ?? new List<string>()
+                };
+
+                IndexItems.Insert(0, newIdx);
+                IndexService.UpsertItem(newIdx); // 写入 JSON 缓存
+                hasNewFiles = true;
+            }
         }
 
-        // 同步完成后刷新UI
-        IndexItems = await IndexService.LoadIndexAsync(); // 🌟 从 JSON 引擎重载
+        // 3. 刷新 UI 状态
+        if (!SyncService.HasConflictsInLastSync)
+        {
+            _saveStatus = hasNewFiles ? "已同步并发现新笔记" : "云端同步完成";
+        }
+
+        // 4. 重建文件夹树和冲突检查
         var rawFolders = await NoteRepository.GetAllFoldersAsync();
         BuildFolderTree(rawFolders);
         ScanForConflicts();
@@ -1235,8 +1265,9 @@
         _isSyncingUI = false;
         await InvokeAsync(StateHasChanged);
 
+        // 提示信息平滑消失
         await Task.Delay(3000);
-        if (_saveStatus == "云端同步完成") _saveStatus = "已保存";
+        if (_saveStatus.Contains("同步")) _saveStatus = "已保存";
         await InvokeAsync(StateHasChanged);
     }
 
