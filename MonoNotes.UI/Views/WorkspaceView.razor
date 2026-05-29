@@ -2538,26 +2538,28 @@
         }
     }
 
-    // 🌟 战役四：提取 Markdown 正文中的所有双向链接（同时兼容旧版纯文本和新版彩色超链接）
+    // 🌟 提取 Markdown 正文中的所有双向链接（匹配新版书名号语法）
     private List<string> ExtractOutgoingLinks(string content)
     {
         if (string.IsNullOrWhiteSpace(content)) return new List<string>();
-
         var links = new HashSet<string>();
 
-        // 1. 匹配旧的纯文本格式: [[笔记标题]]
-        var regex1 = new System.Text.RegularExpressions.Regex(@"\[\[(.*?)\]\]");
-        foreach (System.Text.RegularExpressions.Match match in regex1.Matches(content))
+        // 🌟 匹配最新的格式: 《《笔记标题》》
+        var regex = new System.Text.RegularExpressions.Regex(@"《《(.*?)》》");
+        foreach (System.Text.RegularExpressions.Match match in regex.Matches(content))
         {
             var title = match.Groups[1].Value.Trim();
-            if (!string.IsNullOrEmpty(title)) links.Add(title);
+            if (!string.IsNullOrEmpty(title))
+            {
+                links.Add(title);
+            }
         }
 
-        // 2. 匹配新的高亮超链接格式: [🔗 笔记标题](note://笔记标题)
-        var regex2 = new System.Text.RegularExpressions.Regex(@"\[.*?\]\(note:\/\/(.*?)\)");
-        foreach (System.Text.RegularExpressions.Match match in regex2.Matches(content))
+        // 兼容旧的纯文本格式: [[笔记标题]] (可选，如果不需要兼容以前的笔记可以删掉这块)
+        var regexOld = new System.Text.RegularExpressions.Regex(@"\[\[(.*?)\]\]");
+        foreach (System.Text.RegularExpressions.Match match in regexOld.Matches(content))
         {
-            var title = Uri.UnescapeDataString(match.Groups[1].Value.Trim());
+            var title = match.Groups[1].Value.Trim();
             if (!string.IsNullOrEmpty(title)) links.Add(title);
         }
 

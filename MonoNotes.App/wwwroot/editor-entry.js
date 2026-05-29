@@ -28,16 +28,17 @@ window.MonoNotesEditor = {
                 'export'
             ],
 
+            // 🌟 1. 改为插入 ==标题== 语法
             hint: {
                 extend: [
                     {
                         key: '[[',
                         hint: async (value) => {
                             const hints = await dotNetHelper.invokeMethodAsync('SearchNoteHints', value);
-
                             return hints.map(title => {
                                 return {
-                                    value: `[🔗 ${title}](note://${encodeURIComponent(title)})`,
+                                    // 核心：使用 Vditor 高亮语法，生成 mark 标签，彻底抛弃 a 标签
+                                    value: `《《${title}》》`,
                                     html: `<div style="display: flex; align-items: center; gap: 8px;">
                                              <span style="color: #2eaadc;">📄</span> 
                                              <span style="font-weight: 500;">${title}</span>
@@ -53,16 +54,22 @@ window.MonoNotesEditor = {
                 window.MonoNotesEditor.instances[elementId] = editor;
 
                 document.getElementById(elementId).addEventListener('click', (e) => {
-                    let targetLink = e.target.closest('a');
-                    if (targetLink && targetLink.getAttribute('href') && targetLink.getAttribute('href').startsWith('note://')) {
-                        e.preventDefault();
+
+                    // 🌟 2. 精准拦截我们生成的 mark 标签
+                    let targetMark = e.target.closest('mark');
+                    if (targetMark) {
+                        // 只有按住 Ctrl (Win) 或 Cmd (Mac) 才跳转
                         if (e.ctrlKey || e.metaKey) {
-                            const targetTitle = decodeURIComponent(targetLink.getAttribute('href').replace('note://', ''));
-                            dotNetHelper.invokeMethodAsync('TriggerInternalLink', targetTitle);
+                            e.preventDefault();
+                            e.stopPropagation();
+                            // 提取文字内容发送给 C#
+                            const title = targetMark.textContent.trim();
+                            dotNetHelper.invokeMethodAsync('TriggerInternalLink', title);
                         }
-                        return;
+                        return; // 如果没按 Ctrl，光标正常进入文字，允许修改
                     }
 
+                    // 3. 兼容纯文本的 [[xxx]] (以防你手动打字不选联想词)
                     if (!e.ctrlKey && !e.metaKey) return;
                     const selection = window.getSelection();
                     if (!selection || selection.rangeCount === 0) return;
@@ -70,21 +77,21 @@ window.MonoNotesEditor = {
                     if (textNode && textNode.nodeType === 3) {
                         const text = textNode.textContent;
                         const offset = selection.anchorOffset;
-                        const regex = /\[\[(.*?)\]\]/g;
+                        const regex = /《《(.*?)》》/g;
                         let match;
                         while ((match = regex.exec(text)) !== null) {
                             const start = match.index;
                             const end = match.index + match[0].length;
                             if (offset >= start && offset <= end) {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 dotNetHelper.invokeMethodAsync('TriggerInternalLink', match[1]);
                                 break;
                             }
                         }
                     }
-                });
+                }, true); // 🌟 必须为 true
             },
-
             input: (value) => {
                 dotNetHelper.invokeMethodAsync('UpdateContent', value);
             },

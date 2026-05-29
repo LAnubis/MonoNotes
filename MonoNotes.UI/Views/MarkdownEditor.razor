@@ -23,6 +23,16 @@
         overflow-y: auto !important;
         padding-right: 260px !important;
     }
+        /* 🌟 彻底消灭超链接！劫持 mark 标签，Blazor 绝对无法拦截！ */
+        .vditor-ir mark {
+            background-color: transparent !important; /* 去掉默认的黄色高亮背景 */
+            color: #2eaadc !important; /* 字体变蓝 */
+            text-decoration: underline wavy #2eaadc !important; /* 加上波浪线 */
+            text-decoration-skip-ink: auto;
+            /* 核心：保持普通的文本输入光标（像 | 一样），完全消除超链接的错觉 */
+            cursor: text !important;
+            font-weight: 500;
+        }
 </style>
 
 @code {
