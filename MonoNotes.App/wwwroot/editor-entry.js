@@ -41,8 +41,7 @@ window.MonoNotesEditor = {
                 '|',
                 'undo', 'redo', '|',
                 'edit-mode',
-                'outline',
-                'export'
+                'outline'
             ],
 
             // 注意：这里已经彻底删除了 hint 引擎！
