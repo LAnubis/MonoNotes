@@ -120,19 +120,40 @@
             }
         </div>
 
-        <button class="new-note-btn" @onclick="CreateNewNote" style="flex: 0 0 auto; padding: 4px 12px; background: rgba(46, 170, 220, 0.1); color: #2eaadc; border: 1px solid rgba(46, 170, 220, 0.2);">
-            <span class="icon">➕</span> 新建页面
-        </button>
-        <button class="new-note-btn" title="每日速记 (Inbox)" @onclick="CreateOrOpenDailyNoteAsync"
-                style="flex: 0 0 auto; padding: 4px 12px; background: rgba(46, 170, 220, 0.1); color: #2eaadc; border: 1px solid rgba(46, 170, 220, 0.2); margin-top:5px;">
-            📅 速记
-        </button>
-        <div style="margin-top: auto; padding: 12px; border-top: 1px solid rgba(55,53,47,0.09);">
-            <div class="nav-item" style="padding: 6px 8px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; font-size: 13px; color: var(--nt-text-gray);"
-                 @onclick="OpenSettingsDialog">
-                <span style="margin-right: 8px;">⚙️</span>
-                <span>设置与同步</span>
+        <div style="margin-top: auto; padding: 12px; border-top: 1px solid rgba(55,53,47,0.09); display: flex; flex-direction: column; gap: 8px;">
+
+            <div style="display: flex; gap: 8px;">
+                <div class="nav-item" title="新建空白页面或从模板创建"
+                     style="flex: 1; min-width: 0; padding: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; border-radius: 6px; font-size: 13px; color: var(--nt-text-gray); background: rgba(55,53,47,0.03); transition: background 0.2s;"
+                     @onclick="OpenNewNoteModal">
+                    <span style="font-size: 15px; margin-right: 4px; flex-shrink: 0;">➕</span>
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">新建</span>
+                </div>
+
+                <div class="nav-item" title="每日速记 (Inbox)"
+                     style="flex: 1; min-width: 0; padding: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; border-radius: 6px; font-size: 13px; color: var(--nt-text-gray); background: rgba(55,53,47,0.03); transition: background 0.2s;"
+                     @onclick="CreateOrOpenDailyNoteAsync">
+                    <span style="font-size: 15px; margin-right: 4px; flex-shrink: 0;">📅</span>
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">速记</span>
+                </div>
             </div>
+
+            <div style="display: flex; gap: 8px;">
+                <div class="nav-item" title="模板管理中心"
+                     style="flex: 1; min-width: 0; padding: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; border-radius: 6px; font-size: 13px; color: var(--nt-text-gray); background: rgba(55,53,47,0.03); transition: background 0.2s;"
+                     @onclick="OpenTemplateManager">
+                    <span style="font-size: 15px; margin-right: 4px; flex-shrink: 0;">🗂️</span>
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">模板</span>
+                </div>
+
+                <div class="nav-item" title="设置与同步"
+                     style="flex: 1; min-width: 0; padding: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; border-radius: 6px; font-size: 13px; color: var(--nt-text-gray); background: rgba(55,53,47,0.03); transition: background 0.2s;"
+                     @onclick="OpenSettingsDialog">
+                    <span style="font-size: 15px; margin-right: 4px; flex-shrink: 0;">⚙️</span>
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">设置</span>
+                </div>
+            </div>
+
         </div>
     </aside>
 
@@ -555,8 +576,9 @@
     @if (_showContextMenu && _contextMenuTarget != null)
     {
         <div class="custom-context-menu" style="left: @(_contextMenuX)px; top: @(_contextMenuY)px;" @onclick:stopPropagation="true">
-            <div class="menu-item" @onclick="CreateNoteInContextFolder">📄 在此新建笔记</div>
-
+          @*   <div class="menu-item" @onclick="CreateNoteInContextFolder">📄 在此新建笔记</div> *@
+            <div class="menu-item" @onclick="OpenNewNoteModal">📄 在此新建笔记</div>
+            
             @if (_contextMenuTarget.FullPath != "notes" && _contextMenuTarget.FullPath != "每日速记")
             {
                 <div class="menu-divider"></div>
@@ -589,6 +611,7 @@
                 <div class="menu-item" @onclick="() => OpenFolderSelector(false)">📁 移动到...</div>
                 <div class="menu-item" @onclick="() => OpenFolderSelector(true)">📄 复制到...</div>
                 <div class="menu-item" @onclick="() => OpenExportModal(SelectedNote)">📤 导出笔记...</div>
+                <div class="menu-item" @onclick="() => SaveAsTemplateAsync(SelectedNote)">💾 另存为模板</div>
                 <div class="menu-divider"></div>
                 <div class="menu-item" style="color: #ff4d4f;" @onclick="SoftDeleteNoteContext">🗑️ 移至回收站</div>
             }
@@ -1080,6 +1103,142 @@
                         border-color: #2eaadc;
                     }
         </style>
+    }
+
+    @if (_showNewNoteModal)
+    {
+        <div class="modal-overlay" style="align-items: center; z-index: 99999;" @onclick="CloseNewNoteModal">
+            <div class="modal-content new-note-modal" style="width: 800px; height: 550px; background: var(--nt-bg-main); border-radius: 12px; display: flex; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.25);" @onclick:stopPropagation="true">
+
+                <div style="flex: 0 0 35%; background: rgba(55,53,47,0.03); border-right: 1px solid rgba(55,53,47,0.08); display: flex; flex-direction: column;">
+                    <div style="padding: 16px 20px; font-weight: 600; color: var(--nt-text-gray); font-size: 13px; letter-spacing: 1px;">选择模板</div>
+
+                    <div style="flex: 1; overflow-y: auto; padding: 0 10px 10px 10px; display: flex; flex-direction: column; gap: 4px;">
+                        <div class="template-item @(_selectedTemplate == null ? "active" : "")" @onclick="() => SelectTemplate(null)">
+                            <span style="font-size: 16px;">📄</span> 空白笔记
+                        </div>
+
+                        @foreach (var temp in _availableTemplates)
+                        {
+                            <div class="template-item @(_selectedTemplate?.Id == temp.Id ? "active" : "")" @onclick="() => SelectTemplate(temp)">
+                                <span style="font-size: 16px;">📝</span> @temp.Title
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div style="flex: 1; display: flex; flex-direction: column; position: relative;min-height: 0;">
+                    <div class="template-preview-area" style="flex: 1; padding: 30px; overflow-y: auto; color: var(--nt-text-main);">
+                        @if (_selectedTemplate == null)
+                        {
+                            <div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--nt-text-gray); opacity: 0.5;">
+                                <div style="font-size: 40px; margin-bottom: 16px;">✍️</div>
+                                <div>从一张白纸开始您的创作</div>
+                            </div>
+                        }
+                        else
+                        {
+                            <h2 style="margin-top: 0;">@_selectedTemplate.Title</h2>
+                            <div class="markdown-preview-content">
+                                @((MarkupString)Markdig.Markdown.ToHtml(_selectedTemplate.Content ?? "", new Markdig.MarkdownPipelineBuilder().UseAdvancedExtensions().Build()))
+                            </div>
+                        }
+                    </div>
+
+                    <div style="padding: 16px 24px; border-top: 1px solid rgba(55,53,47,0.08); display: flex; justify-content: flex-end; background: var(--nt-bg-main);">
+                        <button class="btn-cancel" @onclick="CloseNewNoteModal" style="margin-right: 12px; padding: 8px 16px; border: none; background: transparent; color: var(--nt-text-gray); cursor: pointer; border-radius: 6px; font-weight: 500;">取消</button>
+                        <button class="btn-confirm" @onclick="ConfirmCreateNote" style="padding: 8px 24px; border: none; background: #2eaadc; color: white; cursor: pointer; border-radius: 6px; font-weight: 500; box-shadow: 0 2px 6px rgba(46,170,220,0.3);">
+                            @(_selectedTemplate == null ? "创建空白笔记" : "应用此模板")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <style>
+                .template-item {
+                    padding: 12px 16px;
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                    color: var(--nt-text-main);
+                    font-weight: 500;
+                }
+
+                    .template-item:hover {
+                        background: rgba(55,53,47,0.06);
+                    }
+
+                    .template-item.active {
+                        background: rgba(46,170,220,0.1);
+                        color: #2eaadc;
+                    }
+
+                .btn-cancel:hover {
+                    background: rgba(55,53,47,0.08) !important;
+                }
+
+                .btn-confirm:hover {
+                    background: #248fbc !important;
+                }
+                /* 约束预览区的 Markdown 样式 */
+                .markdown-preview-content img {
+                    max-width: 100%;
+                    border-radius: 6px;
+                }
+
+                .markdown-preview-content pre {
+                    background: rgba(55,53,47,0.05);
+                    padding: 12px;
+                    border-radius: 6px;
+                    overflow-x: auto;
+                    font-size: 13px;
+                }
+
+                .markdown-preview-content blockquote {
+                    border-left: 3px solid #dfe2e5;
+                    padding-left: 12px;
+                    color: var(--nt-text-gray);
+                    margin-left: 0;
+                }
+        </style>
+    }
+
+    @if (_showTemplateManager)
+    {
+        <div class="modal-overlay" @onclick="CloseTemplateManager" style="z-index: 99999;">
+            <div class="modal-content" style="width: 500px; max-height: 70vh; display: flex; flex-direction: column;" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <span style="font-weight: 600;">🗂️ 模板管理中心</span>
+                    <button class="icon-btn" @onclick="CloseTemplateManager">×</button>
+                </div>
+                <div class="modal-body" style="padding: 16px; overflow-y: auto; flex: 1;">
+                    @if (!_manageTemplatesList.Any())
+                    {
+                        <div style="text-align: center; color: var(--nt-text-gray); padding: 40px 0;">
+                            <div style="font-size: 40px; margin-bottom: 16px;">👻</div>
+                            <div>暂无任何自定义模板</div>
+                            <div style="font-size: 12px; opacity: 0.6; margin-top: 8px;">在笔记列表右键某篇笔记即可将其另存为模板</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            @foreach (var temp in _manageTemplatesList)
+                            {
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border: 1px solid var(--nt-border); border-radius: 8px; background: rgba(55,53,47,0.02); transition: background 0.2s;">
+                                    <div style="font-weight: 500; font-size: 14px; color: var(--nt-text-main);">📝 @temp.Title</div>
+                                    <button class="icon-btn" style="color: #ff4d4f; padding: 4px 8px; border-radius: 6px; background: rgba(255,77,79,0.1);" @onclick="() => DeleteTemplate(temp.Id)" title="删除模板">🗑️ 删除</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
     }
 </div>
 
@@ -2889,6 +3048,147 @@
                     $"在导出过程中发生了错误：\n{ex.Message}",
                     "关闭");
             }
+        }
+    }
+
+    // 🌟 将当前笔记另存为模板
+    private async Task SaveAsTemplateAsync(MonoNotes.Core.Models.MonoNote note)
+    {
+        _showContextMenu = false; // 先关闭右键菜单
+        StateHasChanged();
+
+        try
+        {
+            // 剥离掉特殊的属性，创建一个干净的模板对象
+            var template = new MonoNotes.Core.Models.MonoNote
+            {
+                Id = Guid.NewGuid().ToString("N"), // 生成新 ID
+                Title = note.Title + " 模板",
+                Content = note.Content, // 复制正文
+                Folder = ".templates",  // 强制指定目录
+                Tags = new List<string>() // 清空原有标签
+            };
+
+            await NoteRepository.SaveTemplateAsync(template);
+
+            if (NativeDialog != null)
+            {
+                await NativeDialog.ShowAlertAsync("🎉 保存成功", $"已成功将【{note.Title}】存为模板！\n下次新建笔记时即可使用。", "太棒了");
+            }
+        }
+        catch (Exception ex)
+        {
+            if (NativeDialog != null)
+            {
+                await NativeDialog.ShowAlertAsync("❌ 保存失败", $"另存为模板时出错：\n{ex.Message}", "关闭");
+            }
+        }
+    }
+
+    // ==========================================
+    // 🌟 新建笔记与模板引擎逻辑
+    // ==========================================
+    private bool _showNewNoteModal = false;
+    private List<MonoNotes.Core.Models.MonoNote> _availableTemplates = new();
+    private MonoNotes.Core.Models.MonoNote? _selectedTemplate = null;
+
+    // 左侧边栏点击 +号 时调用此方法
+    private async Task OpenNewNoteModal()
+    {
+        CloseContextMenu();
+        // 每次打开都重新拉取最新的模板列表
+        _availableTemplates = await NoteRepository.GetAllTemplatesAsync();
+        _selectedTemplate = null; // 默认选中空白笔记
+        _showNewNoteModal = true;
+        StateHasChanged();
+    }
+
+    private void SelectTemplate(MonoNotes.Core.Models.MonoNote? template)
+    {
+        _selectedTemplate = template;
+        StateHasChanged();
+    }
+
+    private void CloseNewNoteModal()
+    {
+        _showNewNoteModal = false;
+        _selectedTemplate = null;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmCreateNote()
+    {
+        var newNote = new MonoNotes.Core.Models.MonoNote
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Title = _selectedTemplate == null ? "无标题笔记" : _selectedTemplate.Title.Replace(" 模板", ""),
+            Content = _selectedTemplate?.Content ?? "",
+            Folder = "notes",
+            CreatedAt = DateTimeOffset.Now,
+            UpdatedAt = DateTimeOffset.Now
+        };
+
+        // 1. 保存物理文件
+        await NoteRepository.SaveNoteAsync(newNote);
+
+        // 2. 更新内存索引
+        var indexItem = new MonoNotes.Core.Models.NoteIndexItem
+        {
+            Id = newNote.Id,
+            Title = newNote.Title,
+            Folder = newNote.Folder,
+            UpdatedAt = newNote.UpdatedAt,
+            CreatedAt = newNote.CreatedAt
+        };
+        IndexItems.Insert(0, indexItem);
+        IndexService.UpsertItem(indexItem);
+
+        // ----------------------------------------------------
+        // 🌟 修复这里的逻辑：按照你的 Tab 系统规范打开笔记
+        // ----------------------------------------------------
+        _openNotesCache.Add(newNote);          // 步骤 A：放入已打开的完整笔记缓存
+        SelectedNoteId = newNote.Id;           // 步骤 B：更新当前选中的笔记 ID
+        await OpenInTabAsync(newNote.Id);      // 步骤 C：在顶部的 Tab 标签页栏打开它
+        // ----------------------------------------------------
+
+        CloseNewNoteModal();
+
+        // 重新构建左侧文件夹树并刷新
+        var rawFolders = await NoteRepository.GetAllFoldersAsync();
+        BuildFolderTree(rawFolders);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ==========================================
+    // 🌟 模板管理中心逻辑
+    // ==========================================
+    private bool _showTemplateManager = false;
+    private List<MonoNotes.Core.Models.MonoNote> _manageTemplatesList = new();
+
+    private async Task OpenTemplateManager()
+    {
+        _manageTemplatesList = await NoteRepository.GetAllTemplatesAsync();
+        _showTemplateManager = true;
+        StateHasChanged();
+    }
+
+    private void CloseTemplateManager()
+    {
+        _showTemplateManager = false;
+        StateHasChanged();
+    }
+
+    private async Task DeleteTemplate(string id)
+    {
+        await NoteRepository.DeleteTemplateAsync(id);
+
+        // 重新拉取最新列表刷新 UI
+        _manageTemplatesList = await NoteRepository.GetAllTemplatesAsync();
+        StateHasChanged();
+
+        if (NativeDialog != null)
+        {
+            await NativeDialog.ShowAlertAsync("🗑️ 删除成功", "该模板已被彻底移除。", "好的");
         }
     }
 }
