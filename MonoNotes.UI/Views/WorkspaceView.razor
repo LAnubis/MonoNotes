@@ -52,7 +52,6 @@
                  @onclick="OpenSuperSearch">
                 <span style="margin-right: 8px;">🔍</span>
                 <span style="flex: 1;">搜索...</span>
-                @* <span style="font-size: 11px; opacity: 0.6; background: rgba(55,53,47,0.1); padding: 2px 6px; border-radius: 4px;">Ctrl+P</span> *@
             </div>
         </div>
         <div class="nav-menu">
@@ -102,18 +101,33 @@
                             OnContextMenu="HandleTreeContextMenu" />
             </div>
 
-            @if (AllTags.Any())
+            @{
+                var tagFrequencies = GetTagFrequencies();
+            }
+            @if (tagFrequencies.Any())
             {
                 <div style="padding: 16px 16px 8px 16px; font-size: 11px; font-weight: 600; color: #999; display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-                    <span>标签</span>
-                    <button class="icon-btn" style="font-size: 14px; opacity: 0.6; padding: 0 4px;" title="管理标签" @onclick="OpenTagManager" @onclick:stopPropagation="true">⚙️</button>
+                    <span>热门标签</span>
+                    <button class="icon-btn" style="font-size: 14px; opacity: 0.6; padding: 0 4px;" title="管理全部标签" @onclick="OpenTagManager" @onclick:stopPropagation="true">⚙️</button>
                 </div>
-                <div style="padding: 0 8px; overflow-y: auto; flex: 1;">
-                    @foreach (var tag in AllTags)
+
+                <div style="padding: 0 16px; display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;">
+                    @foreach (var tagKvp in tagFrequencies.Take(8))
                     {
-                        <div class="nav-item @(_activeTags.Contains(tag) ? "active" : "")" @onclick="() => SelectTag(tag)">
-                            <span style="margin-right: 8px; color: #888;">#</span>
-                            <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@tag</span>
+                        <div class="nav-item @(_activeTags.Contains(tagKvp.Key) ? "active" : "")"
+                             style="padding: 4px 10px; cursor: pointer; border-radius: 12px; font-size: 12px; color: var(--nt-text-main); background: @(_activeTags.Contains(tagKvp.Key) ? "rgba(46,170,220,0.1)" : "rgba(55,53,47,0.05)"); border: 1px solid @(_activeTags.Contains(tagKvp.Key) ? "rgba(46,170,220,0.2)" : "transparent"); display: flex; align-items: center; transition: all 0.2s;"
+                             @onclick="() => SelectTag(tagKvp.Key)">
+                            <span style="opacity: 0.5; margin-right: 2px;">#</span>
+                            <span style="font-weight: @(_activeTags.Contains(tagKvp.Key) ? "600" : "400");">@tagKvp.Key</span>
+                        </div>
+                    }
+
+                    @if (tagFrequencies.Count > 8)
+                    {
+                        <div class="nav-item" title="查看所有 @tagFrequencies.Count 个标签"
+                             style="padding: 4px 10px; cursor: pointer; border-radius: 12px; font-size: 12px; color: var(--nt-text-gray); background: rgba(55,53,47,0.03); border: 1px dashed rgba(55,53,47,0.15); display: flex; align-items: center; transition: all 0.2s;"
+                             @onclick="OpenTagManager">
+                            <span>...</span>
                         </div>
                     }
                 </div>
@@ -121,7 +135,6 @@
         </div>
 
         <div style="margin-top: auto; padding: 12px; border-top: 1px solid rgba(55,53,47,0.09); display: flex; flex-direction: column; gap: 8px;">
-
             <div style="display: flex; gap: 8px;">
                 <div class="nav-item" title="新建空白页面或从模板创建"
                      style="flex: 1; min-width: 0; padding: 8px; cursor: pointer; display: flex; justify-content: center; align-items: center; border-radius: 6px; font-size: 13px; color: var(--nt-text-gray); background: rgba(55,53,47,0.03); transition: background 0.2s;"
@@ -153,7 +166,6 @@
                     <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">设置</span>
                 </div>
             </div>
-
         </div>
     </aside>
 
@@ -576,9 +588,8 @@
     @if (_showContextMenu && _contextMenuTarget != null)
     {
         <div class="custom-context-menu" style="left: @(_contextMenuX)px; top: @(_contextMenuY)px;" @onclick:stopPropagation="true">
-          @*   <div class="menu-item" @onclick="CreateNoteInContextFolder">📄 在此新建笔记</div> *@
             <div class="menu-item" @onclick="OpenNewNoteModal">📄 在此新建笔记</div>
-            
+
             @if (_contextMenuTarget.FullPath != "notes" && _contextMenuTarget.FullPath != "每日速记")
             {
                 <div class="menu-divider"></div>
@@ -715,15 +726,17 @@
                     <button class="icon-btn" @onclick="() => _showTagManagerDialog = false">×</button>
                 </div>
                 <div class="modal-body" style="padding: 16px; max-height: 400px; overflow-y: auto;">
-                    @if (_allUniqueTags.Count == 0)
+                    @if (_allTagsWithCount.Count == 0)
                     {
                         <p style="color: var(--nt-text-gray); text-align: center; margin: 20px 0;">目前没有任何标签</p>
                     }
                     else
                     {
                         <ul style="list-style: none; padding: 0; margin: 0;">
-                            @foreach (var tag in _allUniqueTags)
+                            @foreach (var tagKvp in _allTagsWithCount)
                             {
+                                var tag = tagKvp.Key;
+                                var count = tagKvp.Value;
                                 <li style="display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; border-bottom: 1px solid var(--nt-border);">
                                     @if (_editingTag == tag)
                                     {
@@ -735,9 +748,14 @@
                                     }
                                     else
                                     {
-                                        <span style="color: var(--nt-text-main); font-size: 14px;">
-                                            <span style="color: var(--nt-text-gray); margin-right: 4px;">#</span>@tag
-                                        </span>
+                                        <div style="flex: 1; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px 0;"
+                                             @onclick="() => { SelectTag(tag); _showTagManagerDialog = false; }">
+                                            <span style="color: var(--nt-text-main); font-size: 14px; font-weight: @(_activeTags.Contains(tag) ? "600" : "400");">
+                                                <span style="color: var(--nt-text-gray); margin-right: 4px;">#</span>@tag
+                                            </span>
+                                            <span style="font-size: 11px; background: rgba(55,53,47,0.06); padding: 2px 6px; border-radius: 10px; color: var(--nt-text-gray);">@count 篇</span>
+                                        </div>
+
                                         <div style="display: flex; gap: 8px;">
                                             <button class="icon-btn" style="cursor: pointer; opacity: 0.6;" title="重命名" @onclick="() => StartEditTag(tag)">✏️</button>
                                             <button class="icon-btn" style="color: #ff4d4f; cursor: pointer; opacity: 0.8;" title="全局删除" @onclick="() => ConfirmDeleteTag(tag)">🗑️</button>
@@ -1281,7 +1299,8 @@
     private bool _showNoteContextMenu = false;
     private double _noteContextMenuX = 0;
     private double _noteContextMenuY = 0;
-    private NoteIndexItem? _contextMenuNote; // 🌟 上下文菜单现在针对的是 IndexItem
+    private NoteIndexItem? _contextMenuNote;
+    // 🌟 上下文菜单现在针对的是 IndexItem
 
     private bool _showFolderSelector = false;
     private bool _isCopyMode = false;
@@ -1290,18 +1309,18 @@
     private bool _isFavoriteFilterActive = false;
     private bool _isArchiveFilterActive = false;
     private bool _isTrashFilterActive = false;
-
     private bool _showFolderDeleteConfirm = false;
     private int _notesInFolderCount = 0;
 
     private bool _showWarningDialog = false;
     private string _warningMessage = string.Empty;
-
     private bool _showTagManagerDialog = false;
-    private List<string> _allUniqueTags = new();
+
+    // 🌟 新变量：用于在标签管理弹窗中展示带数量的标签
+    private List<KeyValuePair<string, int>> _allTagsWithCount = new();
+
     private string _editingTag = string.Empty;
     private string _newTagName = string.Empty;
-
     private bool _showTagDeleteConfirm = false;
     private string _tagToDelete = string.Empty;
 
@@ -1318,13 +1337,11 @@
     private bool _isTestingConnection = false;
     private string _connectionTestResult = string.Empty;
     private bool _connectionTestSuccess = false;
-
     // === 🌟 后台同步与冲突处理 ===
     private Timer _bgSyncTimer = new Timer(30000);
     private bool _isSyncingUI = false;
     private bool _showConflictCenter = false;
     private List<string> _conflictFiles = new();
-
     // === 🔍 超级搜索系统状态 ===
     private bool _showSuperSearch = false;
     private string _superSearchQuery = string.Empty;
@@ -1337,18 +1354,13 @@
 
     private bool _isGraphExpanded = false;
 
-
-
-
     protected override async Task OnInitializedAsync()
     {
         // 1. 加载现有的 JSON 索引
         IndexItems = await IndexService.LoadIndexAsync();
-
         // 🌟 2. 终极自愈机制：全盘对齐本地文件！
         // 从底层仓储直接读取硬盘里所有的真实 .md 文件
         var allNotes = await NoteRepository.GetAllNotesAsync();
-
         foreach (var note in allNotes)
         {
             // 如果硬盘里的文件，没有在内存索引里登记，立刻强制补录！
@@ -1370,7 +1382,8 @@
                 };
 
                 IndexItems.Add(newIdx);
-                IndexService.UpsertItem(newIdx); // 触发底层防抖写入 index.json
+                IndexService.UpsertItem(newIdx);
+                // 触发底层防抖写入 index.json
             }
         }
 
@@ -1391,7 +1404,6 @@
 
         // 5. 启动后台服务
         _autoSaveTimer.Elapsed += async (sender, e) => await PerformSaveAsync();
-
         _bgSyncTimer.Elapsed += async (sender, e) => await TriggerBackgroundSync();
         _bgSyncTimer.Start();
 
@@ -1417,10 +1429,8 @@
 
         _isSyncingUI = true;
         await InvokeAsync(StateHasChanged);
-
         // 1. 执行 WebDAV 同步（下载云端新文件到本地磁盘）
         await SyncService.SyncAsync();
-
         // 2. 🌟 核心修复：执行“全量索引自愈”
         // 同步完成后，无论索引有没有，强制扫描硬盘中所有的 .md 文件
         var allRealFiles = await NoteRepository.GetAllNotesAsync();
@@ -1492,7 +1502,6 @@
             var dir = Path.GetDirectoryName(conflictFilePath);
             var originalFileName = System.Text.RegularExpressions.Regex.Replace(conflictFileName, @"\s\(冲突副本.*?\)", "");
             var originalFilePath = Path.Combine(dir, originalFileName);
-
             if (keepLocal)
             {
                 if (File.Exists(conflictFilePath)) File.Delete(conflictFilePath);
@@ -1524,13 +1533,18 @@
         StateHasChanged();
     }
 
-    // 🌟 从轻量级索引中提取全局标签
-    private List<string> AllTags => IndexItems
-        .Where(n => !n.IsDeleted && n.Tags != null)
-        .SelectMany(n => n.Tags)
-        .Distinct()
-        .OrderBy(t => t)
-        .ToList();
+    // 🌟 核心算法：获取所有标签，按使用次数降序排列，次数相同的按字母排列
+    private List<KeyValuePair<string, int>> GetTagFrequencies()
+    {
+        return IndexItems
+            .Where(n => !n.IsDeleted && n.Tags != null)
+            .SelectMany(n => n.Tags!)
+            .GroupBy(t => t)
+            .Select(g => new KeyValuePair<string, int>(g.Key, g.Count()))
+            .OrderByDescending(kv => kv.Value)
+            .ThenBy(kv => kv.Key)
+            .ToList();
+    }
 
     private void ShowFavorites()
     {
@@ -1569,15 +1583,17 @@
         _isTrashFilterActive = false;
         _selectedFolderPath = string.Empty;
         if (_activeTags == null) _activeTags = new HashSet<string>();
-
         if (_activeTags.Contains(tag))
         {
-            _activeTags.Remove(tag); // 如果已存在，再次点击则移除
-            if (!_activeTags.Any()) _selectedFolderPath = "notes"; // 如果标签全关了，回到默认未分类
+            _activeTags.Remove(tag);
+            // 如果已存在，再次点击则移除
+            if (!_activeTags.Any()) _selectedFolderPath = "notes";
+            // 如果标签全关了，回到默认未分类
         }
         else
         {
-            _activeTags.Add(tag); // 叠加 AND 条件
+            _activeTags.Add(tag);
+            // 叠加 AND 条件
         }
 
         RefreshSelection();
@@ -1629,7 +1645,6 @@
         if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_folderInputValue))
         {
             var val = _folderInputValue.Trim();
-
             if (val == "未分类" || val == "每日速记" || val.ToLower() == "notes")
             {
                 _warningMessage = "系统保留名称，不可使用“未分类”或“每日速记”作为文件夹名。";
@@ -1704,7 +1719,6 @@
             Folder = _contextMenuTarget.FullPath,
             Tags = new List<string>()
         };
-
         // 🌟 分别写入 索引缓存 和 完整笔记缓存
         var idxItem = new NoteIndexItem { Id = newNote.Id, Title = "", Folder = newNote.Folder, UpdatedAt = newNote.UpdatedAt, CreatedAt = newNote.UpdatedAt };
         IndexItems.Insert(0, idxItem);
@@ -1764,14 +1778,12 @@
 
     private Timer _autoSaveTimer = new Timer(1000) { AutoReset = false };
     private string _saveStatus = "已保存";
-
     // 🌟 完全适配 JSON 索引的极速过滤属性
     private IEnumerable<NoteIndexItem> FilteredNotes
     {
         get
         {
             IEnumerable<NoteIndexItem> result = IndexItems;
-
             if (_isTrashFilterActive) { result = result.Where(n => n.IsDeleted); }
             else
             {
@@ -1784,8 +1796,14 @@
                     {
                         result = result.Where(n => n.Tags != null && _activeTags.Any(t => n.Tags.Contains(t)));
                     }
-                    else if (_isFavoriteFilterActive) { result = result.Where(n => n.IsFavorite); }
-                    else if (!string.IsNullOrEmpty(_selectedFolderPath)) { result = result.Where(n => n.Folder == _selectedFolderPath); }
+                    else if (_isFavoriteFilterActive)
+                    {
+                        result = result.Where(n => n.IsFavorite);
+                    }
+                    else if (!string.IsNullOrEmpty(_selectedFolderPath))
+                    {
+                        result = result.Where(n => n.Folder == _selectedFolderPath);
+                    }
 
                 }
             }
@@ -1798,7 +1816,6 @@
             }
 
             var orderedResult = result.OrderByDescending(n => n.IsPinned);
-
             switch (_sortMode)
             {
                 case 0: return orderedResult.ThenByDescending(n => n.UpdatedAt);
@@ -1921,7 +1938,6 @@
     private void OnNoteChanged()
     {
         _saveStatus = "正在保存...";
-
         // 🌟 修复2：实现“所见即所得”的实时双向绑定
         // 在打字的瞬间，同步更新左侧列表的索引数据，打破 1 秒的保存延迟
         if (SelectedNote != null)
@@ -1945,7 +1961,6 @@
             SelectedNote.OutgoingLinks = ExtractOutgoingLinks(SelectedNote.Content);
             // 1. 保存到本地磁盘
             await NoteRepository.SaveNoteAsync(SelectedNote);
-
             // 🌟 2. 核心补丁：同步修改 JSON 缓存引擎中的数据
             var indexItem = IndexItems.FirstOrDefault(i => i.Id == SelectedNote.Id);
             if (indexItem != null)
@@ -1961,7 +1976,6 @@
 
                 // 🌟 核心：将关系网同步给内存索引引擎
                 indexItem.OutgoingLinks = SelectedNote.OutgoingLinks;
-
                 IndexService.UpsertItem(indexItem); // 触发防抖写入
             }
 
@@ -2039,7 +2053,10 @@
 
             var allNotes = await NoteRepository.GetAllNotesAsync();
             var realNote = allNotes.FirstOrDefault(n => n.Id == _contextMenuNote.Id);
-            if (realNote != null) { realNote.IsPinned = _contextMenuNote.IsPinned; await NoteRepository.SaveNoteAsync(realNote); }
+            if (realNote != null)
+            {
+                realNote.IsPinned = _contextMenuNote.IsPinned; await NoteRepository.SaveNoteAsync(realNote);
+            }
             StateHasChanged();
         }
         _showNoteContextMenu = false;
@@ -2055,14 +2072,13 @@
     }
 
     private void CloseFolderSelector() => _showFolderSelector = false;
-
     private async Task ConfirmMoveOrCopy()
     {
         if (string.IsNullOrEmpty(_targetFolder)) return;
-
         var allNotes = await NoteRepository.GetAllNotesAsync();
         // 如果是批量，取 Set 里的所有 ID；如果是单选右键，取当前右键菜单的 Note Id
-        var targetIds = _isBatchOperation ? _selectedNoteIds.ToList() : new List<string> { _contextMenuNote?.Id ?? "" };
+        var targetIds = _isBatchOperation ?
+        _selectedNoteIds.ToList() : new List<string> { _contextMenuNote?.Id ?? "" };
 
         foreach (var tId in targetIds)
         {
@@ -2076,11 +2092,13 @@
                 var newNote = new MonoNote
                 {
                     Id = Guid.NewGuid().ToString("N"),
+
                     Title = realNote.Title + " - 副本",
                     Content = realNote.Content,
                     Folder = _targetFolder,
                     UpdatedAt = DateTimeOffset.Now,
-                    Tags = realNote.Tags?.ToList() ?? new List<string>()
+                    Tags = realNote.Tags?.ToList() ??
+                    new List<string>()
                 };
                 var newIdx = new NoteIndexItem { Id = newNote.Id, Title = newNote.Title, Folder = newNote.Folder, UpdatedAt = newNote.UpdatedAt, CreatedAt = newNote.UpdatedAt, Tags = newNote.Tags };
                 IndexItems.Insert(0, newIdx);
@@ -2098,7 +2116,6 @@
         }
 
         _showFolderSelector = false;
-
         if (_isBatchOperation)
         {
             _selectedNoteIds.Clear();
@@ -2116,7 +2133,10 @@
 
             var allNotes = await NoteRepository.GetAllNotesAsync();
             var realNote = allNotes.FirstOrDefault(n => n.Id == _contextMenuNote.Id);
-            if (realNote != null) { realNote.IsArchived = _contextMenuNote.IsArchived; await NoteRepository.SaveNoteAsync(realNote); }
+            if (realNote != null)
+            {
+                realNote.IsArchived = _contextMenuNote.IsArchived; await NoteRepository.SaveNoteAsync(realNote);
+            }
             StateHasChanged();
         }
         _showNoteContextMenu = false;
@@ -2131,7 +2151,10 @@
 
             var allNotes = await NoteRepository.GetAllNotesAsync();
             var realNote = allNotes.FirstOrDefault(n => n.Id == _contextMenuNote.Id);
-            if (realNote != null) { realNote.IsDeleted = true; await NoteRepository.SaveNoteAsync(realNote); }
+            if (realNote != null)
+            {
+                realNote.IsDeleted = true; await NoteRepository.SaveNoteAsync(realNote);
+            }
 
             CloseTab(_contextMenuNote.Id);
             StateHasChanged();
@@ -2148,9 +2171,13 @@
 
             var allNotes = await NoteRepository.GetAllNotesAsync();
             var realNote = allNotes.FirstOrDefault(n => n.Id == _contextMenuNote.Id);
-            if (realNote != null) { realNote.IsDeleted = false; await NoteRepository.SaveNoteAsync(realNote); }
+            if (realNote != null)
+            {
+                realNote.IsDeleted = false; await NoteRepository.SaveNoteAsync(realNote);
+            }
 
-            if (SelectedNoteId == _contextMenuNote.Id) SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ?? string.Empty;
+            if (SelectedNoteId == _contextMenuNote.Id) SelectedNoteId = FilteredNotes.FirstOrDefault()?.Id ??
+            string.Empty;
             StateHasChanged();
         }
         _showNoteContextMenu = false;
@@ -2194,7 +2221,6 @@
     private async Task TryDeleteFolder()
     {
         if (_contextMenuTarget == null || _contextMenuTarget.FullPath == "notes" || _contextMenuTarget.FullPath == "每日速记") return;
-
         if (_contextMenuTarget == null || _contextMenuTarget.FullPath == "notes") return;
         if (_contextMenuTarget.Children.Any())
         {
@@ -2212,11 +2238,9 @@
     private async Task ConfirmDeleteFolder(bool moveNotesToTrash)
     {
         if (_contextMenuTarget == null) return;
-
         // 🌟 1. 先尝试在云端执行“物理超度”
         string remotePath = $"MonoNotes/{NoteRepository.CurrentWorkspace}/{_contextMenuTarget.FullPath}";
         bool cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
-
         if (!cloudDeleted)
         {
             // 如果云端没删掉，提前报警，避免静默复活
@@ -2226,7 +2250,6 @@
 
         // 🌟 2. 云端处理完后，再执行本地删除
         await NoteRepository.DeleteFolderAsync(_contextMenuTarget.FullPath, moveNotesToTrash);
-
         var allNotes = await NoteRepository.GetAllNotesAsync();
 
         foreach (var idx in IndexItems.Where(n => n.Folder == _contextMenuTarget.FullPath).ToList())
@@ -2234,7 +2257,6 @@
             idx.Folder = "notes";
             if (moveNotesToTrash) { idx.IsDeleted = true; CloseTab(idx.Id); }
             IndexService.UpsertItem(idx);
-
             var realNote = allNotes.FirstOrDefault(n => n.Id == idx.Id);
             if (realNote != null)
             {
@@ -2277,12 +2299,7 @@
 
     private void OpenTagManager()
     {
-        _allUniqueTags = IndexItems
-            .Where(n => !n.IsDeleted && n.Tags != null)
-            .SelectMany(n => n.Tags)
-            .Distinct()
-            .OrderBy(t => t)
-            .ToList();
+        _allTagsWithCount = GetTagFrequencies(); // 重新计算统计数据
         _showTagManagerDialog = true;
         CancelEditTag();
     }
@@ -2309,7 +2326,6 @@
 
         await NoteRepository.RenameTagGlobalAsync(_editingTag, _newTagName);
         var allNotes = await NoteRepository.GetAllNotesAsync();
-
         foreach (var idx in IndexItems.Where(n => n.Tags != null && n.Tags.Contains(_editingTag)).ToList())
         {
             idx.Tags.Remove(_editingTag);
@@ -2325,7 +2341,7 @@
             }
         }
 
-        _allUniqueTags = _allUniqueTags.Select(t => t == _editingTag ? _newTagName : t).Distinct().OrderBy(t => t).ToList();
+        _allTagsWithCount = GetTagFrequencies(); // 更新列表和数量
         CancelEditTag();
         StateHasChanged();
     }
@@ -2343,7 +2359,6 @@
 
         await NoteRepository.DeleteTagGlobalAsync(tag);
         var allNotes = await NoteRepository.GetAllNotesAsync();
-
         foreach (var idx in IndexItems.Where(n => n.Tags != null && n.Tags.Contains(tag)).ToList())
         {
             idx.Tags.Remove(tag);
@@ -2357,7 +2372,7 @@
             }
         }
 
-        _allUniqueTags.Remove(tag);
+        _allTagsWithCount = GetTagFrequencies(); // 刷新列表
         if (_activeTags.Contains(tag))
         {
             _activeTags.Remove(tag);
@@ -2404,12 +2419,12 @@
 
         // 🌟 关闭标签页时，及时释放内存！
         _openNotesCache.RemoveAll(n => n.Id == id);
-
         if (SelectedNoteId == id)
         {
             if (_openTabs.Count > 0)
             {
-                int newIndex = index > 0 ? index - 1 : 0;
+                int newIndex = index > 0 ?
+                index - 1 : 0;
                 SelectedNoteId = _openTabs[newIndex];
             }
             else
@@ -2563,13 +2578,15 @@
     private int _sortMode = 0;
     private void ToggleTimeSort()
     {
-        _sortMode = _sortMode == 0 ? 1 : 0;
+        _sortMode = _sortMode == 0 ?
+        1 : 0;
         RefreshSelection();
     }
 
     private void ToggleTitleSort()
     {
-        _sortMode = _sortMode == 2 ? 3 : 2;
+        _sortMode = _sortMode == 2 ?
+        3 : 2;
         RefreshSelection();
     }
 
@@ -2599,7 +2616,6 @@
     private async Task LocalizeRemoteImagesAsync()
     {
         if (SelectedNote == null || string.IsNullOrWhiteSpace(SelectedNote.Content)) return;
-
         // 正则匹配标准的 Markdown 图片语法：![alt](http...)
         var regex = new System.Text.RegularExpressions.Regex(@"\!\[(.*?)\]\((http.*?)\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         var matches = regex.Matches(SelectedNote.Content);
@@ -2623,7 +2639,8 @@
         if (!Directory.Exists(assetsPath)) Directory.CreateDirectory(assetsPath);
 
         using var httpClient = new HttpClient();
-        httpClient.Timeout = TimeSpan.FromSeconds(15); // 防止个别死链卡住
+        httpClient.Timeout = TimeSpan.FromSeconds(15);
+        // 防止个别死链卡住
 
         foreach (System.Text.RegularExpressions.Match match in matches)
         {
@@ -2635,7 +2652,6 @@
             {
                 // 下载图片字节流
                 var imageBytes = await httpClient.GetByteArrayAsync(remoteUrl);
-
                 // 尝试从 URL 提取扩展名（忽略 ? 后的参数），如果没有就默认给个 .png
                 var extension = Path.GetExtension(remoteUrl).Split('?')[0];
                 if (string.IsNullOrEmpty(extension) || extension.Length > 5) extension = ".png";
@@ -2680,9 +2696,17 @@
         {
             var idx = IndexItems.FirstOrDefault(n => n.Id == id);
             var real = allNotes.FirstOrDefault(n => n.Id == id);
-            if (idx != null) { idx.IsDeleted = true; IndexService.UpsertItem(idx); }
-            if (real != null) { real.IsDeleted = true; await NoteRepository.SaveNoteAsync(real); }
-            CloseTab(id); // 从标签页移除
+            if (idx != null)
+            {
+                idx.IsDeleted = true; IndexService.UpsertItem(idx);
+            }
+            if (real != null)
+            {
+                real.IsDeleted = true;
+                await NoteRepository.SaveNoteAsync(real);
+            }
+            CloseTab(id);
+            // 从标签页移除
         }
         _selectedNoteIds.Clear();
         SelectedNoteId = string.Empty;
@@ -2696,8 +2720,15 @@
         {
             var idx = IndexItems.FirstOrDefault(n => n.Id == id);
             var real = allNotes.FirstOrDefault(n => n.Id == id);
-            if (idx != null) { idx.IsDeleted = false; IndexService.UpsertItem(idx); }
-            if (real != null) { real.IsDeleted = false; await NoteRepository.SaveNoteAsync(real); }
+            if (idx != null)
+            {
+                idx.IsDeleted = false; IndexService.UpsertItem(idx);
+            }
+            if (real != null)
+            {
+                real.IsDeleted = false;
+                await NoteRepository.SaveNoteAsync(real);
+            }
         }
         _selectedNoteIds.Clear();
         SelectedNoteId = string.Empty;
@@ -2757,9 +2788,7 @@
         string todayStr = DateTime.Now.ToString("yyyy-MM-dd");
 
         string dailyFolderName = "每日速记";
-
         var existingNote = IndexItems.FirstOrDefault(n => n.Title == todayStr && !n.IsDeleted);
-
         if (existingNote != null)
         {
             _selectedFolderPath = string.Empty;
@@ -2855,7 +2884,14 @@
     }
 
     // 🌟 自制大纲的模型与提取引擎
-    public class HeadingInfo { public int Level { get; set; } public string Text { get; set; } = string.Empty; }
+    public class HeadingInfo
+    {
+        public int Level
+        {
+            get; set;
+        }
+        public string Text { get; set; } = string.Empty;
+    }
 
     private List<HeadingInfo> ExtractHeadings(string content)
     {
@@ -2864,11 +2900,9 @@
 
         var lines = content.Split('\n');
         bool isInCodeBlock = false;
-
         foreach (var line in lines)
         {
             var trimmed = line.Trim();
-
             // 避开代码块里的注释
             if (trimmed.StartsWith("```"))
             {
@@ -2962,7 +2996,6 @@
     private async Task ExportNoteAsync(string format)
     {
         if (_noteToExport == null) return;
-
         try
         {
             // 🌟 智能定位：跨平台获取系统的“下载(Downloads)”目录
@@ -2975,11 +3008,11 @@
             string filePath = Path.Combine(downloadsPath, fileName);
 
             string contentToWrite = "";
-
             if (format == "md" || format == "txt")
             {
                 // MD 和 TXT 直接输出原文内容
-                contentToWrite = _noteToExport.Content ?? "";
+                contentToWrite = _noteToExport.Content ??
+                "";
             }
             else if (format == "html")
             {
@@ -3000,10 +3033,14 @@
         code {{ background: #f4f4f4; color: #eb5757; padding: 3px 6px; border-radius: 4px; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 85%; }}
         pre {{ background: #f6f8fa; padding: 16px; border-radius: 8px; overflow-x: auto; }}
         pre code {{ background: transparent; color: inherit; padding: 0; }}
-        blockquote {{ border-left: 4px solid #dfe2e5; padding-left: 16px; color: #6a737d; margin-left: 0; }}
-        table {{ border-collapse: collapse; width: 100%; margin-bottom: 16px; }}
-        th, td {{ border: 1px solid #dfe2e5; padding: 8px 12px; }}
-        th {{ background-color: #f6f8fa; }}
+        blockquote {{ border-left: 4px solid #dfe2e5; padding-left: 16px; color: #6a737d; margin-left: 0;
+}}
+        table {{ border-collapse: collapse; width: 100%; margin-bottom: 16px;
+}}
+        th, td {{ border: 1px solid #dfe2e5; padding: 8px 12px;
+}}
+        th {{ background-color: #f6f8fa;
+}}
     </style>
 </head>
 <body>
@@ -3054,9 +3091,9 @@
     // 🌟 将当前笔记另存为模板
     private async Task SaveAsTemplateAsync(MonoNotes.Core.Models.MonoNote note)
     {
-        _showContextMenu = false; // 先关闭右键菜单
+        _showContextMenu = false;
+        // 先关闭右键菜单
         StateHasChanged();
-
         try
         {
             // 剥离掉特殊的属性，创建一个干净的模板对象
@@ -3068,7 +3105,6 @@
                 Folder = ".templates",  // 强制指定目录
                 Tags = new List<string>() // 清空原有标签
             };
-
             await NoteRepository.SaveTemplateAsync(template);
 
             if (NativeDialog != null)
@@ -3098,7 +3134,8 @@
         CloseContextMenu();
         // 每次打开都重新拉取最新的模板列表
         _availableTemplates = await NoteRepository.GetAllTemplatesAsync();
-        _selectedTemplate = null; // 默认选中空白笔记
+        _selectedTemplate = null;
+        // 默认选中空白笔记
         _showNewNoteModal = true;
         StateHasChanged();
     }
@@ -3121,16 +3158,16 @@
         var newNote = new MonoNotes.Core.Models.MonoNote
         {
             Id = Guid.NewGuid().ToString("N"),
-            Title = _selectedTemplate == null ? "无标题笔记" : _selectedTemplate.Title.Replace(" 模板", ""),
-            Content = _selectedTemplate?.Content ?? "",
+            Title = _selectedTemplate == null ?
+            "无标题笔记" : _selectedTemplate.Title.Replace(" 模板", ""),
+            Content = _selectedTemplate?.Content ??
+            "",
             Folder = "notes",
             CreatedAt = DateTimeOffset.Now,
             UpdatedAt = DateTimeOffset.Now
         };
-
         // 1. 保存物理文件
         await NoteRepository.SaveNoteAsync(newNote);
-
         // 2. 更新内存索引
         var indexItem = new MonoNotes.Core.Models.NoteIndexItem
         {
@@ -3146,13 +3183,15 @@
         // ----------------------------------------------------
         // 🌟 修复这里的逻辑：按照你的 Tab 系统规范打开笔记
         // ----------------------------------------------------
-        _openNotesCache.Add(newNote);          // 步骤 A：放入已打开的完整笔记缓存
-        SelectedNoteId = newNote.Id;           // 步骤 B：更新当前选中的笔记 ID
-        await OpenInTabAsync(newNote.Id);      // 步骤 C：在顶部的 Tab 标签页栏打开它
+        _openNotesCache.Add(newNote);
+        // 步骤 A：放入已打开的完整笔记缓存
+        SelectedNoteId = newNote.Id;
+        // 步骤 B：更新当前选中的笔记 ID
+        await OpenInTabAsync(newNote.Id);
+        // 步骤 C：在顶部的 Tab 标签页栏打开它
         // ----------------------------------------------------
 
         CloseNewNoteModal();
-
         // 重新构建左侧文件夹树并刷新
         var rawFolders = await NoteRepository.GetAllFoldersAsync();
         BuildFolderTree(rawFolders);
@@ -3181,11 +3220,9 @@
     private async Task DeleteTemplate(string id)
     {
         await NoteRepository.DeleteTemplateAsync(id);
-
         // 重新拉取最新列表刷新 UI
         _manageTemplatesList = await NoteRepository.GetAllTemplatesAsync();
         StateHasChanged();
-
         if (NativeDialog != null)
         {
             await NativeDialog.ShowAlertAsync("🗑️ 删除成功", "该模板已被彻底移除。", "好的");
