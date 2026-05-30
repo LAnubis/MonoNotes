@@ -49,10 +49,8 @@ MonoNotes 是一款基于 **.NET MAUI + Blazor Hybrid** 构建的跨平台、本
 - [.NET 10.0 SDK](https://dotnet.microsoft.com/download) 或更高版本
 - Visual Studio 2026 / JetBrains Rider  (安装 MAUI 工作负载)
 
-### 编译与运行
-1. 克隆代码到本地：
+### 克隆代码到本地：
    ```bash
    git clone [https://github.com/LAnubis/MonoNotes.git](https://github.com/LAnubis/MonoNotes.git)
    git clone [https://gitee.com/drshawnliu/mono-notes.git](https://gitee.com/drshawnliu/mono-notes.git)
    
-   cd MonoNotes
