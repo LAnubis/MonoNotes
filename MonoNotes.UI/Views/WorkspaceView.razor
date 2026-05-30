@@ -2185,13 +2185,30 @@
 
     private async Task HardDeleteNoteContext()
     {
+        if (_isSyncingUI)
+        {
+            _warningMessage = "后台正在与云端同步数据，请等待同步完成后再执行彻底删除。";
+            _showWarningDialog = true;
+            _showNoteContextMenu = false;
+            return;
+        }
+
         if (_contextMenuNote != null)
         {
-            await NoteRepository.DeleteNoteAsync(_contextMenuNote.Id);
-            IndexItems.Remove(_contextMenuNote);
-            IndexService.RemoveItem(_contextMenuNote.Id);
+            bool cloudDeleted = await SafeCloudDeleteAsync(_contextMenuNote.Folder, _contextMenuNote.Id);
 
-            CloseTab(_contextMenuNote.Id);
+            if (cloudDeleted || !await WebDavService.TestConnectionAsync())
+            {
+                await NoteRepository.DeleteNoteAsync(_contextMenuNote.Id);
+                IndexItems.Remove(_contextMenuNote);
+                IndexService.RemoveItem(_contextMenuNote.Id);
+                CloseTab(_contextMenuNote.Id);
+            }
+            else
+            {
+                _warningMessage = "彻底删除失败：云端服务器拒绝了请求。为防止同步将其复活，本地文件已保留，请稍后再试。";
+                _showWarningDialog = true;
+            }
             StateHasChanged();
         }
         _showNoteContextMenu = false;
@@ -2238,17 +2255,27 @@
     private async Task ConfirmDeleteFolder(bool moveNotesToTrash)
     {
         if (_contextMenuTarget == null) return;
-        // 🌟 1. 先尝试在云端执行“物理超度”
-        string remotePath = $"MonoNotes/{NoteRepository.CurrentWorkspace}/{_contextMenuTarget.FullPath}";
+
+        if (_isSyncingUI)
+        {
+            _warningMessage = "后台正在与云端同步数据，请等待同步完成后再删除文件夹。";
+            _showWarningDialog = true;
+            _showFolderDeleteConfirm = false;
+            return;
+        }
+
+        // 🌟 修复 Windows 文件夹路径分隔符导致云端 404 删不掉文件夹的 Bug
+        string normalizedPath = _contextMenuTarget.FullPath.Replace('\\', '/').Trim('/');
+        string remotePath = $"MonoNotes/{NoteRepository.CurrentWorkspace}/{normalizedPath}";
+
         bool cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
         if (!cloudDeleted)
         {
-            // 如果云端没删掉，提前报警，避免静默复活
             _warningMessage = "本地文件夹已删除，但云端数据销毁失败（可能是网络波动或授权过期）。这可能会导致它在下次同步时复活，建议稍后去坚果云网页端手动清理。";
             _showWarningDialog = true;
         }
 
-        // 🌟 2. 云端处理完后，再执行本地删除
+        // 2. 云端处理完后，再执行本地删除
         await NoteRepository.DeleteFolderAsync(_contextMenuTarget.FullPath, moveNotesToTrash);
         var allNotes = await NoteRepository.GetAllNotesAsync();
 
@@ -2737,31 +2764,101 @@
 
     private async Task BatchHardDelete()
     {
-        foreach (var id in _selectedNoteIds)
+        if (_isSyncingUI)
         {
-            await NoteRepository.DeleteNoteAsync(id);
-            IndexItems.RemoveAll(n => n.Id == id);
-            IndexService.RemoveItem(id);
-            CloseTab(id);
+            _warningMessage = "后台正在与云端同步数据，为防复活，请等待同步完成后再执行彻底删除。";
+            _showWarningDialog = true;
+            return;
         }
+
+        int failCount = 0;
+        var idsToProcess = _selectedNoteIds.ToList();
+
+        foreach (var id in idsToProcess)
+        {
+            var item = IndexItems.FirstOrDefault(n => n.Id == id);
+            if (item != null)
+            {
+                bool cloudDeleted = await SafeCloudDeleteAsync(item.Folder, item.Id);
+
+                if (cloudDeleted || !await WebDavService.TestConnectionAsync())
+                {
+                    await NoteRepository.DeleteNoteAsync(id);
+                    IndexItems.RemoveAll(n => n.Id == id);
+                    IndexService.RemoveItem(id);
+                    CloseTab(id);
+                }
+                else
+                {
+                    failCount++;
+                }
+            }
+        }
+
         _selectedNoteIds.Clear();
         SelectedNoteId = string.Empty;
+
+        if (failCount > 0)
+        {
+            _warningMessage = $"批量删除完毕。有 {failCount} 篇笔记云端无响应。\n\n为防同步复活，本地副本已强行保留，请稍后再试。";
+            _showWarningDialog = true;
+        }
+
         StateHasChanged();
     }
 
     private async Task ExecuteEmptyTrash()
     {
-        var trashIds = IndexItems.Where(n => n.IsDeleted).Select(n => n.Id).ToList();
-        foreach (var id in trashIds)
+        // 🌟 并发锁：如果在同步，绝对不准删！
+        if (_isSyncingUI)
         {
-            await NoteRepository.DeleteNoteAsync(id);
-            IndexItems.RemoveAll(n => n.Id == id);
-            IndexService.RemoveItem(id);
-            CloseTab(id);
+            _warningMessage = "后台正在与云端同步数据，为防止文件混乱复活，请等待右上方同步动画停止后再清空回收站。";
+            _showWarningDialog = true;
+            _showEmptyTrashConfirm = false;
+            return;
         }
+
+        var trashItems = IndexItems.Where(n => n.IsDeleted).ToList();
+        int successCount = 0;
+        int failCount = 0;
+
+        _saveStatus = "正在清理云端...";
+        await InvokeAsync(StateHasChanged);
+
+        foreach (var item in trashItems)
+        {
+            bool cloudDeleted = await SafeCloudDeleteAsync(item.Folder, item.Id);
+
+            // 🌟 只有云端真删掉了，才允许删本地
+            if (cloudDeleted || !await WebDavService.TestConnectionAsync())
+            {
+                await NoteRepository.DeleteNoteAsync(item.Id);
+                IndexItems.RemoveAll(n => n.Id == item.Id);
+                IndexService.RemoveItem(item.Id);
+                CloseTab(item.Id);
+                successCount++;
+            }
+            else
+            {
+                failCount++;
+            }
+        }
+
         _selectedNoteIds.Clear();
         SelectedNoteId = string.Empty;
         _showEmptyTrashConfirm = false;
+
+        if (failCount > 0)
+        {
+            _warningMessage = $"清空完毕。成功 {successCount} 篇，失败 {failCount} 篇。\n\n失败的文件已被云端拒绝删除，为防止同步再次将其复活，已强行保留在回收站内。请稍后再试。";
+            _showWarningDialog = true;
+            _saveStatus = "清理完成(有失败)";
+        }
+        else
+        {
+            _saveStatus = "回收站已清空";
+        }
+
         StateHasChanged();
     }
 
@@ -3219,13 +3316,54 @@
 
     private async Task DeleteTemplate(string id)
     {
-        await NoteRepository.DeleteTemplateAsync(id);
-        // 重新拉取最新列表刷新 UI
-        _manageTemplatesList = await NoteRepository.GetAllTemplatesAsync();
-        StateHasChanged();
-        if (NativeDialog != null)
+        if (_isSyncingUI)
         {
-            await NativeDialog.ShowAlertAsync("🗑️ 删除成功", "该模板已被彻底移除。", "好的");
+            if (NativeDialog != null) await NativeDialog.ShowAlertAsync("⚠️ 正在同步", "后台正在与云端同步数据，请等待右上角图标停止旋转后再删除模板。", "我知道了");
+            return;
         }
+
+        string remotePath = $"MonoNotes/{NoteRepository.CurrentWorkspace}/.templates/{id}.md";
+        bool cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
+
+        if (!cloudDeleted)
+        {
+            await Task.Delay(1000);
+            cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
+        }
+
+        if (cloudDeleted || !await WebDavService.TestConnectionAsync())
+        {
+            await NoteRepository.DeleteTemplateAsync(id);
+            _manageTemplatesList = await NoteRepository.GetAllTemplatesAsync();
+            StateHasChanged();
+
+            if (NativeDialog != null) await NativeDialog.ShowAlertAsync("🗑️ 删除成功", "该模板已被彻底移除。", "好的");
+        }
+        else
+        {
+            if (NativeDialog != null) await NativeDialog.ShowAlertAsync("❌ 删除失败", "云端拒绝删除，为防再次复活，已终止本地删除。请稍后再试。", "我知道了");
+        }
+    }
+
+    // 🌟 终极防线 1：路径净化器（抹平 Windows 和 Mac 的路径差异，防止云端 404）
+    private string GetRemoteNotePath(string folder, string id)
+    {
+        string normalizedFolder = string.IsNullOrWhiteSpace(folder) ? "notes" : folder.Replace('\\', '/').Trim('/');
+        return $"MonoNotes/{NoteRepository.CurrentWorkspace}/{normalizedFolder}/{id}.md";
+    }
+
+    // 🌟 终极防线 2：带限流突破的安全云删除助手
+    private async Task<bool> SafeCloudDeleteAsync(string folder, string id)
+    {
+        string remotePath = GetRemoteNotePath(folder, id);
+        bool cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
+
+        if (!cloudDeleted)
+        {
+            // 如果触发了坚果云频繁请求限制，强制冷静 1000 毫秒后重试！
+            await Task.Delay(1000);
+            cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
+        }
+        return cloudDeleted;
     }
 }

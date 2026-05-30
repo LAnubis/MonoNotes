@@ -216,7 +216,7 @@ namespace MonoNotes.Sync
 
                 var response = await _httpClient.SendAsync(request);
 
-                return response.IsSuccessStatusCode;
+                return response.IsSuccessStatusCode || (int)response.StatusCode == 404;
             }
             catch (Exception ex)
             {
