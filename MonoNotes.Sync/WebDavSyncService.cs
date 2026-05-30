@@ -126,7 +126,7 @@ namespace MonoNotes.Sync
             foreach (var dirName in allDirNames)
             {
                 // 🌟 修复 3：放行 .assets 文件夹！只屏蔽其他隐藏垃圾文件
-                if (dirName.StartsWith(".") && dirName != ".assets") continue;
+                if (dirName.StartsWith(".") && dirName != ".assets" && dirName != ".templates") continue;
 
                 var remoteDirPath = string.IsNullOrEmpty(relativePath) ? $"{RemoteBaseFolder}/{dirName}" : $"{RemoteBaseFolder}/{relativePath}/{dirName}";
                 var remoteD = remoteItems.FirstOrDefault(r => r.IsFolder && r.Name == dirName);

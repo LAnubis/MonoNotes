@@ -51,6 +51,10 @@ namespace MonoNotes.App.Services
             if (!Directory.Exists(_storageDirectory)) Directory.CreateDirectory(_storageDirectory);
             var assetsPath = Path.Combine(_storageDirectory, ".assets");
             if (!Directory.Exists(assetsPath)) Directory.CreateDirectory(assetsPath);
+
+            // 🌟 确保隐藏的模板文件夹存在
+            var templatesPath = Path.Combine(_storageDirectory, ".templates");
+            if (!Directory.Exists(templatesPath)) Directory.CreateDirectory(templatesPath);
         }
 
         // 🌟 新增：获取所有知识库
@@ -84,8 +88,10 @@ namespace MonoNotes.App.Services
         public async Task<List<MonoNote>> GetAllNotesAsync()
         {
             var notes = new List<MonoNote>();
-            var files = Directory.GetFiles(_storageDirectory, "*.md", SearchOption.AllDirectories);
-
+            //var files = Directory.GetFiles(_storageDirectory, "*.md", SearchOption.AllDirectories);
+            var files = Directory.GetFiles(_storageDirectory, "*.md", SearchOption.AllDirectories)
+                                 .Where(f => !f.Replace('\\', '/').Contains("/.templates/"))
+                                 .ToList();
             foreach (var file in files)
             {
                 try
@@ -344,7 +350,92 @@ namespace MonoNotes.App.Services
                 await SaveNoteAsync(bookNote);
             }
         }
+        // ==========================================
+        // 🌟 模板专属管理方法
+        // ==========================================
 
+        public async Task<List<MonoNote>> GetAllTemplatesAsync()
+        {
+            var templates = new List<MonoNote>();
+            var templatesDir = Path.Combine(_storageDirectory, ".templates");
+            if (!Directory.Exists(templatesDir)) return templates;
+
+            // 模板只存放在 .templates 根目录下，不往下递归
+            var files = Directory.GetFiles(templatesDir, "*.md", SearchOption.TopDirectoryOnly);
+
+            foreach (var file in files)
+            {
+                try
+                {
+                    var text = await File.ReadAllTextAsync(file);
+                    if (text.StartsWith("---"))
+                    {
+                        var parts = text.Split(new[] { "---" }, 3, StringSplitOptions.None);
+                        if (parts.Length >= 3)
+                        {
+                            var yaml = parts[1];
+                            var content = parts[2].TrimStart('\r', '\n');
+                            content = content.Replace("./.assets/", $"{AppConstants.ImageBaseUrl}/Workspaces/{CurrentWorkspace}/.assets/");
+
+                            var meta = _yamlDeserializer.Deserialize<NoteMetadata>(yaml);
+
+                            templates.Add(new MonoNote
+                            {
+                                Id = meta.Id ?? Path.GetFileNameWithoutExtension(file),
+                                Title = meta.Title ?? "未命名模板",
+                                Tags = meta.Tags ?? new List<string>(),
+                                UpdatedAt = meta.UpdatedAt != default ? meta.UpdatedAt : File.GetLastWriteTime(file),
+                                Content = content,
+                                Folder = ".templates", // 强制标记归属
+                                IsPinned = meta.IsPinned,
+                                IsFavorite = meta.IsFavorite
+                            });
+                        }
+                    }
+                }
+                catch { /* 忽略损坏的模板 */ }
+            }
+            return templates.OrderByDescending(n => n.UpdatedAt).ToList();
+        }
+
+        public async Task SaveTemplateAsync(MonoNote template)
+        {
+            template.UpdatedAt = DateTimeOffset.Now;
+            var templatesDir = Path.Combine(_storageDirectory, ".templates");
+            if (!Directory.Exists(templatesDir)) Directory.CreateDirectory(templatesDir);
+
+            var filePath = Path.Combine(templatesDir, $"{template.Id}.md");
+
+            var meta = new NoteMetadata
+            {
+                Id = template.Id,
+                Title = template.Title ?? "未命名模板",
+                UpdatedAt = template.UpdatedAt,
+                Tags = template.Tags ?? new List<string>(),
+                IsPinned = template.IsPinned,
+                IsFavorite = template.IsFavorite
+            };
+
+            var yaml = _yamlSerializer.Serialize(meta);
+            var sb = new StringBuilder();
+            sb.AppendLine("---");
+            sb.Append(yaml);
+            sb.AppendLine("---");
+
+            var pureContent = template.Content?.Replace($"{AppConstants.ImageBaseUrl}/Workspaces/{CurrentWorkspace}/", "./") ?? string.Empty;
+            sb.AppendLine(pureContent);
+
+            await File.WriteAllTextAsync(filePath, sb.ToString());
+        }
+
+        public async Task DeleteTemplateAsync(string id)
+        {
+            var filePath = Path.Combine(_storageDirectory, ".templates", $"{id}.md");
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
         private class NoteMetadata
         {
             public string Id { get; set; }

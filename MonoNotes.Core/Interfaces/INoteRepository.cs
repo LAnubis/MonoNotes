@@ -33,5 +33,9 @@ namespace MonoNotes.Core.Interfaces
 
         Task RenameTagGlobalAsync(string oldTag, string newTag);
         Task DeleteTagGlobalAsync(string targetTag);
+
+        Task<List<MonoNote>> GetAllTemplatesAsync();
+        Task SaveTemplateAsync(MonoNote template);
+        Task DeleteTemplateAsync(string id);
     }
 }

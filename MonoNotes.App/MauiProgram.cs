@@ -31,6 +31,8 @@ namespace MonoNotes.App
             builder.Services.AddScoped<MonoNotes.UI.Services.VisualEngineService>();
             // 🌟 注册本地 JSON 索引缓存引擎 (单例，确保全局只有一个内存实例)
             builder.Services.AddSingleton<MonoNotes.Storage.JsonIndexService>();
+            // 🌟 注册原生弹窗服务
+            builder.Services.AddSingleton<INativeDialogService, MauiNativeDialogService>();
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();

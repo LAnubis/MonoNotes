@@ -2,6 +2,8 @@
 @using System.Timers
 @using MonoNotes.Core.Interfaces
 @using MonoNotes.Core.Models
+@using Markdig
+@inject MonoNotes.Core.Interfaces.INativeDialogService NativeDialog
 @inject INoteRepository NoteRepository
 @implements IDisposable
 @inject IJSRuntime JSRuntime
@@ -586,6 +588,7 @@
                 <div class="menu-divider"></div>
                 <div class="menu-item" @onclick="() => OpenFolderSelector(false)">📁 移动到...</div>
                 <div class="menu-item" @onclick="() => OpenFolderSelector(true)">📄 复制到...</div>
+                <div class="menu-item" @onclick="() => OpenExportModal(SelectedNote)">📤 导出笔记...</div>
                 <div class="menu-divider"></div>
                 <div class="menu-item" style="color: #ff4d4f;" @onclick="SoftDeleteNoteContext">🗑️ 移至回收站</div>
             }
@@ -1038,6 +1041,44 @@
                         opacity: 1;
                     }
                 }
+        </style>
+    }
+
+    @if (_showExportModal && _noteToExport != null)
+    {
+        <div class="modal-overlay" style="align-items: center; z-index: 99999;" @onclick="CloseExportModal">
+            <div class="modal-content" style="width: 320px; padding: 24px; background: var(--nt-bg-main); border-radius: 12px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.25);" @onclick:stopPropagation="true">
+                <div style="font-size: 24px; margin-bottom: 12px;">📤</div>
+                <h3 style="margin: 0 0 20px 0; font-size: 16px; color: var(--nt-text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    导出: @_noteToExport.Title
+                </h3>
+
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <button class="export-btn" @onclick="@(() => ExportNoteAsync("md"))">Markdown (.md)</button>
+                    <button class="export-btn" @onclick="@(() => ExportNoteAsync("html"))">网页文件 (.html)</button>
+                    <button class="export-btn" @onclick="@(() => ExportNoteAsync("txt"))">纯文本 (.txt)</button>
+                </div>
+            </div>
+        </div>
+
+        <style>
+                .export-btn {
+                    background: rgba(55,53,47,0.05);
+                    color: var(--nt-text-main);
+                    border: 1px solid rgba(55,53,47,0.1);
+                    padding: 10px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    font-weight: 500;
+                    transition: all 0.2s;
+                }
+
+                    .export-btn:hover {
+                        background: #2eaadc;
+                        color: white;
+                        border-color: #2eaadc;
+                    }
         </style>
     }
 </div>
@@ -2736,5 +2777,118 @@
         _showInsertModal = true;
         _insertSearchText = string.Empty;
         StateHasChanged();
+    }
+
+    // ==========================================
+    // 🌟 导出笔记核心逻辑
+    // ==========================================
+    private bool _showExportModal = false;
+    private MonoNotes.Core.Models.MonoNote? _noteToExport = null;
+
+    private void OpenExportModal(MonoNotes.Core.Models.MonoNote note)
+    {
+        _noteToExport = note;
+        _showExportModal = true;
+        _showContextMenu = false;
+        StateHasChanged();
+    }
+
+    private void CloseExportModal()
+    {
+        _showExportModal = false;
+        _noteToExport = null;
+        StateHasChanged();
+    }
+
+    private async Task ExportNoteAsync(string format)
+    {
+        if (_noteToExport == null) return;
+
+        try
+        {
+            // 🌟 智能定位：跨平台获取系统的“下载(Downloads)”目录
+            string downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+            if (!Directory.Exists(downloadsPath)) Directory.CreateDirectory(downloadsPath);
+
+            // 过滤掉标题中不能做文件名的特殊字符
+            string safeTitle = string.Join("_", _noteToExport.Title!.Split(Path.GetInvalidFileNameChars()));
+            string fileName = $"{safeTitle}_{DateTime.Now:yyyyMMdd_HHmmss}.{format}";
+            string filePath = Path.Combine(downloadsPath, fileName);
+
+            string contentToWrite = "";
+
+            if (format == "md" || format == "txt")
+            {
+                // MD 和 TXT 直接输出原文内容
+                contentToWrite = _noteToExport.Content ?? "";
+            }
+            else if (format == "html")
+            {
+                // HTML：使用 Markdig 强力渲染，并包装上一套极其极客/优雅的 CSS 样式
+                var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+                var htmlBody = Markdown.ToHtml(_noteToExport.Content ?? "", pipeline);
+
+                contentToWrite = $@"
+<!DOCTYPE html>
+<html lang=""zh-CN"">
+<head>
+    <meta charset=""utf-8"">
+    <title>{_noteToExport.Title}</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; padding: 5vw; max-width: 800px; margin: 0 auto; color: #37352f; background-color: #ffffff; }}
+        h1, h2, h3 {{ color: #111; font-weight: 600; }}
+        img {{ max-width: 100%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin: 16px 0; }}
+        code {{ background: #f4f4f4; color: #eb5757; padding: 3px 6px; border-radius: 4px; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 85%; }}
+        pre {{ background: #f6f8fa; padding: 16px; border-radius: 8px; overflow-x: auto; }}
+        pre code {{ background: transparent; color: inherit; padding: 0; }}
+        blockquote {{ border-left: 4px solid #dfe2e5; padding-left: 16px; color: #6a737d; margin-left: 0; }}
+        table {{ border-collapse: collapse; width: 100%; margin-bottom: 16px; }}
+        th, td {{ border: 1px solid #dfe2e5; padding: 8px 12px; }}
+        th {{ background-color: #f6f8fa; }}
+    </style>
+</head>
+<body>
+    <h1>{_noteToExport.Title}</h1>
+    {htmlBody}
+</body>
+</html>";
+            }
+
+            // 写入文件
+            await File.WriteAllTextAsync(filePath, contentToWrite);
+
+            // 🌟 导出成功：在底部 Toast 状态栏提示用户
+            _saveStatus = $"✅ 已导出至下载目录: {fileName}";
+            CloseExportModal();
+            await InvokeAsync(StateHasChanged);
+
+            // 3秒后将提示语恢复
+            await Task.Delay(4000);
+            if (_saveStatus.StartsWith("✅")) _saveStatus = "已保存";
+            await InvokeAsync(StateHasChanged);
+
+            // 🌟 导出成功时：
+            if (NativeDialog != null)
+            {
+                await NativeDialog.ShowAlertAsync(
+                    "🎉 导出成功",
+                    $"您的笔记已成功保存至下载目录：\n\n{fileName}",
+                    "太棒了");
+            }
+        }
+        catch (Exception ex)
+        {
+            _saveStatus = $"❌ 导出失败: {ex.Message}";
+            await InvokeAsync(StateHasChanged);
+
+            // 🌟 catch 导出失败时：
+            if (NativeDialog != null)
+            {
+                await NativeDialog.ShowAlertAsync(
+                    "❌ 导出失败",
+                    $"在导出过程中发生了错误：\n{ex.Message}",
+                    "关闭");
+            }
+        }
     }
 }
