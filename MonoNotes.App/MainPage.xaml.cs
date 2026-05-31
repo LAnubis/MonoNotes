@@ -1,4 +1,8 @@
 ﻿using Microsoft.AspNetCore.Components.WebView;
+using Microsoft.AspNetCore.Components.WebView.Maui;
+using MonoNotes.UI.Views;
+
+
 #if WINDOWS
 using Microsoft.UI.Xaml.Controls;
 #endif
@@ -14,6 +18,26 @@ namespace MonoNotes.App
         public MainPage()
         {
             InitializeComponent();
+
+            // ========================================================
+            // 🌟 核心：设备探测与动态视图注入 (代替传统的 Routes 路由)
+            // ========================================================
+            var rootComponent = new RootComponent
+            {
+                Selector = "#app" // 对应 wwwroot/index.html 里的 <div id="app"></div>
+            };
+
+#if IOS || ANDROID
+            // 📱 手机端：注入移动端专属的极简 UI
+            rootComponent.ComponentType = typeof(MobileWorkspaceView);
+#else
+            // 💻 桌面端：注入全尺寸多栏 UI
+            rootComponent.ComponentType = typeof(WorkspaceView);
+#endif
+            // 将决定好的视图动态装载进 WebView
+            blazorWebView.RootComponents.Add(rootComponent);
+            // ========================================================
+
 
             // Windows 用的初始化后事件
             blazorWebView.BlazorWebViewInitialized += BlazorWebView_Initialized;

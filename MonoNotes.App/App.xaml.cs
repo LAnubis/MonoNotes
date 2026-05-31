@@ -40,8 +40,10 @@
                     var screenBounds = uiWindow.WindowScene.Screen.Bounds;
                     
                     // 向 macOS 申请将应用窗口铺满整个屏幕
-                    var geometry = new UIKit.UIWindowSceneGeometryPreferencesMac(screenBounds, new CoreGraphics.CGRect());
-                    uiWindow.WindowScene.RequestGeometryUpdate(geometry, null);
+                  // ✅ .NET 8/9/10 支持的新写法
+var geometry = new UIKit.UIWindowSceneGeometryPreferencesMac();
+geometry.SystemFrame = screenBounds;
+uiWindow.WindowScene.RequestGeometryUpdate(geometry, (error) => { });
                 }
 #endif
             };

@@ -1,0 +1,1323 @@
+﻿@using System.IO
+@using System.Timers
+@using MonoNotes.Core.Interfaces
+@using MonoNotes.Core.Models
+@using Markdig
+@inject MonoNotes.Core.Interfaces.INativeDialogService NativeDialog
+@inject INoteRepository NoteRepository
+@implements IDisposable
+@inject IJSRuntime JSRuntime
+@inject ISettingsService SettingsService
+@inject IWebDavService WebDavService
+@inject MonoNotes.Core.Interfaces.IWebDavSyncService SyncService
+@inject MonoNotes.Core.Interfaces.ISearchService SearchService
+@inject MonoNotes.Storage.JsonIndexService IndexService
+
+<div class="mobile-workspace">
+    @if (!string.IsNullOrEmpty(SelectedNoteId) && SelectedNote != null)
+    {
+        <div class="mobile-editor-view">
+            <div class="mobile-nav-bar">
+                <button class="icon-btn back-btn" @onclick="CloseEditor">
+                    <span style="font-size: 18px; margin-right: 4px;">‹</span> 返回
+                </button>
+                <div class="status-indicator">@_saveStatus</div>
+                <button class="icon-btn" @onclick="() => _showEditorOptionsSheet = true">
+                    <span style="font-size: 20px;">⋯</span>
+                </button>
+            </div>
+
+            <div class="mobile-editor-body">
+                <input class="mobile-title-input" placeholder="无标题笔记"
+                       @bind="SelectedNote.Title" @bind:event="oninput" @onkeyup="OnNoteChanged" />
+
+                <div class="mobile-tags-row">
+                    @if (SelectedNote.Tags != null)
+                    {
+                        @foreach (var tag in SelectedNote.Tags)
+                        {
+                            <span class="tag-pill">#@tag <span class="remove" @onclick="() => RemoveTag(tag)">×</span></span>
+                        }
+                    }
+                    <input type="text" class="tag-input" placeholder="+ 添加标签" @bind="_newTagInput" @bind:event="oninput" @onkeyup="HandleTagInputKey" />
+                </div>
+
+                <div class="mobile-markdown-container">
+                    <MarkdownEditor @ref="_markdownEditor" Content="@SelectedNote.Content"
+                                    ContentChanged="@((newContent) => { SelectedNote.Content = newContent; OnNoteChanged(); })"
+                                    CurrentFolder="@SelectedNote.Folder"
+                                    GlobalIndex="IndexItems"
+                                    OnInternalLinkClick="HandleInternalLinkClick" />
+                </div>
+            </div>
+
+            @if (_showEditorOptionsSheet)
+            {
+                <div class="bottom-sheet-overlay" @onclick="() => _showEditorOptionsSheet = false">
+                    <div class="bottom-sheet-content" @onclick:stopPropagation="true">
+                        <div class="sheet-header">
+                            <div class="sheet-drag-handle"></div>
+                            <span>笔记选项</span>
+                        </div>
+                        <div class="sheet-body">
+                            <div class="sheet-action-item" @onclick="TogglePin">
+                                <span>📌</span> @(SelectedNote.IsPinned ? "取消置顶" : "置顶笔记")
+                            </div>
+                            <div class="sheet-action-item" @onclick="() => { _showEditorOptionsSheet = false; _showFolderSelector = true; }">
+                                <span>📁</span> 移动到...
+                            </div>
+                            <div class="sheet-action-item" @onclick="() => { _showEditorOptionsSheet = false; SaveAsTemplateAsync(SelectedNote); }">
+                                <span>💾</span> 另存为模板
+                            </div>
+                            <div class="sheet-action-item danger" @onclick="DeleteCurrentNote">
+                                <span>🗑️</span> 移至回收站
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="mobile-main-view">
+
+            <div class="mobile-content-area">
+                @if (_currentNavTab == "notes")
+                {
+                    <div class="mobile-header-dropdown" @onclick="() => _showFolderSheet = true">
+                        <span class="title">
+                            @if (_isFavoriteFilterActive)
+                            {
+                                <span>⭐ 收藏夹</span>
+                            }
+                            else if (_isTrashFilterActive)
+                            {
+
+                                <span>🗑️ 回收站</span>
+                            }
+                            else if (_activeTags.Any())
+                            {
+
+                                <span>🏷️ #@_activeTags.First()</span>
+                            }
+                            else if (!string.IsNullOrEmpty(_selectedFolderPath))
+                            {
+
+                                <span>📁 @Path.GetFileName(_selectedFolderPath)</span>
+                            }
+                            else
+                            {
+
+                                <span>📝 全部笔记</span>
+                            }
+                        </span>
+                        <span class="icon">▾</span>
+                    </div>
+
+                    <div class="mobile-note-list">
+                        @foreach (var note in FilteredNotes)
+                        {
+                            <div class="mobile-note-card">
+                                <div class="card-content" @onclick="() => SelectNote(note.Id)">
+                                    <div class="card-title">@(string.IsNullOrWhiteSpace(note.Title) ? "无标题" : note.Title)</div>
+                                    <div class="card-meta">
+                                        @note.UpdatedAt.ToString("MM-dd HH:mm")
+                                        @if (note.IsPinned)
+                                        {
+                                            <span class="meta-icon">📌</span>
+                                        }
+                                        @if (note.IsFavorite)
+                                        {
+                                            <span class="meta-icon">⭐</span>
+                                        }
+                                        @if (note.Tags != null && note.Tags.Any())
+                                        {
+                                            <span class="meta-tag">#@note.Tags.First()</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="card-actions" @onclick="() => OpenNoteActionSheet(note)">
+                                    <span>⋯</span>
+                                </div>
+                            </div>
+                        }
+
+                        @if (!FilteredNotes.Any())
+                        {
+                            <div class="empty-state">
+                                <span>🪹</span>
+                                <p>这里空空如也</p>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="fab-container">
+                        <button class="fab-main" @onclick="CreateNewNote">➕</button>
+                        <div class="fab-secondary" @onclick="CreateOrOpenDailyNoteAsync">📅</div>
+                        <div class="fab-secondary" @onclick="() => _showTemplateSheet = true">🗂️</div>
+                    </div>
+
+                    @if (_showNoteActionSheet && _actionNote != null)
+                    {
+                        <div class="bottom-sheet-overlay" @onclick="() => _showNoteActionSheet = false">
+                            <div class="bottom-sheet-content" @onclick:stopPropagation="true">
+                                <div class="sheet-header">
+                                    <div class="sheet-drag-handle"></div>
+                                    <span class="truncate">@_actionNote.Title</span>
+                                </div>
+                                <div class="sheet-body">
+                                    @if (_actionNote.IsDeleted)
+                                    {
+                                        <div class="sheet-action-item" @onclick="RestoreActionNote"><span>↩️</span> 恢复笔记</div>
+                                        <div class="sheet-action-item danger" @onclick="HardDeleteActionNote"><span>❌</span> 彻底删除</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="sheet-action-item" @onclick="ToggleActionNoteFavorite"><span>⭐</span> @(_actionNote.IsFavorite ? "取消收藏" : "收藏")</div>
+                                        <div class="sheet-action-item" @onclick="ToggleActionNotePin"><span>📌</span> @(_actionNote.IsPinned ? "取消置顶" : "置顶")</div>
+                                        <div class="sheet-action-item danger" @onclick="SoftDeleteActionNote"><span>🗑️</span> 移至回收站</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (_showFolderSheet)
+                    {
+                        <div class="bottom-sheet-overlay" @onclick="() => _showFolderSheet = false">
+                            <div class="bottom-sheet-content" style="max-height: 80vh;" @onclick:stopPropagation="true">
+                                <div class="sheet-header">
+                                    <div class="sheet-drag-handle"></div>
+                                    <span>视图与文件夹</span>
+                                </div>
+                                <div class="sheet-body" style="overflow-y: auto;">
+                                    <div class="sheet-section-title">快捷视图</div>
+                                    <div class="sheet-nav-item @(!_isFavoriteFilterActive && !_isTrashFilterActive && string.IsNullOrEmpty(_selectedFolderPath) && !_activeTags.Any() ? "active" : "")" @onclick='() => { ResetFilters(); _showFolderSheet = false; }'>📝 全部笔记</div>
+                                    <div class="sheet-nav-item @(_isFavoriteFilterActive ? "active" : "")" @onclick='() => { ShowFavorites(); _showFolderSheet = false; }'>⭐ 收藏夹</div>
+                                    <div class="sheet-nav-item @(_isTrashFilterActive ? "active" : "")" @onclick='() => { ShowTrash(); _showFolderSheet = false; }'>🗑️ 回收站</div>
+
+                                    <div class="sheet-section-title">文件夹</div>
+                                    @foreach (var folder in _folderTree)
+                                    {
+                                        <div class="sheet-nav-item @(_selectedFolderPath == folder.FullPath ? "active" : "")" @onclick='() => { OnFolderSelectedHandler(folder.FullPath); _showFolderSheet = false; }'>
+                                            📁 @(folder.Name == "notes" ? "未分类" : folder.Name)
+                                        </div>
+                                    }
+
+                                    <div class="sheet-section-title">热门标签</div>
+                                    <div class="sheet-tags-wrap">
+                                        @foreach (var tagKvp in GetTagFrequencies().Take(10))
+                                        {
+                                            <span class="sheet-tag-pill @(_activeTags.Contains(tagKvp.Key) ? "active" : "")" @onclick='() => { SelectTag(tagKvp.Key); _showFolderSheet = false; }'>#@tagKvp.Key</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (_showTemplateSheet)
+                    {
+                        <div class="bottom-sheet-overlay" @onclick="() => _showTemplateSheet = false">
+                            <div class="bottom-sheet-content" @onclick:stopPropagation="true">
+                                <div class="sheet-header">
+                                    <div class="sheet-drag-handle"></div>
+                                    <span>从模板新建</span>
+                                </div>
+                                <div class="sheet-body" style="max-height: 50vh; overflow-y: auto;">
+                                    <div class="sheet-action-item" @onclick="() => ConfirmCreateNoteFromTemplate(null)">
+                                        <span>📄</span> 空白笔记
+                                    </div>
+                                    @foreach (var temp in _availableTemplates)
+                                    {
+                                        <div class="sheet-action-item" @onclick="() => ConfirmCreateNoteFromTemplate(temp)">
+                                            <span>📝</span> @temp.Title
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+                else if (_currentNavTab == "search")
+                {
+                    <div class="mobile-search-view">
+                        <div class="search-bar-container">
+                            <input type="text" class="mobile-search-input" placeholder="搜索全局笔记..."
+                                   @bind="_superSearchQuery" @bind:event="oninput" @onkeyup="ExecuteSuperSearch" />
+                        </div>
+                        <div class="search-results">
+                            @foreach (var result in _searchResults)
+                            {
+                                <div class="search-result-card" @onclick="() => JumpToSearchResult(result.NoteId)">
+                                    <div class="result-title">@result.Title</div>
+                                    @if (result.Snippets.Any())
+                                    {
+                                        <div class="result-snippet">@((MarkupString)result.Snippets.First())</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else if (_currentNavTab == "settings")
+                {
+                    <div class="mobile-settings-view">
+                        <div class="settings-header">
+                            <h2>我的</h2>
+                            <p>@NoteRepository.CurrentWorkspace</p>
+                        </div>
+
+                        <div class="settings-group">
+                            <div class="settings-item" @onclick="OpenWorkspaceManager">
+                                <span>📚 切换知识库</span>
+                                <span class="arrow">›</span>
+                            </div>
+                        </div>
+
+                        <div class="settings-group">
+                            <div class="settings-item" @onclick="TriggerBackgroundSync">
+                                <span>☁️ 立即同步</span>
+                                @if (_isSyncingUI)
+                                {
+                                    <span class="syncing-text">同步中...</span>
+                                }
+                                else
+                                {
+
+                                    <span class="arrow">›</span>
+                                }
+                            </div>
+                            <div class="settings-item">
+                                <span>⚙️ WebDAV 设置 (请在PC端配置)</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="mobile-bottom-nav">
+                <div class="nav-tab @(_currentNavTab == "notes" ? "active" : "")" @onclick='() => _currentNavTab = "notes"'>
+                    <div class="nav-icon">📝</div>
+                    <span>笔记</span>
+                </div>
+                <div class="nav-tab @(_currentNavTab == "search" ? "active" : "")" @onclick='() => _currentNavTab = "search"'>
+                    <div class="nav-icon">🔍</div>
+                    <span>搜索</span>
+                </div>
+                <div class="nav-tab @(_currentNavTab == "settings" ? "active" : "")" @onclick='() => _currentNavTab = "settings"'>
+                    <div class="nav-icon">⚙️</div>
+                    <span>我</span>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+@if (_showFolderSelector)
+{
+    <div class="bottom-sheet-overlay" @onclick="() => _showFolderSelector = false">
+        <div class="bottom-sheet-content" style="max-height: 80vh;" @onclick:stopPropagation="true">
+            <div class="sheet-header">
+                <div class="sheet-drag-handle"></div>
+                <span>移动到...</span>
+            </div>
+            <div class="sheet-body" style="overflow-y: auto;">
+                <div class="sheet-nav-item @(_targetFolder == "notes" ? "active" : "")" @onclick='() => _targetFolder = "notes"'>
+                    📁 未分类
+                </div>
+                @foreach (var folder in _folderTree)
+                {
+                    if (folder.FullPath != "notes" && folder.FullPath != "每日速记")
+                    {
+                        <div class="sheet-nav-item @(_targetFolder == folder.FullPath ? "active" : "")" @onclick='() => _targetFolder = folder.FullPath'>
+                            📁 @folder.Name
+                        </div>
+                    }
+                }
+
+                <div style="display: flex; gap: 12px; margin-top: 20px;">
+                    <button class="btn-cancel" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #ddd; background: transparent;" @onclick="() => _showFolderSelector = false">取消</button>
+                    <button class="btn-primary" style="flex: 1; padding: 12px; border-radius: 8px; border: none; background: #2eaadc; color: white;" disabled="@(string.IsNullOrEmpty(_targetFolder))" @onclick="ConfirmMoveNote">确认移动</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+<style>
+    .mobile-workspace {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        width: 100vw;
+        background-color: var(--nt-bg-main, #ffffff);
+        color: var(--nt-text-main, #333333);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        overflow: hidden;
+    }
+
+    /* 底层视图结构 */
+    .mobile-main-view {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .mobile-content-area {
+        flex: 1;
+        overflow-y: auto;
+        padding-bottom: 20px;
+    }
+
+    /* 底部导航栏 */
+    .mobile-bottom-nav {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        height: 56px;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-top: 1px solid rgba(0,0,0,0.05);
+        padding-bottom: env(safe-area-inset-bottom); /* iOS 小黑条适配 */
+        flex-shrink: 0;
+    }
+
+    .nav-tab {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        height: 100%;
+        color: #999;
+        font-size: 10px;
+        font-weight: 500;
+    }
+
+        .nav-tab.active {
+            color: #2eaadc;
+        }
+
+    .nav-icon {
+        font-size: 20px;
+        margin-bottom: 2px;
+        transition: transform 0.2s;
+    }
+
+    .nav-tab.active .nav-icon {
+        transform: translateY(-2px) scale(1.1);
+    }
+
+    /* 顶部下拉切换器 */
+    .mobile-header-dropdown {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 16px;
+        font-size: 16px;
+        font-weight: 600;
+        border-bottom: 1px solid rgba(0,0,0,0.03);
+    }
+
+        .mobile-header-dropdown .icon {
+            margin-left: 4px;
+            font-size: 12px;
+            opacity: 0.5;
+        }
+
+    /* 笔记列表与卡片 */
+    .mobile-note-list {
+        padding: 12px;
+    }
+
+    .mobile-note-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px;
+        background: rgba(55,53,47,0.03);
+        border-radius: 12px;
+        margin-bottom: 12px;
+        transition: background 0.2s;
+    }
+
+        .mobile-note-card:active {
+            background: rgba(55,53,47,0.08);
+        }
+
+    .card-content {
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .card-title {
+        font-size: 15px;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 6px;
+    }
+
+    .card-meta {
+        font-size: 12px;
+        color: #999;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .meta-tag {
+        background: rgba(46,170,220,0.1);
+        color: #2eaadc;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+    }
+
+    .card-actions {
+        padding: 8px;
+        color: #999;
+        font-size: 18px;
+        margin-right: -8px;
+    }
+
+    /* 空白页 */
+    .empty-state {
+        text-align: center;
+        margin-top: 60px;
+        color: #bbb;
+    }
+
+        .empty-state span {
+            font-size: 48px;
+            display: block;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+    /* 悬浮操作按钮 (FAB) */
+    .fab-container {
+        position: absolute;
+        right: 20px;
+        bottom: 80px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 12px;
+    }
+
+    .fab-main {
+        width: 56px;
+        height: 56px;
+        border-radius: 28px;
+        background: #2eaadc;
+        color: white;
+        font-size: 24px;
+        border: none;
+        box-shadow: 0 4px 12px rgba(46,170,220,0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .fab-secondary {
+        width: 40px;
+        height: 40px;
+        border-radius: 20px;
+        background: white;
+        color: #333;
+        font-size: 18px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* 底部面板 (Bottom Sheet) */
+    .bottom-sheet-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 999;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+    }
+
+    .bottom-sheet-content {
+        background: var(--nt-bg-main, #fff);
+        border-radius: 20px 20px 0 0;
+        padding-bottom: env(safe-area-inset-bottom);
+        animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .sheet-header {
+        padding: 16px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 15px;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        position: relative;
+    }
+
+    .sheet-drag-handle {
+        width: 36px;
+        height: 4px;
+        background: #ddd;
+        border-radius: 2px;
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .sheet-body {
+        padding: 8px 16px 16px 16px;
+    }
+
+    .sheet-action-item {
+        padding: 16px;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid rgba(0,0,0,0.03);
+    }
+
+        .sheet-action-item:active {
+            background: rgba(0,0,0,0.03);
+        }
+
+        .sheet-action-item.danger {
+            color: #ff4d4f;
+        }
+
+    .sheet-section-title {
+        font-size: 12px;
+        color: #999;
+        margin: 16px 0 8px 8px;
+        font-weight: 600;
+    }
+
+    .sheet-nav-item {
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 4px;
+        font-size: 14px;
+    }
+
+        .sheet-nav-item.active {
+            background: rgba(46,170,220,0.1);
+            color: #2eaadc;
+            font-weight: 500;
+        }
+
+    .sheet-tags-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 0 8px;
+    }
+
+    .sheet-tag-pill {
+        padding: 6px 12px;
+        background: rgba(0,0,0,0.05);
+        border-radius: 16px;
+        font-size: 12px;
+    }
+
+        .sheet-tag-pill.active {
+            background: #2eaadc;
+            color: white;
+        }
+
+    /* 单页编辑器视图 */
+    .mobile-editor-view {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: var(--nt-bg-main);
+        z-index: 10;
+    }
+
+    .mobile-nav-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        padding-top: max(12px, env(safe-area-inset-top));
+    }
+
+    .back-btn {
+        font-size: 15px;
+        color: #2eaadc;
+        display: flex;
+        align-items: center;
+        background: none;
+        border: none;
+        padding: 0;
+    }
+
+    .status-indicator {
+        font-size: 11px;
+        color: #999;
+    }
+
+    .mobile-editor-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        padding: 16px;
+    }
+
+    .mobile-title-input {
+        font-size: 24px;
+        font-weight: 600;
+        border: none;
+        outline: none;
+        background: transparent;
+        width: 100%;
+        margin-bottom: 16px;
+        color: var(--nt-text-main);
+    }
+
+    .mobile-tags-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+
+    .tag-pill {
+        background: rgba(0,0,0,0.04);
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        white-space: nowrap;
+    }
+
+        .tag-pill .remove {
+            margin-left: 6px;
+            color: #999;
+            font-size: 14px;
+        }
+
+    .tag-input {
+        border: none;
+        background: transparent;
+        font-size: 13px;
+        outline: none;
+        min-width: 80px;
+    }
+
+    .mobile-markdown-container {
+        flex: 1;
+        min-height: 300px;
+    }
+
+    /* 搜索页 */
+    .mobile-search-view {
+        padding: 16px;
+        padding-top: max(16px, env(safe-area-inset-top));
+    }
+
+    .mobile-search-input {
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 8px;
+        border: none;
+        background: rgba(0,0,0,0.05);
+        font-size: 15px;
+        outline: none;
+        margin-bottom: 20px;
+    }
+
+    .search-result-card {
+        padding: 16px;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .result-title {
+        font-weight: 600;
+        font-size: 15px;
+        margin-bottom: 6px;
+    }
+
+    .result-snippet {
+        font-size: 13px;
+        color: #666;
+        line-height: 1.5;
+    }
+
+    /* 设置页 */
+    .mobile-settings-view {
+        padding: 24px 16px;
+        padding-top: max(24px, env(safe-area-inset-top));
+        background: rgba(0,0,0,0.02);
+        height: 100%;
+    }
+
+    .settings-header {
+        margin-bottom: 32px;
+        padding-left: 8px;
+    }
+
+        .settings-header h2 {
+            margin: 0 0 4px 0;
+            font-size: 28px;
+        }
+
+        .settings-header p {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+        }
+
+    .settings-group {
+        background: #fff;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        overflow: hidden;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+
+    .settings-item {
+        padding: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(0,0,0,0.03);
+        font-size: 15px;
+    }
+
+        .settings-item:last-child {
+            border-bottom: none;
+        }
+
+        .settings-item:active {
+            background: rgba(0,0,0,0.02);
+        }
+
+        .settings-item .arrow {
+            color: #ccc;
+            font-size: 20px;
+        }
+
+    .syncing-text {
+        font-size: 12px;
+        color: #2eaadc;
+    }
+
+    @@keyframes slideUp {
+        from {
+            transform: translateY(100%);
+        }
+
+        to {
+            transform: translateY(0);
+        }
+    }
+
+    .truncate {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+        display: inline-block;
+        vertical-align: middle;
+    }
+</style>
+
+@code {
+    // ==========================================
+    // 💡 状态管理
+    // ==========================================
+    private List<NoteIndexItem> IndexItems = new();
+    private List<FolderTree.FolderNode> _folderTree = new();
+
+    private string _currentNavTab = "notes"; // "notes", "search", "settings"
+    private string SelectedNoteId = string.Empty;
+    private MonoNote? SelectedNote = null;
+
+    // 过滤与分类状态
+    private string _selectedFolderPath = "notes";
+    private HashSet<string> _activeTags = new();
+    private bool _isFavoriteFilterActive = false;
+    private bool _isTrashFilterActive = false;
+
+    // 底部面板开关 (Bottom Sheets)
+    private bool _showFolderSheet = false;
+    private bool _showNoteActionSheet = false;
+    private bool _showEditorOptionsSheet = false;
+    private bool _showTemplateSheet = false;
+
+    // 临时操作对象
+    private NoteIndexItem? _actionNote = null;
+    private List<MonoNote> _availableTemplates = new();
+    private string _saveStatus = "已保存";
+    private Timer _autoSaveTimer = new Timer(1000) { AutoReset = false };
+    private MarkdownEditor? _markdownEditor;
+    private string _newTagInput = string.Empty;
+
+    // 搜索与同步状态
+    private string _superSearchQuery = string.Empty;
+    private List<SearchResultItem> _searchResults = new();
+    private bool _isSyncingUI = false;
+
+
+    // --- 文件夹移动状态 ---
+    private bool _showFolderSelector = false;
+    private string _targetFolder = string.Empty;
+
+    // ==========================================
+    // 💡 生命周期与初始化
+    // ==========================================
+    protected override async Task OnInitializedAsync()
+    {
+        IndexItems = await IndexService.LoadIndexAsync();
+
+        // 执行轻量级自愈（只补录索引，手机端不扫描全文）
+        var rawFolders = await NoteRepository.GetAllFoldersAsync();
+        BuildFolderTree(rawFolders);
+
+        _autoSaveTimer.Elapsed += async (sender, e) => await PerformSaveAsync();
+
+        // 获取模板预备
+        _availableTemplates = await NoteRepository.GetAllTemplatesAsync();
+    }
+
+    public void Dispose()
+    {
+        _autoSaveTimer.Dispose();
+    }
+
+    // ==========================================
+    // 💡 过滤与列表计算
+    // ==========================================
+    private IEnumerable<NoteIndexItem> FilteredNotes
+    {
+        get
+        {
+            IEnumerable<NoteIndexItem> result = IndexItems;
+            if (_isTrashFilterActive) { result = result.Where(n => n.IsDeleted); }
+            else
+            {
+                result = result.Where(n => !n.IsDeleted && !n.IsArchived);
+                if (_activeTags != null && _activeTags.Any())
+                {
+                    result = result.Where(n => n.Tags != null && _activeTags.Any(t => n.Tags.Contains(t)));
+                }
+                else if (_isFavoriteFilterActive) { result = result.Where(n => n.IsFavorite); }
+                else if (!string.IsNullOrEmpty(_selectedFolderPath)) { result = result.Where(n => n.Folder == _selectedFolderPath); }
+            }
+            return result.OrderByDescending(n => n.IsPinned).ThenByDescending(n => n.UpdatedAt);
+        }
+    }
+
+    // ==========================================
+    // 💡 导航与视图切换
+    // ==========================================
+    private void ResetFilters()
+    {
+        _isFavoriteFilterActive = false;
+        _isTrashFilterActive = false;
+        _selectedFolderPath = string.Empty;
+        _activeTags.Clear();
+    }
+
+    private void ShowFavorites()
+    {
+        ResetFilters();
+        _isFavoriteFilterActive = true;
+    }
+
+    private void ShowTrash()
+    {
+        ResetFilters();
+        _isTrashFilterActive = true;
+    }
+
+    private void OnFolderSelectedHandler(string path)
+    {
+        ResetFilters();
+        _selectedFolderPath = path;
+    }
+
+    private void SelectTag(string tag)
+    {
+        ResetFilters();
+        _activeTags.Add(tag);
+    }
+
+    // ==========================================
+    // 💡 笔记操作 (列表页)
+    // ==========================================
+    private async Task SelectNote(string id)
+    {
+        // 手机端：点击加载单篇笔记并全屏显示
+        var allNotes = await NoteRepository.GetAllNotesAsync();
+        SelectedNote = allNotes.FirstOrDefault(n => n.Id == id);
+        if (SelectedNote != null)
+        {
+            SelectedNoteId = id;
+            _saveStatus = "已保存";
+        }
+    }
+
+    private void OpenNoteActionSheet(NoteIndexItem note)
+    {
+        _actionNote = note;
+        _showNoteActionSheet = true;
+    }
+
+    // 🌟 新建笔记 (入口点)
+    private async Task CreateNewNote()
+    {
+        var targetFolder = string.IsNullOrWhiteSpace(_selectedFolderPath) ? "notes" : _selectedFolderPath;
+        SelectedNote = new MonoNote
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Title = "",
+            Content = "",
+            UpdatedAt = DateTimeOffset.Now,
+            Folder = targetFolder,
+            Tags = new List<string>()
+        };
+
+        var idxItem = new NoteIndexItem { Id = SelectedNote.Id, Title = "", Folder = SelectedNote.Folder, UpdatedAt = SelectedNote.UpdatedAt, CreatedAt = SelectedNote.UpdatedAt };
+        IndexItems.Insert(0, idxItem);
+        IndexService.UpsertItem(idxItem);
+
+        SelectedNoteId = SelectedNote.Id;
+        await NoteRepository.SaveNoteAsync(SelectedNote);
+    }
+
+    private async Task ConfirmCreateNoteFromTemplate(MonoNote? template)
+    {
+        _showTemplateSheet = false;
+        SelectedNote = new MonoNote
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Title = template == null ? "无标题笔记" : template.Title.Replace(" 模板", ""),
+            Content = template?.Content ?? "",
+            Folder = "notes",
+            UpdatedAt = DateTimeOffset.Now
+        };
+
+        var indexItem = new NoteIndexItem { Id = SelectedNote.Id, Title = SelectedNote.Title, Folder = SelectedNote.Folder, UpdatedAt = SelectedNote.UpdatedAt };
+        IndexItems.Insert(0, indexItem);
+        IndexService.UpsertItem(indexItem);
+
+        SelectedNoteId = SelectedNote.Id;
+        await NoteRepository.SaveNoteAsync(SelectedNote);
+    }
+
+    private async Task CreateOrOpenDailyNoteAsync()
+    {
+        string todayStr = DateTime.Now.ToString("yyyy-MM-dd");
+        string dailyFolderName = "每日速记";
+
+        var existingNote = IndexItems.FirstOrDefault(n => n.Title == todayStr && !n.IsDeleted);
+        if (existingNote != null)
+        {
+            await SelectNote(existingNote.Id);
+        }
+        else
+        {
+            SelectedNote = new MonoNote
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Title = todayStr,
+                Content = $"# {todayStr}\n\n- [ ] ",
+                UpdatedAt = DateTimeOffset.Now,
+                Folder = dailyFolderName,
+                Tags = new List<string>()
+            };
+
+            var idxItem = new NoteIndexItem { Id = SelectedNote.Id, Title = SelectedNote.Title, Folder = SelectedNote.Folder, UpdatedAt = SelectedNote.UpdatedAt };
+            IndexItems.Insert(0, idxItem);
+            IndexService.UpsertItem(idxItem);
+
+            // 确保文件夹存在
+            var rawFolders = await NoteRepository.GetAllFoldersAsync();
+            if (!rawFolders.Any(f => f == dailyFolderName))
+            {
+                await NoteRepository.CreateFolderAsync("", dailyFolderName);
+                BuildFolderTree(await NoteRepository.GetAllFoldersAsync());
+            }
+
+            SelectedNoteId = SelectedNote.Id;
+            await NoteRepository.SaveNoteAsync(SelectedNote);
+        }
+    }
+
+    // ==========================================
+    // 💡 编辑器内部逻辑
+    // ==========================================
+    private async Task CloseEditor()
+    {
+        if (SelectedNote != null)
+        {
+            await PerformSaveAsync();
+        }
+        SelectedNoteId = string.Empty;
+        SelectedNote = null;
+    }
+
+    private void OnNoteChanged()
+    {
+        _saveStatus = "正在保存...";
+        if (SelectedNote != null)
+        {
+            var idx = IndexItems.FirstOrDefault(i => i.Id == SelectedNote.Id);
+            if (idx != null && idx.Title != SelectedNote.Title) idx.Title = SelectedNote.Title;
+        }
+        _autoSaveTimer.Stop(); _autoSaveTimer.Start();
+    }
+
+    private async Task PerformSaveAsync()
+    {
+        if (SelectedNote != null)
+        {
+            SelectedNote.OutgoingLinks = ExtractOutgoingLinks(SelectedNote.Content);
+            await NoteRepository.SaveNoteAsync(SelectedNote);
+
+            var indexItem = IndexItems.FirstOrDefault(i => i.Id == SelectedNote.Id);
+            if (indexItem != null)
+            {
+                indexItem.Title = SelectedNote.Title;
+                indexItem.Folder = SelectedNote.Folder;
+                indexItem.UpdatedAt = SelectedNote.UpdatedAt;
+                indexItem.Tags = SelectedNote.Tags ?? new List<string>();
+                indexItem.IsPinned = SelectedNote.IsPinned;
+                indexItem.OutgoingLinks = SelectedNote.OutgoingLinks;
+                IndexService.UpsertItem(indexItem);
+            }
+            _saveStatus = "已保存";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task HandleTagInputKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_newTagInput) && SelectedNote != null)
+        {
+            var tag = _newTagInput.Trim().TrimStart('#');
+            SelectedNote.Tags ??= new List<string>();
+            if (!SelectedNote.Tags.Contains(tag))
+            {
+                SelectedNote.Tags.Add(tag);
+                await PerformSaveAsync();
+            }
+            _newTagInput = string.Empty;
+        }
+    }
+
+    private async Task RemoveTag(string tag)
+    {
+        if (SelectedNote != null && SelectedNote.Tags != null)
+        {
+            SelectedNote.Tags.Remove(tag);
+            await PerformSaveAsync();
+        }
+    }
+
+    private async Task HandleInternalLinkClick(string targetTitle)
+    {
+        var targetNote = IndexItems.FirstOrDefault(n => n.Title == targetTitle && !n.IsDeleted);
+        if (targetNote != null) await SelectNote(targetNote.Id);
+    }
+
+    // ==========================================
+    // 💡 笔记数据操作 (Action Sheets)
+    // ==========================================
+    private async Task TogglePin()
+    {
+        if (SelectedNote != null) { SelectedNote.IsPinned = !SelectedNote.IsPinned; await PerformSaveAsync(); }
+        _showEditorOptionsSheet = false;
+    }
+
+    private async Task DeleteCurrentNote()
+    {
+        if (SelectedNote != null)
+        {
+            SelectedNote.IsDeleted = true;
+            await PerformSaveAsync();
+            await CloseEditor();
+        }
+        _showEditorOptionsSheet = false;
+    }
+
+    private async Task ToggleActionNoteFavorite()
+    {
+        if (_actionNote != null)
+        {
+            _actionNote.IsFavorite = !_actionNote.IsFavorite;
+            IndexService.UpsertItem(_actionNote);
+            var allNotes = await NoteRepository.GetAllNotesAsync();
+            var realNote = allNotes.FirstOrDefault(n => n.Id == _actionNote.Id);
+            if (realNote != null) { realNote.IsFavorite = _actionNote.IsFavorite; await NoteRepository.SaveNoteAsync(realNote); }
+        }
+        _showNoteActionSheet = false;
+    }
+
+    private async Task ToggleActionNotePin()
+    {
+        if (_actionNote != null)
+        {
+            _actionNote.IsPinned = !_actionNote.IsPinned;
+            IndexService.UpsertItem(_actionNote);
+            var allNotes = await NoteRepository.GetAllNotesAsync();
+            var realNote = allNotes.FirstOrDefault(n => n.Id == _actionNote.Id);
+            if (realNote != null) { realNote.IsPinned = _actionNote.IsPinned; await NoteRepository.SaveNoteAsync(realNote); }
+        }
+        _showNoteActionSheet = false;
+    }
+
+    private async Task SoftDeleteActionNote()
+    {
+        if (_actionNote != null)
+        {
+            _actionNote.IsDeleted = true;
+            IndexService.UpsertItem(_actionNote);
+            var allNotes = await NoteRepository.GetAllNotesAsync();
+            var realNote = allNotes.FirstOrDefault(n => n.Id == _actionNote.Id);
+            if (realNote != null) { realNote.IsDeleted = true; await NoteRepository.SaveNoteAsync(realNote); }
+        }
+        _showNoteActionSheet = false;
+    }
+
+    private async Task RestoreActionNote()
+    {
+        if (_actionNote != null)
+        {
+            _actionNote.IsDeleted = false;
+            IndexService.UpsertItem(_actionNote);
+            var allNotes = await NoteRepository.GetAllNotesAsync();
+            var realNote = allNotes.FirstOrDefault(n => n.Id == _actionNote.Id);
+            if (realNote != null) { realNote.IsDeleted = false; await NoteRepository.SaveNoteAsync(realNote); }
+        }
+        _showNoteActionSheet = false;
+    }
+
+    private async Task HardDeleteActionNote()
+    {
+        if (_actionNote != null)
+        {
+            string remotePath = $"MonoNotes/{NoteRepository.CurrentWorkspace}/{_actionNote.Folder}/{_actionNote.Id}.md";
+            await WebDavService.DeleteItemAsync(remotePath); // 尝试云端删除
+            await NoteRepository.DeleteNoteAsync(_actionNote.Id);
+            IndexItems.Remove(_actionNote);
+            IndexService.RemoveItem(_actionNote.Id);
+        }
+        _showNoteActionSheet = false;
+    }
+
+    // ==========================================
+    // 💡 辅助工具方法
+    // ==========================================
+    private List<KeyValuePair<string, int>> GetTagFrequencies()
+    {
+        return IndexItems.Where(n => !n.IsDeleted && n.Tags != null).SelectMany(n => n.Tags!)
+            .GroupBy(t => t).Select(g => new KeyValuePair<string, int>(g.Key, g.Count()))
+            .OrderByDescending(kv => kv.Value).ToList();
+    }
+
+    private void BuildFolderTree(List<string> rawPaths)
+    {
+        _folderTree.Clear();
+        foreach (var path in rawPaths)
+        {
+            var parts = path.Split('/');
+            var currentLevel = _folderTree;
+            string currentFullPath = "";
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var part = parts[i];
+                currentFullPath = string.IsNullOrEmpty(currentFullPath) ? part : $"{currentFullPath}/{part}";
+                var existingNode = currentLevel.FirstOrDefault(n => n.FullPath == currentFullPath);
+                if (existingNode == null)
+                {
+                    existingNode = new FolderTree.FolderNode { Name = part, FullPath = currentFullPath };
+                    currentLevel.Add(existingNode);
+                }
+                currentLevel = existingNode.Children;
+            }
+        }
+    }
+
+    private List<string> ExtractOutgoingLinks(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return new List<string>();
+        var links = new HashSet<string>();
+        var regex = new System.Text.RegularExpressions.Regex(@"《《(.*?)》》");
+        foreach (System.Text.RegularExpressions.Match match in regex.Matches(content))
+        {
+            var title = match.Groups[1].Value.Trim();
+            if (!string.IsNullOrEmpty(title)) links.Add(title);
+        }
+        return links.ToList();
+    }
+
+    private async Task ExecuteSuperSearch(KeyboardEventArgs e)
+    {
+        var allNotes = await NoteRepository.GetAllNotesAsync();
+        _searchResults = await SearchService.SearchAsync(_superSearchQuery, allNotes);
+    }
+
+    private void JumpToSearchResult(string noteId)
+    {
+        _currentNavTab = "notes";
+        SelectNote(noteId);
+    }
+
+    private async Task TriggerBackgroundSync()
+    {
+        if (_isSyncingUI) return;
+        _isSyncingUI = true;
+        await SyncService.SyncAsync();
+        IndexItems = await IndexService.LoadIndexAsync();
+        _isSyncingUI = false;
+    }
+
+    private async Task OpenWorkspaceManager() { /* 待接驳通用弹窗或直接切换 */ }
+    private async Task SaveAsTemplateAsync(MonoNote note) { /* 另存为模板逻辑复用 */ }
+
+    private async Task ConfirmMoveNote()
+    {
+        if (string.IsNullOrEmpty(_targetFolder)) return;
+
+        // 判断是移动打开的单篇笔记，还是列表里右键选中的笔记
+        var targetNote = _actionNote != null ? IndexItems.FirstOrDefault(n => n.Id == _actionNote.Id) : IndexItems.FirstOrDefault(n => n.Id == SelectedNoteId);
+
+        if (targetNote != null)
+        {
+            targetNote.Folder = _targetFolder;
+            IndexService.UpsertItem(targetNote);
+
+            var allNotes = await NoteRepository.GetAllNotesAsync();
+            var realNote = allNotes.FirstOrDefault(n => n.Id == targetNote.Id);
+            if (realNote != null)
+            {
+                realNote.Folder = _targetFolder;
+                await NoteRepository.SaveNoteAsync(realNote);
+            }
+        }
+
+        _showFolderSelector = false;
+        _showEditorOptionsSheet = false;
+        _showNoteActionSheet = false;
+        _actionNote = null;
+        _targetFolder = string.Empty;
+        StateHasChanged();
+    }
+}
