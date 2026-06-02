@@ -1,3 +1,5 @@
 ﻿
 打包js
 npx esbuild editor-entry.js --bundle --minify --outfile=js/editor.bundle.js --loader:.woff=file --loader:.woff2=file --loader:.ttf=file --loader:.svg=file
+
+npx esbuild wwwroot/editor-entry.js --bundle --minify --outfile=wwwroot/js/editor.bundle.js --loader:.woff=file --loader:.woff2=file --loader:.ttf=file --loader:.svg=file
