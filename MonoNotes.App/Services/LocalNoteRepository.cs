@@ -19,9 +19,12 @@ namespace MonoNotes.App.Services
 
         public LocalNoteRepository()
         {
-            _rootDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MonoNotes");
+
+            // 提升到 MonoNotes 根目录
+            _rootDirectory = PathHelper.GetBaseDirectory();
             if (!Directory.Exists(_rootDirectory)) Directory.CreateDirectory(_rootDirectory);
 
+            // 读取上次打开的库配置
             var configPath = Path.Combine(_rootDirectory, "workspace.txt");
             if (File.Exists(configPath))
             {

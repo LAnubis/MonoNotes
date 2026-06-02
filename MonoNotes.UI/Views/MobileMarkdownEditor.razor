@@ -1,0 +1,85 @@
+﻿@using MonoNotes.Core.Models
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<div id="@_editorId" class="mobile-vditor-container"></div>
+
+<style>
+    .mobile-vditor-container {
+        flex: 1; /* 撑满父容器 */
+        width: 100%;
+        height: 100% !important;
+        border: none !important;
+    }
+
+        .mobile-vditor-container .vditor-content {
+            padding-bottom: 80px; /* 给手机软键盘留缓冲 */
+        }
+
+        .mobile-vditor-container .vditor-toolbar {
+            display: none !important;
+        }
+</style>
+
+@code {
+    [Parameter] public string? Content { get; set; }
+    [Parameter] public EventCallback<string> ContentChanged { get; set; }
+    [Parameter] public string? CurrentFolder { get; set; }
+    [Parameter] public List<NoteIndexItem>? GlobalIndex { get; set; }
+    [Parameter] public EventCallback<string> OnInternalLinkClick { get; set; }
+
+    private readonly string _editorId = "mobile-editor-" + Guid.NewGuid().ToString("N");
+    private bool _isRendered = false;
+    private DotNetObjectReference<MobileMarkdownEditor>? _dotNetRef;
+    private string? _lastContent;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _lastContent = Content;
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("initMobileVditor", _editorId, Content, _dotNetRef);
+            _isRendered = true;
+        }
+    }
+
+    // 🌟 核心修复 3：监听父组件传进来的数据变化，主动推给 JS
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_isRendered && Content != _lastContent)
+        {
+            _lastContent = Content;
+            await JSRuntime.InvokeVoidAsync("updateMobileVditorContent", _editorId, Content);
+        }
+    }
+
+    [JSInvokable]
+    public async Task UpdateContent(string newContent)
+    {
+        if (Content != newContent)
+        {
+            _lastContent = newContent; // 拦截事件循环，防止重复渲染
+            Content = newContent;
+            await ContentChanged.InvokeAsync(newContent);
+        }
+    }
+
+    // 🌟 必须用 try-catch 包裹！防止 JS 报错连累 Blazor 引擎崩溃！
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_isRendered)
+            {
+                await JSRuntime.InvokeVoidAsync("destroyVditor", _editorId);
+            }
+            _dotNetRef?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            // 即使 JS 找不到或者销毁出错，也只是把错误打印出来，绝不让 Blazor 崩溃
+            System.Diagnostics.Debug.WriteLine($"🔥 销毁移动端编辑器时拦截到异常: {ex.Message}");
+        }
+    }
+}

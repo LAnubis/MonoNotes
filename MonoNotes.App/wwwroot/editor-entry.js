@@ -125,3 +125,53 @@ window.MonoNotesEditor = {
         }
     }
 };
+
+window.initMobileVditor = function (editorId, initialContent, dotNetHelper) {
+    if (!window.vditorInstances) {
+        window.vditorInstances = {};
+    }
+
+    window.vditorInstances[editorId] = new Vditor(editorId, {
+        mode: "ir",
+        toolbarConfig: { hide: true },
+        toolbar: [],
+        outline: { enable: false },
+        cache: { enable: false }, // 禁用原生缓存
+
+        // 🌟 核心修复 1：必须等待 Vditor 的 DOM 外壳完全建好后，再写入内容！
+        after: () => {
+            window.vditorInstances[editorId].setValue(initialContent || "");
+        },
+
+        input(value) {
+            dotNetHelper.invokeMethodAsync('UpdateContent', value);
+        }
+    });
+};
+
+// 🌟 核心修复 2：增加专门供 Blazor 调用的内容更新接口
+window.updateMobileVditorContent = function (editorId, content) {
+    if (window.vditorInstances && window.vditorInstances[editorId]) {
+        window.vditorInstances[editorId].setValue(content || "");
+    }
+};
+
+// 🌟 放在 initMobileVditor 附近
+window.destroyVditor = function (editorId) {
+    try {
+        if (window.vditorInstances && window.vditorInstances[editorId]) {
+            // 1. 调用 Vditor 的原生销毁清理内存
+            window.vditorInstances[editorId].destroy();
+            // 2. 从全局字典中剔除
+            delete window.vditorInstances[editorId];
+
+            // 3. 强制清空残余的 DOM 节点，防止内存泄漏
+            var elem = document.getElementById(editorId);
+            if (elem) {
+                elem.innerHTML = '';
+            }
+        }
+    } catch (err) {
+        console.warn("Vditor 销毁时遇到小问题，已忽略: ", err);
+    }
+};

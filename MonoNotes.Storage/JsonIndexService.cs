@@ -1,6 +1,7 @@
-﻿using System.Text.Json;
+﻿using MonoNotes.Core;
 using MonoNotes.Core.Models;
 using MonoNotes.Core.Serialization;
+using System.Text.Json;
 
 namespace MonoNotes.Storage
 {
@@ -17,11 +18,12 @@ namespace MonoNotes.Storage
 
         public JsonIndexService()
         {
-            // 将 index.json 存放在 Workspaces 根目录
-            var baseDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MonoNotes", "Workspaces");
+            var baseDir = PathHelper.GetWorkspacesDirectory();
+
+
             if (!Directory.Exists(baseDir)) Directory.CreateDirectory(baseDir);
 
-            _indexPath = Path.Combine(baseDir, "index.json");
+            _indexPath = PathHelper.GetCacheDirectory();
         }
 
         // 🚀 毫秒级加载：软件启动时调用

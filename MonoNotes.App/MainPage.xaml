@@ -5,6 +5,9 @@
              x:Class="MonoNotes.App.MainPage">
 
     <BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">
+        <BlazorWebView.RootComponents>
+            <RootComponent Selector="#app" ComponentType="{x:Type local:MainRouter}" />
+        </BlazorWebView.RootComponents>
     </BlazorWebView>
 
 </ContentPage>

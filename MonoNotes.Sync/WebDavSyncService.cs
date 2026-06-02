@@ -1,4 +1,5 @@
-﻿using MonoNotes.Core.Interfaces;
+﻿using MonoNotes.Core;
+using MonoNotes.Core.Interfaces;
 using System.Text.RegularExpressions;
 
 namespace MonoNotes.Sync
@@ -18,7 +19,7 @@ namespace MonoNotes.Sync
         {
             _webDav = webDav;
             _settings = settings;
-            _baseStorageDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MonoNotes", "Workspaces");
+            _baseStorageDir = PathHelper.GetWorkspacesDirectory();
         }
 
         public async Task SyncAsync()
@@ -30,9 +31,13 @@ namespace MonoNotes.Sync
             try
             {
                 var settings = await _settings.GetSettingsAsync();
-                if (!settings.EnableWebDavSync) return;
 
                 if (!await _webDav.TestConnectionAsync()) return;
+
+                if (!settings.EnableWebDavSync)
+                {
+                    return;
+                }
 
                 await _webDav.EnsureDirectoryExistsAsync(RemoteBaseFolder);
 
@@ -60,10 +65,26 @@ namespace MonoNotes.Sync
             var localFiles = Directory.GetFiles(localDir).Select(f => new FileInfo(f)).ToList();
 
             // 过滤掉本身就是冲突副本的文件
-            localFiles = localFiles.Where(f => !f.Name.Contains("冲突副本")).ToList();
+            //localFiles = localFiles.Where(f => !f.Name.Contains("冲突副本")).ToList();
+
+            //var allFileNames = localFiles.Select(f => f.Name)
+            //    .Union(remoteItems.Where(r => !r.IsFolder).Select(r => r.Name))
+            //    .Distinct();
+
+            localFiles = localFiles.Where(f =>
+                !f.Name.Contains("冲突副本") &&
+                f.Name != "index.json" &&           // 🚫 绝对不同步本地索引字典
+                !f.Name.StartsWith(".") &&          // 🚫 屏蔽 Mac 的 .DS_Store 等隐藏文件
+                f.Extension.ToLower() == ".md"      // ✅ 强制只同步 Markdown 笔记文件
+            ).ToList();
 
             var allFileNames = localFiles.Select(f => f.Name)
-                .Union(remoteItems.Where(r => !r.IsFolder).Select(r => r.Name))
+                .Union(remoteItems.Where(r =>
+                    !r.IsFolder &&
+                    r.Name != "index.json" &&
+                    !r.Name.StartsWith(".") &&
+                    r.Name.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
+                ).Select(r => r.Name))
                 .Distinct();
 
             // === 🔄 文件同步与冲突检测 ===

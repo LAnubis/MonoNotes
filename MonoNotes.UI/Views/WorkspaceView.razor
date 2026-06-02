@@ -1,8 +1,9 @@
 ﻿@using System.IO
 @using System.Timers
+@using Markdig
+@using MonoNotes.Core
 @using MonoNotes.Core.Interfaces
 @using MonoNotes.Core.Models
-@using Markdig
 @inject MonoNotes.Core.Interfaces.INativeDialogService NativeDialog
 @inject INoteRepository NoteRepository
 @implements IDisposable
@@ -36,7 +37,7 @@
                     }
                 </div>
 
-                <button class="icon-btn" title="立即同步" @onclick="TriggerBackgroundSync" disabled="@_isSyncingUI"
+                <button class="icon-btn" title="立即同步" @onclick="() => TriggerBackgroundSync(isManual: true)" disabled="@_isSyncingUI"
                         style="width: 28px; height: 28px; border-radius: 50%; padding: 0; display: flex; justify-content: center; align-items: center; opacity: 0.85; background: rgba(55,53,47,0.06); box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: background-color 0.2s;">
                     <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"
                          style="transform-origin: center; @(_isSyncingUI ? "animation: spin 1s linear infinite;" : "")">
@@ -1416,14 +1417,12 @@
         _bgSyncTimer.Dispose();
     }
 
-    private async Task TriggerBackgroundSync()
+    private async Task TriggerBackgroundSync(bool isManual = false)
     {
         if (_isSyncingUI) return;
         var settings = await SettingsService.GetSettingsAsync();
-        if (!settings.EnableWebDavSync)
+        if (!settings.EnableWebDavSync && !isManual)
         {
-            _warningMessage = "请先在左下角设置中开启【后台自动同步】开关！";
-            _showWarningDialog = true;
             return;
         }
 
@@ -1485,7 +1484,8 @@
     {
         try
         {
-            var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MonoNotes", "Workspaces", NoteRepository.CurrentWorkspace);
+            string basePath = PathHelper.GetWorkspacesDirectory();
+            var dataDir = Path.Combine(basePath, NoteRepository.CurrentWorkspace);
             if (Directory.Exists(dataDir))
             {
                 _conflictFiles = Directory.GetFiles(dataDir, "*冲突副本*.md", SearchOption.AllDirectories).ToList();
@@ -2661,7 +2661,8 @@
         bool hasChanges = false;
 
         // 确保当前知识库的 .assets 文件夹存在
-        var workspacePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MonoNotes", "Workspaces", NoteRepository.CurrentWorkspace);
+        string basePath=PathHelper.GetWorkspacesDirectory();
+        var workspacePath = Path.Combine(basePath,  NoteRepository.CurrentWorkspace);
         var assetsPath = Path.Combine(workspacePath, ".assets");
         if (!Directory.Exists(assetsPath)) Directory.CreateDirectory(assetsPath);
 
@@ -3189,6 +3190,7 @@
     private async Task SaveAsTemplateAsync(MonoNotes.Core.Models.MonoNote note)
     {
         _showContextMenu = false;
+        _showNoteContextMenu = false;
         // 先关闭右键菜单
         StateHasChanged();
         try
@@ -3252,46 +3254,50 @@
 
     private async Task ConfirmCreateNote()
     {
-        var newNote = new MonoNotes.Core.Models.MonoNote
+        // 🌟 1. 动态确定目标文件夹
+        // 逻辑：如果当前选中的是物理文件夹（且不是特殊视图），则使用该路径；否则默认为 "notes"
+        string targetFolder = (!string.IsNullOrWhiteSpace(_selectedFolderPath) &&
+                              !_isFavoriteFilterActive && !_isArchiveFilterActive && !_isTrashFilterActive)
+                              ? _selectedFolderPath
+                              : "notes";
+
+        var newNote = new MonoNote
         {
             Id = Guid.NewGuid().ToString("N"),
-            Title = _selectedTemplate == null ?
-            "无标题笔记" : _selectedTemplate.Title.Replace(" 模板", ""),
-            Content = _selectedTemplate?.Content ??
-            "",
-            Folder = "notes",
+            Title = _selectedTemplate == null ? "无标题笔记" : _selectedTemplate.Title.Replace(" 模板", ""),
+            Content = _selectedTemplate?.Content ?? "",
+            Folder = targetFolder, // 🌟 关键：使用动态路径
             CreatedAt = DateTimeOffset.Now,
             UpdatedAt = DateTimeOffset.Now
         };
-        // 1. 保存物理文件
+
+        // 2. 保存物理文件
+        // NoteRepository 内部应使用 PathHelper.GetWorkspacesDirectory()
         await NoteRepository.SaveNoteAsync(newNote);
-        // 2. 更新内存索引
-        var indexItem = new MonoNotes.Core.Models.NoteIndexItem
+
+        // 3. 更新内存索引
+        var indexItem = new NoteIndexItem
         {
             Id = newNote.Id,
             Title = newNote.Title,
-            Folder = newNote.Folder,
+            Folder = newNote.Folder, // 🌟 同步更新索引中的文件夹归属
             UpdatedAt = newNote.UpdatedAt,
             CreatedAt = newNote.CreatedAt
         };
         IndexItems.Insert(0, indexItem);
         IndexService.UpsertItem(indexItem);
 
-        // ----------------------------------------------------
-        // 🌟 修复这里的逻辑：按照你的 Tab 系统规范打开笔记
-        // ----------------------------------------------------
+        // 4. 打开笔记 Tab
         _openNotesCache.Add(newNote);
-        // 步骤 A：放入已打开的完整笔记缓存
         SelectedNoteId = newNote.Id;
-        // 步骤 B：更新当前选中的笔记 ID
         await OpenInTabAsync(newNote.Id);
-        // 步骤 C：在顶部的 Tab 标签页栏打开它
-        // ----------------------------------------------------
 
         CloseNewNoteModal();
-        // 重新构建左侧文件夹树并刷新
+
+        // 5. 刷新树结构
         var rawFolders = await NoteRepository.GetAllFoldersAsync();
         BuildFolderTree(rawFolders);
+
         await InvokeAsync(StateHasChanged);
     }
 

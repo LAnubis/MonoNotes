@@ -1,0 +1,17 @@
+﻿@using Microsoft.Maui.Devices
+@using MonoNotes.UI.Views
+
+@if (IsMobile)
+{
+    <MobileWorkspaceView />
+}
+else
+{
+    <WorkspaceView />
+}
+
+@code {
+    private bool IsMobile =>
+        DeviceInfo.Current.Platform == DevicePlatform.Android ||
+        DeviceInfo.Current.Platform == DevicePlatform.iOS;
+}

@@ -1,7 +1,5 @@
 ﻿using Microsoft.AspNetCore.Components.WebView;
 using Microsoft.AspNetCore.Components.WebView.Maui;
-using MonoNotes.UI.Views;
-
 
 #if WINDOWS
 using Microsoft.UI.Xaml.Controls;
@@ -19,32 +17,21 @@ namespace MonoNotes.App
         {
             InitializeComponent();
 
-            // ========================================================
-            // 🌟 核心：设备探测与动态视图注入 (代替传统的 Routes 路由)
-            // ========================================================
-            var rootComponent = new RootComponent
-            {
-                Selector = "#app" // 对应 wwwroot/index.html 里的 <div id="app"></div>
-            };
-
-#if IOS || ANDROID
-            // 📱 手机端：注入移动端专属的极简 UI
-            rootComponent.ComponentType = typeof(MobileWorkspaceView);
-#else
-            // 💻 桌面端：注入全尺寸多栏 UI
-            rootComponent.ComponentType = typeof(WorkspaceView);
-#endif
-            // 将决定好的视图动态装载进 WebView
-            blazorWebView.RootComponents.Add(rootComponent);
-            // ========================================================
-
+            // 🌟 已经清除了所有动态注入 RootComponent 的代码，回归最稳定的 XAML 静态绑定
+            // 请务必配合 MainRouter.razor 和 MainPage.xaml 的修改使用
 
             // Windows 用的初始化后事件
             blazorWebView.BlazorWebViewInitialized += BlazorWebView_Initialized;
             // Mac 用的初始化前事件（因为拦截器必须在内核启动前挂载）
             blazorWebView.BlazorWebViewInitializing += BlazorWebView_Initializing;
         }
-
+        // 🌟 拦截安卓手机的“侧滑返回”和“物理返回键”
+        protected override bool OnBackButtonPressed()
+        {
+            // 阻止系统默认的“退出 App”行为。
+            // 这样以后即使你侧滑返回，App 也不会瞬间被关掉了。
+            return true;
+        }
         private void BlazorWebView_Initializing(object? sender, BlazorWebViewInitializingEventArgs e)
         {
 #if MACCATALYST

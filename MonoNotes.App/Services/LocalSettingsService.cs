@@ -1,7 +1,8 @@
-﻿using System.Text.Json;
+﻿using Microsoft.Maui.Storage; // 引入 MAUI 的存储与加密库
+using MonoNotes.Core;
 using MonoNotes.Core.Interfaces;
 using MonoNotes.Core.Models;
-using Microsoft.Maui.Storage; // 引入 MAUI 的存储与加密库
+using System.Text.Json;
 
 namespace MonoNotes.App.Services
 {
@@ -11,11 +12,10 @@ namespace MonoNotes.App.Services
 
         public LocalSettingsService()
         {
-            // 将基础配置文件存在 MonoNotes 根目录
-            var rootDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MonoNotes");
+            var rootDirectory = PathHelper.GetBaseDirectory();
             if (!Directory.Exists(rootDirectory)) Directory.CreateDirectory(rootDirectory);
 
-            _settingsFilePath = Path.Combine(rootDirectory, "settings.json");
+            _settingsFilePath = PathHelper.GetSettingsFilePath();
         }
 
         public async Task<AppSettings> GetSettingsAsync()

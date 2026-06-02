@@ -13,8 +13,21 @@ namespace MonoNotes.Sync
         public WebDavService(ISettingsService settingsService)
         {
             _settingsService = settingsService;
-            // 禁用默认的超时限制，防止大文件传输中断
-            _httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+            // ==========================================
+            // 🌟 跨平台网络终极护城河：强制使用纯血 .NET 引擎
+            // ==========================================
+            var handler = new SocketsHttpHandler
+            {
+                // 极其重要：禁止安卓底层自动跟随重定向，防止 PROPFIND 被篡改为 GET！
+                AllowAutoRedirect = false
+            };
+
+            // 挂载新引擎，并保留你的 5 分钟超时设置
+            _httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(5) };
+
+            // 🌟 极其重要：坚果云必须加上伪装的 User-Agent，否则会被防火墙拦截！
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 MonoNotes/1.0");
         }
 
         // 🌟 核心拦截：每次请求前，实时组装 Basic Auth 认证头
@@ -22,6 +35,8 @@ namespace MonoNotes.Sync
         {
             var request = new HttpRequestMessage(method, url);
             var settings = await _settingsService.GetSettingsAsync();
+
+         
             var password = await _settingsService.GetSecurePasswordAsync("MonoNotes_WebDav_Password");
 
             if (string.IsNullOrWhiteSpace(settings.WebDavUsername) || string.IsNullOrWhiteSpace(password))
@@ -38,27 +53,62 @@ namespace MonoNotes.Sync
         {
             baseUrl = baseUrl.TrimEnd('/');
             path = path.TrimStart('/');
-            return string.IsNullOrEmpty(path) ? baseUrl : $"{baseUrl}/{path}";
+            var finalUrl = string.IsNullOrEmpty(path) ? baseUrl : $"{baseUrl}/{path}";
+
+            // ==========================================
+            // 🌟 核心协议修复：智能补全 WebDAV 目录的斜杠
+            // ==========================================
+            // 判断当前请求的是文件还是文件夹 (通过有无扩展名来判断，比如 .md)
+            if (!string.IsNullOrEmpty(Path.GetExtension(finalUrl)))
+            {
+                // 如果是文件 (例如: /MonoNotes/xxx.md)，绝对不能加斜杠
+                return finalUrl;
+            }
+            else
+            {
+                // 如果是文件夹 (例如: https://dav.jianguoyun.com/dav)，强制补全斜杠！
+                return finalUrl.EndsWith("/") ? finalUrl : finalUrl + "/";
+            }
         }
 
         // 1. 测试连接 (向根目录发送 PROPFIND)
         public async Task<bool> TestConnectionAsync()
         {
-            try
+            var settings = await _settingsService.GetSettingsAsync();
+            var password = await _settingsService.GetSecurePasswordAsync("MonoNotes_WebDav_Password");
+
+            // 🌟 1. 拦截空配置：明确抛出异常，不再让底层瞎猜
+            if (string.IsNullOrWhiteSpace(settings.WebDavUrl) ||
+                string.IsNullOrWhiteSpace(settings.WebDavUsername) ||
+                string.IsNullOrWhiteSpace(password))
             {
-                var settings = await _settingsService.GetSettingsAsync();
-                var url = NormalizeUrl(settings.WebDavUrl);
-
-                // PROPFIND 是 WebDAV 专属方法
-                var request = await CreateRequestAsync(new HttpMethod("PROPFIND"), url);
-                request.Headers.Add("Depth", "0"); // 只查当前目录，不深入
-
-                var response = await _httpClient.SendAsync(request);
-                return response.IsSuccessStatusCode;
+                throw new Exception("账号、密码或服务器地址不能为空！");
             }
-            catch
+
+            var url = NormalizeUrl(settings.WebDavUrl);
+            var request = await CreateRequestAsync(new HttpMethod("PROPFIND"), url);
+            request.Headers.Add("Depth", "0");
+
+            // 🌟 2. 去掉全局的 try-catch，让网络异常自然抛给 UI
+            var response = await _httpClient.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
             {
-                return false;
+                return true;
+            }
+
+            // 🌟 3. 把冰冷的 HTTP 状态码翻译成人类能看懂的红字提示
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                throw new Exception("账号或密码错误 (401)");
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                throw new Exception("找不到服务器路径，请检查 URL 是否填写正确 (404)");
+            }
+            else
+            {
+                throw new Exception($"服务器拒绝了连接，状态码: {response.StatusCode}");
             }
         }
 

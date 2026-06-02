@@ -25,21 +25,20 @@
         <a href="" class="reload">重新加载</a>
         <a class="dismiss">🗙</a>
     </div>-->
-
-    <script src="_framework/blazor.webview.js"></script>
-
+    <!--<script src="_framework/blazor.webview.js"></script>-->
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
     <script src="js/editor.bundle.js?v=99"></script>
     <script>
         // @ts-nocheck
-        if (window['Blazor']) {
-            window['Blazor'].start().catch(function (e) {
-                if (e && e.message && e.message.includes('Blazor has already started')) {
-                    console.log("检测到热重载重复启动，已按幂等原则忽略。");
-                } else {
-                    console.error("Blazor 启动失败:", e);
-                }
-            });
-}
+//         if (window['Blazor']) {
+//             window['Blazor'].start().catch(function (e) {
+//                 if (e && e.message && e.message.includes('Blazor has already started')) {
+//                     console.log("检测到热重载重复启动，已按幂等原则忽略。");
+//                 } else {
+//                     console.error("Blazor 启动失败:", e);
+//                 }
+//             });
+// }
 
 window.visualEngine = {
     // 切换深浅模式
