@@ -4,7 +4,9 @@
 		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
 
 		<GenerateMvcApplicationPartsAssemblyAttributes>false</GenerateMvcApplicationPartsAssemblyAttributes>
-
+		<SatelliteResourceLanguages>en-US;zh-Hans</SatelliteResourceLanguages>
+		<SupportedCultures>en-US;zh-Hans</SupportedCultures>
+		<SupportedUICultures>en-US;zh-Hans</SupportedUICultures>
 		<OutputType>Exe</OutputType>
 		<RootNamespace>MonoNotes.App</RootNamespace>
 		<UseMaui>true</UseMaui>
@@ -19,17 +21,39 @@
 
 		<ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
+		<Version>1.0.1</Version>
 
-		<WindowsPackageType>None</WindowsPackageType>
+		<WindowsPackageType>MSIX</WindowsPackageType>
+		<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+		<Platforms>AnyCPU;x64;ARM64</Platforms>
+		<GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+		<AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
+		<PackageCertificateThumbprint>1F2E28546710DD05F0731374AB587A2BA7833091</PackageCertificateThumbprint>
+		<AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
+		<AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
+		<AppxSymbolPackageEnabled>True</AppxSymbolPackageEnabled>
+		<GenerateTestArtifacts>False</GenerateTestArtifacts>
+		<AppInstallerUri>C:\Program Files\MonoNotes</AppInstallerUri>
+		<HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
+		<GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|AnyCPU'">
 	  <AndroidPackageFormat>apk</AndroidPackageFormat>
+	<RuntimeIdentifiers>android-arm;android-arm64</RuntimeIdentifiers>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|ARM64'">
+	  <AndroidPackageFormat>apk</AndroidPackageFormat>
+	  <RuntimeIdentifiers>android-arm;android-arm64</RuntimeIdentifiers>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0-android|x64'">
+	  <AndroidPackageFormat>apk</AndroidPackageFormat>
+	  <RuntimeIdentifiers>android-arm;android-arm64</RuntimeIdentifiers>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -56,4 +80,13 @@
 		<ProjectReference Include="..\MonoNotes.Sync\MonoNotes.Sync.csproj" />
 		<ProjectReference Include="..\MonoNotes.UI\MonoNotes.UI.csproj" />
 	</ItemGroup>
+
+	<Target Name="RemoveUnwantedLanguageFolders" AfterTargets="Publish">
+	<ItemGroup>
+		<UnwantedLanguageDirs Include="$(PublishDir)\**\de;$(PublishDir)\**\es;$(PublishDir)\**\fr;$(PublishDir)\**\it;$(PublishDir)\**\ja;$(PublishDir)\**\ko;$(PublishDir)\**\ru;$(PublishDir)\**\qps-ploc" />
+		<UnwantedLanguageDirs Include="$(PublishDir)\**\cs;$(PublishDir)\**\pl;$(PublishDir)\**\pt-BR;$(PublishDir)\**\tr" />
+	</ItemGroup>
+	<RemoveDir Directories="@(UnwantedLanguageDirs)" />
+	<Message Text="====== 已自动清理多余的小语种文件夹 ======" Importance="high" />
+</Target>
 </Project>

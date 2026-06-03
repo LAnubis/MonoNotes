@@ -25,6 +25,7 @@ namespace MonoNotes.App
             // Mac 用的初始化前事件（因为拦截器必须在内核启动前挂载）
             blazorWebView.BlazorWebViewInitializing += BlazorWebView_Initializing;
         }
+
         // 🌟 拦截安卓手机的“侧滑返回”和“物理返回键”
         protected override bool OnBackButtonPressed()
         {

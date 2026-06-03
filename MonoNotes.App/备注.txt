@@ -3,3 +3,11 @@
 npx esbuild editor-entry.js --bundle --minify --outfile=js/editor.bundle.js --loader:.woff=file --loader:.woff2=file --loader:.ttf=file --loader:.svg=file
 
 npx esbuild wwwroot/editor-entry.js --bundle --minify --outfile=wwwroot/js/editor.bundle.js --loader:.woff=file --loader:.woff2=file --loader:.ttf=file --loader:.svg=file
+
+
+
+dotnet publish -f net10.0-windows10.0.19041.0 -c Release -p:RuntimeIdentifierOverride=win10-x64 -p:WindowsPackageType=None
+dotnet publish -f net10.0-windows10.0.19041.0 -c Release -p:RuntimeIdentifierOverride=win10-x64 -p:WindowsPackageType=None -p:PublishTrimmed=false --self-contained true
+dotnet publish -f net10.0-windows10.0.19041.0 -c Release -p:RuntimeIdentifierOverride=win10-x64 -p:PublishTrimmed=false
+
+dotnet publish -f net10.0-windows10.0.19041.0 -c Release -p:RuntimeIdentifierOverride=win10-x64 -p:WindowsPackageType=None -p:PublishTrimmed=false --self-contained true
