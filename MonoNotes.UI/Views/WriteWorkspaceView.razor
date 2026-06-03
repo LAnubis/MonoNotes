@@ -22,6 +22,17 @@
     {
         CurrentSubView = viewName;
     }
+
+    // 🌟 新增：记录当前正在阅读/编辑的章节 ID
+    private string ActiveChapterId { get; set; } = string.Empty;
+
+
+    // 🌟 新增：专门处理章节被点击的事件
+    private void HandleChapterSelected(string chapterId)
+    {
+        ActiveChapterId = chapterId;
+        CurrentSubView = "editor"; // 切回编辑器视图
+    }
 }
 
 <div class="write-workspace-layout">
@@ -35,7 +46,8 @@
             <WorkSidebar CurrentWorkId="@ActiveWorkId"
                          ActiveSubView="@CurrentSubView"
                          OnReturnClicked="ReturnToGlobal"
-                         OnSubViewSelected="HandleSubViewChanged" />
+                         OnSubViewSelected="HandleSubViewChanged"
+                         OnChapterSelected="HandleChapterSelected" />
         }
     </div>
 
@@ -48,7 +60,7 @@
         {
             @if (CurrentSubView == "editor")
             {
-                <WorkEditorDesk CurrentWorkId="@ActiveWorkId" />
+                <WorkEditorDesk CurrentWorkId="@ActiveWorkId" CurrentChapterId="@ActiveChapterId" />
             }
             else if (CurrentSubView == "foreshadowing")
             {

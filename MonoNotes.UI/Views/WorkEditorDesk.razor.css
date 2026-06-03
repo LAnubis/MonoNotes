@@ -1,11 +1,22 @@
-﻿.editor-desk-container {
+﻿/* =========================================
+   1. 整体布局容器
+========================================= */
+.editor-desk-container {
     display: flex;
     flex-direction: column;
     height: 100%;
     background-color: #ffffff; /* 纯白背景，极致纯净 */
 }
 
-/* 顶部状态栏 */
+.editor-body-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* =========================================
+   2. 顶部状态栏
+========================================= */
 .desk-topbar {
     display: flex;
     justify-content: space-between;
@@ -21,6 +32,7 @@
         border-bottom: 1px solid #f0f0f0;
     }
 
+/* 面包屑导航 */
 .breadcrumb .muted {
     color: #aaa;
 }
@@ -35,6 +47,7 @@
     font-weight: 500;
 }
 
+/* 右侧工具组 */
 .desk-tools {
     display: flex;
     align-items: center;
@@ -74,7 +87,9 @@
     color: #f57f17;
 }
 
-/* 🌟 核心编辑区 (模拟纸张) */
+/* =========================================
+   3. 居中编辑区 (模拟纸张)
+========================================= */
 .editor-paper-wrapper {
     flex: 1;
     overflow-y: auto;
@@ -82,6 +97,24 @@
     justify-content: center; /* 让中间的“纸张”居中 */
     padding: 40px 20px 100px 20px;
 }
+
+    /* 隐藏与优化滚动条 */
+    .editor-paper-wrapper::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .editor-paper-wrapper::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .editor-paper-wrapper::-webkit-scrollbar-thumb {
+        background: #e0e0e0;
+        border-radius: 4px;
+    }
+
+        .editor-paper-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #bdbdbd;
+        }
 
 .editor-paper {
     width: 100%;
@@ -126,20 +159,132 @@
         color: #ccc;
     }
 
-/* 修改滚动条样式，让它更隐蔽 */
-.editor-paper-wrapper::-webkit-scrollbar {
-    width: 8px;
+/* 即时渲染模式占位符 */
+.wysiwyg-container {
+    min-height: 60vh;
+    border: 2px dashed #e0e0e0;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #fbfbfb;
 }
 
-.editor-paper-wrapper::-webkit-scrollbar-track {
-    background: transparent;
+.wysiwyg-placeholder-message {
+    text-align: center;
+    color: #888;
+    line-height: 1.8;
 }
 
-.editor-paper-wrapper::-webkit-scrollbar-thumb {
-    background: #e0e0e0;
-    border-radius: 4px;
-}
-
-    .editor-paper-wrapper::-webkit-scrollbar-thumb:hover {
-        background: #bdbdbd;
+    .wysiwyg-placeholder-message h4 {
+        color: #1976d2;
+        margin-bottom: 10px;
     }
+
+
+
+/* =========================================
+   5. 右侧目录栏 (TOC)
+========================================= */
+.editor-toc-sidebar {
+    width: 240px;
+    background-color: #fafafa;
+    border-left: 1px solid #f0f0f0;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.toc-header {
+    font-size: 14px;
+    color: #333;
+    font-weight: bold;
+    margin-top: 0;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #e0e0e0;
+}
+
+.toc-empty {
+    font-size: 12px;
+    color: #aaa;
+    text-align: center;
+    margin-top: 40px;
+    line-height: 1.8;
+}
+
+.toc-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.toc-item {
+    font-size: 13px;
+    color: #555;
+    padding: 6px 0;
+    cursor: pointer;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+    .toc-item:hover {
+        color: #1976d2;
+    }
+
+.toc-dot {
+    display: inline-block;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background-color: #ccc;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+/* 🌟 主体横向布局 */
+.editor-body-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    gap: 30px; /* 🌟 增加右侧目录和左侧编辑器之间的空隙 */
+}
+
+/* 居中编辑区容器 */
+.editor-paper-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    justify-content: center;
+    padding: 40px 0 100px 40px; /* 🌟 增加 left: 40px，让它和左侧菜单拉开距离 */
+}
+
+/* 核心纸张 */
+.editor-paper {
+    width: 100%;
+    max-width: 960px; /* 🌟 宽度变大，从 760px 增加到 960px (或你喜欢的宽度) */
+    display: flex;
+    flex-direction: column;
+}
+
+/* 标题输入框 */
+.chapter-title-input {
+    width: 100%; /* 🌟 保证和编辑器一样长 */
+    font-size: 32px;
+    font-weight: bold;
+    color: #222;
+    border: none;
+    outline: none;
+    background: transparent;
+    margin-bottom: 20px;
+    padding: 0;
+    line-height: 1.4;
+}
+
+/* Vditor 挂载点自身高度保障 */
+.chapter-content-textarea {
+    flex: 1;
+    min-height: 65vh;
+}

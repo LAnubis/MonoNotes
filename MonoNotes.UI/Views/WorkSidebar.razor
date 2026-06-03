@@ -1,58 +1,79 @@
 ﻿@using MonoNotes.Core.Models
+@using MonoNotes.Storage
+@inject WriteSpaceRepository Repository
 
 @code {
-    [Parameter]
-    public string CurrentWorkId { get; set; } = string.Empty;
+    [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnReturnClicked { get; set; }
+    [Parameter] public string ActiveSubView { get; set; } = "editor";
+    [Parameter] public EventCallback<string> OnSubViewSelected { get; set; }
 
-    [Parameter]
-    public EventCallback OnReturnClicked { get; set; }
+    private string ActiveChapterId { get; set; } = string.Empty;
 
-    // 🌟 接收父组件传来的当前视图状态，用于高亮菜单
-    [Parameter]
-    public string ActiveSubView { get; set; } = "editor";
+    // 🌟 换成真实的索引对象
+    private WorkIndex? CurrentWorkIndex;
+    private List<Volume> NovelVolumes => CurrentWorkIndex?.Volumes ?? new();
 
-    // 🌟 向父组件发送切换视图的请求
-    [Parameter]
-    public EventCallback<string> OnSubViewSelected { get; set; }
-
-    // 记录当前被选中的章节 ID
-    private string ActiveChapterId { get; set; } = "c_001"; // 默认选中第一章
-
-    // 🌟 模拟该本小说的卷章数据
-    private List<Volume> NovelVolumes = new()
+    // 🌟 当 CurrentWorkId 发生变化时（比如你从大厅点进了一本书），触发加载
+    protected override async Task OnParametersSetAsync()
     {
-        new Volume
+        if (!string.IsNullOrEmpty(CurrentWorkId))
         {
-            Title = "第一卷：风起云涌",
-            Chapters = new()
-            {
-                new Chapter { Id = "c_001", Title = "第1章 雨夜惊变", WordCount = 3240 },
-                new Chapter { Id = "c_002", Title = "第2章 命运的齿轮", WordCount = 2850 }
-            }
-        },
-        new Volume
-        {
-            Title = "第二卷：破晓之光",
-            IsExpanded = false, // 默认让它折叠
-            Chapters = new()
-            {
-                new Chapter { Id = "c_003", Title = "第3章 远行", WordCount = 4100 }
-            }
+            await LoadIndexAsync();
         }
-    };
+    }
 
-    // 切换卷的折叠/展开
+    private async Task LoadIndexAsync()
+    {
+        CurrentWorkIndex = await Repository.GetWorkIndexAsync(CurrentWorkId);
+
+        // 如果是空书（刚新建的），默认给它建一卷和一章
+        if (CurrentWorkIndex != null && !CurrentWorkIndex.Volumes.Any())
+        {
+            await AddNewVolume("第一卷：风起云涌");
+            await AddNewChapter(CurrentWorkIndex.Volumes.First());
+        }
+    }
+
+    // 🌟 新建卷
+    private async Task AddNewVolume(string title = "")
+    {
+        if (CurrentWorkIndex == null) return;
+        var volTitle = string.IsNullOrEmpty(title) ? $"第 {CurrentWorkIndex.Volumes.Count + 1} 卷" : title;
+
+        CurrentWorkIndex.Volumes.Add(new Volume { Title = volTitle });
+        await Repository.SaveWorkIndexAsync(CurrentWorkIndex);
+    }
+
+    // 🌟 新建章
+    private async Task AddNewChapter(Volume volume)
+    {
+        if (CurrentWorkIndex == null) return;
+
+        var newChapter = new Chapter { Title = $"第 {volume.Chapters.Count + 1} 章：新章节" };
+        volume.Chapters.Add(newChapter);
+        volume.IsExpanded = true; // 新建后自动展开该卷
+
+        await Repository.SaveWorkIndexAsync(CurrentWorkIndex);
+
+        // 新建完自动选中它
+        await SelectChapter(newChapter.Id);
+    }
+
     private void ToggleVolume(Volume vol)
     {
         vol.IsExpanded = !vol.IsExpanded;
     }
 
-    // 选中某个章节
+    [Parameter]
+    public EventCallback<string> OnChapterSelected { get; set; }
+
+    // 修改现有的 SelectChapter 方法
     private async Task SelectChapter(string chapterId)
     {
         ActiveChapterId = chapterId;
-        // 🌟 极度重要：点击章节时，不仅要选中章节，还要确保右侧切回到“正文编辑器”视图
-        await OnSubViewSelected.InvokeAsync("editor");
+        // 🌟 告诉父级：我要切到这个章节的编辑器
+        await OnChapterSelected.InvokeAsync(chapterId);
     }
 }
 
@@ -81,7 +102,7 @@
 
         <div class="tree-header">
             <span>✍️ 正文目录</span>
-            <button class="icon-btn" title="新建卷/章">➕</button>
+            <button class="icon-btn" title="新建卷" @onclick="@(() => AddNewVolume(""))">➕</button>
         </div>
 
         <ul class="tree-list">
@@ -91,6 +112,10 @@
                     <div class="volume-title" @onclick="() => ToggleVolume(volume)">
                         <span class="toggle-icon">@(volume.IsExpanded ? "🔽" : "▶️")</span>
                         <span class="title-text">@volume.Title</span>
+                        <button class="icon-btn" style="margin-left:auto; font-size: 10px;"
+                                @onclick="() => AddNewChapter(volume)" @onclick:stopPropagation="true">
+                            ➕
+                        </button>
                     </div>
 
                     @if (volume.IsExpanded)

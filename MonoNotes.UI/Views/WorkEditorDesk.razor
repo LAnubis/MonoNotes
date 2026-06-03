@@ -1,53 +1,160 @@
-﻿@code {
-    [Parameter]
-    public string CurrentWorkId { get; set; } = string.Empty;
+﻿@using MonoNotes.Storage
+@using System.Text.RegularExpressions
+@inject WriteSpaceRepository Repository
+@inject IJSRuntime JS
+@implements IDisposable
 
-    // 🌟 模拟当前正在编辑的章节数据
-    private string ChapterTitle { get; set; } = "第1章 雨夜惊变";
-    private string Content { get; set; } = "夜，深得像浓墨。\n\n萧炎摸了摸手指上那枚古朴的黑色戒指，长长地吐出一口浊气。这是母亲留给他的唯一遗物，每当心烦意乱时，冰凉的触感总能让他稍微平静一些。\n\n“既然已经被家族放弃，那便只能靠自己了。”他喃喃自语，眼中闪过一丝决绝。";
+@code {
+    [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
+    [Parameter] public string CurrentChapterId { get; set; } = string.Empty;
 
-    private string LastSavedTime { get; set; } = DateTime.Now.ToString("HH:mm");
+    private string ChapterTitle { get; set; } = "加载中...";
+    private string Content { get; set; } = string.Empty;
+    private string SaveStatus { get; set; } = "已同步";
 
-    // 简单的字数统计逻辑 (实际开发中可以过滤标点符号)
     private int WordCount => string.IsNullOrWhiteSpace(Content) ? 0 : Content.Length;
 
-    // 模拟纯净版 Markdown 快捷插入工具
-    private void InsertForeshadowing()
+    private CancellationTokenSource? _debounceCts;
+    private DotNetObjectReference<WorkEditorDesk>? _objRef;
+
+    // 目录节点实体
+    public class TocItem
     {
-        // TODO: 未来在这里触发“设为伏笔”的交互逻辑
+        public int Level { get; set; }
+        public string Text { get; set; } = string.Empty;
+    }
+    private List<TocItem> DocumentToc { get; set; } = new();
+
+    protected override void OnInitialized()
+    {
+        _objRef = DotNetObjectReference.Create(this);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(CurrentWorkId) && !string.IsNullOrEmpty(CurrentChapterId))
+        {
+            SaveStatus = "正在读取...";
+            var index = await Repository.GetWorkIndexAsync(CurrentWorkId);
+            var chapter = index?.Volumes.SelectMany(v => v.Chapters).FirstOrDefault(c => c.Id == CurrentChapterId);
+            ChapterTitle = chapter?.Title ?? "未命名章节";
+            Content = await Repository.ReadChapterContentAsync(CurrentWorkId, CurrentChapterId);
+
+            GenerateToc();
+            SaveStatus = "已同步";
+
+            // 🌟 每次切换章节，重新灌入数据到 Vditor
+            await LoadVditorAsync();
+        }
+    }
+
+    private async Task LoadVditorAsync()
+    {
+        if (_objRef != null)
+        {
+            // 调用我们在 editor-entry.js 里写好的专属写作引擎
+            await JS.InvokeVoidAsync("writingVditor.init", "vditor-writing-area", Content, _objRef);
+        }
+    }
+
+    // 🌟 接收 Vditor (渲染模式) 传回来的实时内容
+    [JSInvokable]
+    public async Task OnVditorInput(string value)
+    {
+        Content = value;
+        await TriggerAutoSave();
+    }
+
+    private async Task TriggerAutoSave()
+    {
+        SaveStatus = "正在输入...";
+        _debounceCts?.Cancel();
+        _debounceCts = new CancellationTokenSource();
+
+        try
+        {
+            // 停顿 1.5 秒后自动落盘
+            await Task.Delay(1500, _debounceCts.Token);
+            SaveStatus = "保存中...";
+            await Repository.SaveChapterContentAsync(CurrentWorkId, CurrentChapterId, Content);
+
+            // 保存时重新提取一次目录
+            GenerateToc();
+
+            SaveStatus = $"已保存 {DateTime.Now:HH:mm:ss}";
+            StateHasChanged();
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    // 正则提取目录大纲
+    private void GenerateToc()
+    {
+        DocumentToc.Clear();
+        if (string.IsNullOrWhiteSpace(Content)) return;
+        var lines = Content.Split('\n');
+        foreach (var line in lines)
+        {
+            var match = Regex.Match(line, @"^(#{1,6})\s+(.*)");
+            if (match.Success)
+            {
+                DocumentToc.Add(new TocItem { Level = match.Groups[1].Value.Length, Text = match.Groups[2].Value.Trim() });
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        _objRef?.Dispose();
+        // 组件销毁时，清理 Vditor 实例释放内存
+        _ = JS.InvokeVoidAsync("writingVditor.destroy", "vditor-writing-area");
     }
 }
 
 <div class="editor-desk-container">
     <div class="desk-topbar">
         <div class="breadcrumb">
-            <span class="muted">第一卷：风起云涌</span>
+            <span class="muted">正文编辑</span>
             <span class="separator">/</span>
             <span class="current">@ChapterTitle</span>
         </div>
 
         <div class="desk-tools">
-            <span class="save-status">
-                <span class="icon">☁️</span> 已保存 @LastSavedTime
-            </span>
-            <span class="word-count-badge">
-                @WordCount 字
-            </span>
-            <button class="tool-btn foreshadow-btn" @onclick="InsertForeshadowing" title="标记伏笔">
-                💡 设为伏笔
-            </button>
+            <span class="save-status"><span class="icon">☁️</span> @SaveStatus</span>
+            <span class="word-count-badge">@WordCount 字</span>
+            <button class="tool-btn foreshadow-btn" title="标记伏笔">💡 设为伏笔</button>
         </div>
     </div>
 
-    <div class="editor-paper-wrapper">
-        <div class="editor-paper">
-            <input type="text" class="chapter-title-input" @bind="ChapterTitle" @bind:event="oninput" placeholder="无标题章节" />
+    <div class="editor-body-layout">
 
-            <textarea class="chapter-content-textarea"
-                      @bind="Content"
-                      @bind:event="oninput"
-                      placeholder="从这里开始你的故事..."
-                      spellcheck="false"></textarea>
+        <div class="editor-paper-wrapper">
+            <div class="editor-paper">
+                <input type="text" class="chapter-title-input" value="@ChapterTitle" readonly placeholder="无标题章节" />
+
+                <div id="vditor-writing-area" class="chapter-content-textarea" style="background: transparent;"></div>
+            </div>
         </div>
+
+        <div class="editor-toc-sidebar">
+            <h4 class="toc-header">本文大纲</h4>
+            @if (!DocumentToc.Any())
+            {
+                <div class="toc-empty">暂无章节标题<br>请在正文使用 # 输入标题</div>
+            }
+            else
+            {
+                <ul class="toc-list">
+                    @foreach (var item in DocumentToc)
+                    {
+                        var indent = (item.Level - 1) * 14;
+                        <li class="toc-item" style="padding-left: @(indent)px;">
+                            <span class="toc-dot"></span> @item.Text
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+
     </div>
 </div>

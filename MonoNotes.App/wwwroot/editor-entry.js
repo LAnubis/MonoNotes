@@ -44,13 +44,10 @@ window.MonoNotesEditor = {
                 'outline'
             ],
 
-            // 注意：这里已经彻底删除了 hint 引擎！
-
             after: () => {
                 window.MonoNotesEditor.instances[elementId] = editor;
 
                 document.getElementById(elementId).addEventListener('click', (e) => {
-                    // 保留兼容：按住 Ctrl 点击《《xxx》》跳转的功能
                     if (!e.ctrlKey && !e.metaKey) return;
                     const selection = window.getSelection();
                     if (!selection || selection.rangeCount === 0) return;
@@ -117,7 +114,6 @@ window.MonoNotesEditor = {
         }
     },
 
-    // 🌟 新增：专门暴露给 C# 调用的插入文本 API
     insertTextAtCursor: function (elementId, text) {
         const editor = window.MonoNotesEditor.instances[elementId];
         if (editor) {
@@ -136,9 +132,8 @@ window.initMobileVditor = function (editorId, initialContent, dotNetHelper) {
         toolbarConfig: { hide: true },
         toolbar: [],
         outline: { enable: false },
-        cache: { enable: false }, // 禁用原生缓存
+        cache: { enable: false },
 
-        // 🌟 核心修复 1：必须等待 Vditor 的 DOM 外壳完全建好后，再写入内容！
         after: () => {
             window.vditorInstances[editorId].setValue(initialContent || "");
         },
@@ -149,23 +144,18 @@ window.initMobileVditor = function (editorId, initialContent, dotNetHelper) {
     });
 };
 
-// 🌟 核心修复 2：增加专门供 Blazor 调用的内容更新接口
 window.updateMobileVditorContent = function (editorId, content) {
     if (window.vditorInstances && window.vditorInstances[editorId]) {
         window.vditorInstances[editorId].setValue(content || "");
     }
 };
 
-// 🌟 放在 initMobileVditor 附近
 window.destroyVditor = function (editorId) {
     try {
         if (window.vditorInstances && window.vditorInstances[editorId]) {
-            // 1. 调用 Vditor 的原生销毁清理内存
             window.vditorInstances[editorId].destroy();
-            // 2. 从全局字典中剔除
             delete window.vditorInstances[editorId];
 
-            // 3. 强制清空残余的 DOM 节点，防止内存泄漏
             var elem = document.getElementById(editorId);
             if (elem) {
                 elem.innerHTML = '';
@@ -173,5 +163,50 @@ window.destroyVditor = function (editorId) {
         }
     } catch (err) {
         console.warn("Vditor 销毁时遇到小问题，已忽略: ", err);
+    }
+};
+
+// =========================================================================
+// 🌟 写作模式专属：纯净无打扰即时渲染编辑器引擎 (Writing Vditor)
+// =========================================================================
+window.writingVditor = {
+    instances: {},
+
+    init: function (elementId, initialContent, dotNetHelper) {
+        if (this.instances[elementId]) {
+            this.instances[elementId].destroy();
+            delete this.instances[elementId];
+        }
+
+        this.instances[elementId] = new Vditor(elementId, {
+            value: initialContent || "",
+            mode: 'ir',
+            // 🌟 核心：恢复 Vditor 原生工具栏，配置长篇写作最常用的按钮
+            toolbar: [
+                'headings', 'bold', 'italic', 'strike', '|',
+                'quote', 'list', 'ordered-list', 'check', '|',
+                'line', 'undo', 'redo', 'fullscreen'
+            ],
+            cache: { enable: false },
+            outline: { enable: false },
+
+            input: (value) => {
+                dotNetHelper.invokeMethodAsync('OnVditorInput', value);
+            }
+        });
+    },
+
+    insert: function (elementId, text) {
+        const editor = this.instances[elementId];
+        if (editor) editor.insertValue(text);
+    },
+
+    destroy: function (elementId) {
+        if (this.instances[elementId]) {
+            try { this.instances[elementId].destroy(); } catch (e) { }
+            delete this.instances[elementId];
+        }
+        const el = document.getElementById(elementId);
+        if (el) el.innerHTML = '';
     }
 };

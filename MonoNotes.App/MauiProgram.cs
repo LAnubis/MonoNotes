@@ -54,6 +54,8 @@ namespace MonoNotes.App
             builder.Services.AddSingleton<JsonIndexService>();
             // 🌟 注册原生弹窗服务
             builder.Services.AddSingleton<INativeDialogService, MauiNativeDialogService>();
+
+            builder.Services.AddSingleton<WriteSpaceRepository>();
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();

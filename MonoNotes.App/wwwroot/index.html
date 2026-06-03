@@ -62,6 +62,36 @@ window.visualEngine = {
         document.documentElement.style.setProperty(name, value);
     }
 };
+
+window.mdHelper = {
+    insertSyntax: function (elementId, prefix, suffix) {
+        var el = document.getElementById(elementId);
+        if (!el) return;
+
+        var start = el.selectionStart;
+        var end = el.selectionEnd;
+        var text = el.value;
+        var selectedText = text.substring(start, end);
+
+        // 如果是标题类（只传了 prefix，没传 suffix），且没有选中文字，就加上默认占位符
+        if (selectedText.length === 0 && suffix === "") {
+            selectedText = "标题文字";
+        } else if (selectedText.length === 0) {
+            selectedText = "在此输入文字";
+        }
+
+        var replacement = prefix + selectedText + suffix;
+        el.value = text.substring(0, start) + replacement + text.substring(end);
+
+        // 重新定位光标到选中的文字上，方便直接替换
+        el.focus();
+        el.selectionStart = start + prefix.length;
+        el.selectionEnd = start + prefix.length + selectedText.length;
+
+        // 🌟 极度重要：触发 input 事件，让 Blazor 知道内容变了，从而触发自动保存
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+};
     </script>
 </body>
 </html>
