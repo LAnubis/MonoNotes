@@ -1,0 +1,46 @@
+﻿@using MonoNotes.Core.Models
+
+@code {
+    // 暴露出点击事件，把选中的作品 ID 传给外部容器
+    [Parameter]
+    public EventCallback<string> OnWorkSelected { get; set; }
+
+    // 🌟 模拟我们的本地作品库（未来这些数据从 writespace-index.json 读取）
+    private List<Work> MyWorks = new()
+    {
+        new Work { Id = "work_001", Title = "长夜将明", WorkType = "novel" },
+        new Work { Id = "work_002", Title = "赛博修仙录", WorkType = "novel" },
+        new Work { Id = "work_003", Title = "短篇集", WorkType = "short" }
+    };
+
+    private async Task OpenWork(string workId)
+    {
+        // 触发事件，告诉最外层：我要进小黑屋写这本小说了！
+        await OnWorkSelected.InvokeAsync(workId);
+    }
+}
+
+<div class="sidebar-content" style="padding: 15px;">
+    <div style="font-size: 14px; font-weight: bold; color: #666; margin-bottom: 15px;">
+        🪐 创作空间
+    </div>
+
+    <ul style="list-style: none; padding: 0; line-height: 2.2; cursor: pointer;">
+        <li style="padding: 5px 10px; border-radius: 6px; transition: background 0.2s;">🏠 首页看板</li>
+
+        <li style="margin-top: 15px; font-weight: bold; color: #888; font-size: 12px;">我的作品</li>
+
+        @foreach (var work in MyWorks.Where(w => w.WorkType == "novel"))
+        {
+            <li @onclick="() => OpenWork(work.Id)"
+                style="padding: 5px 10px; border-radius: 6px; transition: background 0.2s; padding-left: 20px;">
+                📖 @work.Title
+            </li>
+        }
+
+        <li style="margin-top: 15px; font-weight: bold; color: #888; font-size: 12px;">资源库</li>
+        <li style="padding: 5px 10px;">📦 全局素材库</li>
+        <li style="padding: 5px 10px;">📋 模板库</li>
+        <li style="padding: 5px 10px;">⚙️ 设置</li>
+    </ul>
+</div>

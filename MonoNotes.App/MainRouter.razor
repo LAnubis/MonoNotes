@@ -1,17 +1,65 @@
 ﻿@using Microsoft.Maui.Devices
 @using MonoNotes.UI.Views
+@using Microsoft.AspNetCore.Components.Web
 
-@if (IsMobile)
-{
-    <MobileWorkspaceView />
-}
-else
-{
-    <WorkspaceView />
-}
+<div class="global-mode-switcher" style="position: absolute; bottom: 20px; right: 20px; z-index: 9999;">
+    <button @onclick="ToggleAppMode" style="padding: 10px 20px; border-radius: 8px; background: #3b82f6; color: white; border: none; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-weight: bold;">
+        🔄 切换至 @(IsWritingMode ? "笔记模式" : "写作模式")
+    </button>
+</div>
+
+<ErrorBoundary @ref="errorBoundary">
+    <ChildContent>
+        @if (IsWritingMode)
+        {
+            <WriteWorkspaceView />
+        }
+        else
+        {
+            @if (IsMobile)
+            {
+                <MobileWorkspaceView />
+            }
+            else
+            {
+                <WorkspaceView />
+            }
+        }
+    </ChildContent>
+    <ErrorContent Context="ex">
+        <div style="background: #fee2e2; color: #991b1b; padding: 20px; margin: 20px; border: 2px solid #ef4444; border-radius: 8px; position: absolute; top: 50px; left: 50px; z-index: 10000; width: 80%;">
+            <h3>🚨 致命错误：组件渲染崩溃！</h3>
+            <p><strong>错误原因:</strong> @ex.Message</p>
+            <hr style="border-color: #f87171;" />
+            <pre style="overflow: auto; max-height: 400px; font-size: 12px;">@ex.StackTrace</pre>
+            <button @onclick="ResetError" style="margin-top: 15px; padding: 8px 15px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                返回笔记模式
+            </button>
+        </div>
+    </ErrorContent>
+</ErrorBoundary>
 
 @code {
+    private ErrorBoundary? errorBoundary;
+    private bool IsWritingMode { get; set; } = false;
+
     private bool IsMobile =>
         DeviceInfo.Current.Platform == DevicePlatform.Android ||
         DeviceInfo.Current.Platform == DevicePlatform.iOS;
+
+    private void ToggleAppMode()
+    {
+        IsWritingMode = !IsWritingMode;
+        // 如果是从崩溃状态切回来，尝试恢复错误边界
+        if (!IsWritingMode)
+        {
+            errorBoundary?.Recover();
+        }
+    }
+
+    private void ResetError()
+    {
+        IsWritingMode = false;
+        errorBoundary?.Recover();
+    }
 }

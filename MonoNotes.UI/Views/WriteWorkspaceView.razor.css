@@ -1,0 +1,27 @@
+﻿.write-workspace-layout {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    background-color: #f8f9fa; /* 护眼背景色 */
+    overflow: hidden;
+}
+
+.sidebar-region {
+    width: 260px;
+    min-width: 260px;
+    height: 100%;
+    background-color: #ffffff;
+    border-right: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.2s ease-in-out; /* 切换时的微小过渡动画 */
+}
+
+.main-content-region {
+    flex: 1; /* 占据剩余全部空间 */
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background-color: #ffffff;
+}

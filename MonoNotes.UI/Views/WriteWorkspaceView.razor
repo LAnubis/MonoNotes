@@ -1,0 +1,43 @@
+﻿@code {
+    // 当前激活的作品 ID。如果为 null，说明在全局“创作空间”；如果有值，说明进入了“单本工作台”。
+    private string? ActiveWorkId { get; set; } = null;
+
+    // 从全局进入单本模式
+    private void EnterWork(string workId)
+    {
+        ActiveWorkId = workId;
+        StateHasChanged();
+    }
+
+    // 从单本模式退回全局
+    private void ReturnToGlobal()
+    {
+        // TODO: 在这里触发“状态熔断”，强制保存当前工作台的内容
+        ActiveWorkId = null;
+        StateHasChanged();
+    }
+}
+
+<div class="write-workspace-layout">
+    <div class="sidebar-region">
+        @if (string.IsNullOrEmpty(ActiveWorkId))
+        {
+            <GlobalSidebar OnWorkSelected="EnterWork" />
+        }
+        else
+        {
+            <WorkSidebar CurrentWorkId="@ActiveWorkId" OnReturnClicked="ReturnToGlobal" />
+        }
+    </div>
+
+    <div class="main-content-region">
+        @if (string.IsNullOrEmpty(ActiveWorkId))
+        {
+            <GlobalDashboard />
+        }
+        else
+        {
+            <WorkEditorDesk CurrentWorkId="@ActiveWorkId" />
+        }
+    </div>
+</div>

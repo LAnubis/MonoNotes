@@ -1,0 +1,53 @@
+﻿@code {
+    [Parameter]
+    public string CurrentWorkId { get; set; } = string.Empty;
+
+    // 🌟 模拟当前正在编辑的章节数据
+    private string ChapterTitle { get; set; } = "第1章 雨夜惊变";
+    private string Content { get; set; } = "夜，深得像浓墨。\n\n萧炎摸了摸手指上那枚古朴的黑色戒指，长长地吐出一口浊气。这是母亲留给他的唯一遗物，每当心烦意乱时，冰凉的触感总能让他稍微平静一些。\n\n“既然已经被家族放弃，那便只能靠自己了。”他喃喃自语，眼中闪过一丝决绝。";
+
+    private string LastSavedTime { get; set; } = DateTime.Now.ToString("HH:mm");
+
+    // 简单的字数统计逻辑 (实际开发中可以过滤标点符号)
+    private int WordCount => string.IsNullOrWhiteSpace(Content) ? 0 : Content.Length;
+
+    // 模拟纯净版 Markdown 快捷插入工具
+    private void InsertForeshadowing()
+    {
+        // TODO: 未来在这里触发“设为伏笔”的交互逻辑
+    }
+}
+
+<div class="editor-desk-container">
+    <div class="desk-topbar">
+        <div class="breadcrumb">
+            <span class="muted">第一卷：风起云涌</span>
+            <span class="separator">/</span>
+            <span class="current">@ChapterTitle</span>
+        </div>
+
+        <div class="desk-tools">
+            <span class="save-status">
+                <span class="icon">☁️</span> 已保存 @LastSavedTime
+            </span>
+            <span class="word-count-badge">
+                @WordCount 字
+            </span>
+            <button class="tool-btn foreshadow-btn" @onclick="InsertForeshadowing" title="标记伏笔">
+                💡 设为伏笔
+            </button>
+        </div>
+    </div>
+
+    <div class="editor-paper-wrapper">
+        <div class="editor-paper">
+            <input type="text" class="chapter-title-input" @bind="ChapterTitle" @bind:event="oninput" placeholder="无标题章节" />
+
+            <textarea class="chapter-content-textarea"
+                      @bind="Content"
+                      @bind:event="oninput"
+                      placeholder="从这里开始你的故事..."
+                      spellcheck="false"></textarea>
+        </div>
+    </div>
+</div>

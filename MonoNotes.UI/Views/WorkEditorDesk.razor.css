@@ -1,0 +1,145 @@
+﻿.editor-desk-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: #ffffff; /* 纯白背景，极致纯净 */
+}
+
+/* 顶部状态栏 */
+.desk-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 30px;
+    border-bottom: 1px solid transparent; /* 预留边框位置，鼠标移入时显示 */
+    color: #999;
+    font-size: 13px;
+    transition: all 0.3s ease;
+}
+
+    .desk-topbar:hover {
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+.breadcrumb .muted {
+    color: #aaa;
+}
+
+.breadcrumb .separator {
+    margin: 0 8px;
+    color: #ddd;
+}
+
+.breadcrumb .current {
+    color: #555;
+    font-weight: 500;
+}
+
+.desk-tools {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.save-status {
+    font-size: 12px;
+    color: #8cc63f; /* 让人安心的浅绿色 */
+}
+
+.word-count-badge {
+    background-color: #f5f5f5;
+    padding: 2px 8px;
+    border-radius: 12px;
+    color: #666;
+    font-variant-numeric: tabular-nums;
+}
+
+.tool-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #666;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+    .tool-btn:hover {
+        background-color: #f0f0f0;
+        color: #333;
+    }
+
+.foreshadow-btn:hover {
+    background-color: #fff8e1; /* 伏笔按钮特殊的亮黄色 Hover */
+    color: #f57f17;
+}
+
+/* 🌟 核心编辑区 (模拟纸张) */
+.editor-paper-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    justify-content: center; /* 让中间的“纸张”居中 */
+    padding: 40px 20px 100px 20px;
+}
+
+.editor-paper {
+    width: 100%;
+    max-width: 760px; /* 最佳阅读行长限制，防止眼球转动疲劳 */
+    display: flex;
+    flex-direction: column;
+}
+
+/* 标题输入框 */
+.chapter-title-input {
+    font-size: 32px;
+    font-weight: bold;
+    color: #222;
+    border: none;
+    outline: none;
+    background: transparent;
+    margin-bottom: 30px;
+    padding: 0;
+    line-height: 1.4;
+}
+
+    .chapter-title-input::placeholder {
+        color: #ddd;
+    }
+
+/* 正文输入框 */
+.chapter-content-textarea {
+    flex: 1;
+    font-size: 16px;
+    line-height: 1.8; /* 宽裕的行距，呼吸感强 */
+    color: #333;
+    border: none;
+    outline: none;
+    background: transparent;
+    resize: none; /* 禁止拖动右下角 */
+    padding: 0;
+    min-height: 60vh;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif; /* 适合中文阅读的无衬线字体 */
+}
+
+    .chapter-content-textarea::placeholder {
+        color: #ccc;
+    }
+
+/* 修改滚动条样式，让它更隐蔽 */
+.editor-paper-wrapper::-webkit-scrollbar {
+    width: 8px;
+}
+
+.editor-paper-wrapper::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.editor-paper-wrapper::-webkit-scrollbar-thumb {
+    background: #e0e0e0;
+    border-radius: 4px;
+}
+
+    .editor-paper-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #bdbdbd;
+    }

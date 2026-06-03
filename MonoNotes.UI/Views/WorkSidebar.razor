@@ -1,0 +1,103 @@
+﻿@using MonoNotes.Core.Models
+
+@code {
+    [Parameter]
+    public string CurrentWorkId { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback OnReturnClicked { get; set; }
+
+    // 🌟 记录当前被选中的章节 ID
+    private string ActiveChapterId { get; set; } = string.Empty;
+
+    // 🌟 模拟该本小说的卷章数据
+    private List<Volume> NovelVolumes = new()
+    {
+        new Volume
+        {
+            Title = "第一卷：风起云涌",
+            Chapters = new()
+            {
+                new Chapter { Id = "c_001", Title = "第1章 雨夜惊变", WordCount = 3240 },
+                new Chapter { Id = "c_002", Title = "第2章 命运的齿轮", WordCount = 2850 }
+            }
+        },
+        new Volume
+        {
+            Title = "第二卷：破晓之光",
+            IsExpanded = false, // 默认让它折叠
+            Chapters = new()
+            {
+                new Chapter { Id = "c_003", Title = "第3章 远行", WordCount = 4100 }
+            }
+        }
+    };
+
+    // 切换卷的折叠/展开
+    private void ToggleVolume(Volume vol)
+    {
+        vol.IsExpanded = !vol.IsExpanded;
+    }
+
+    // 选中某个章节
+    private void SelectChapter(string chapterId)
+    {
+        ActiveChapterId = chapterId;
+        // TODO: 未来在这里触发事件，通知右侧的 Editor 渲染对应的 markdown 文件
+    }
+}
+
+<div class="work-sidebar-container">
+    <div class="sidebar-header back-btn" @onclick="OnReturnClicked">
+        <span class="icon">⬅️</span> 返回创作空间
+    </div>
+
+    <div class="sidebar-scroll-area">
+        <ul class="nav-list base-nav">
+            <li><span class="icon">📊</span> 概览</li>
+            <li><span class="icon">📌</span> 大纲</li>
+            <li><span class="icon">💡</span> 伏笔看板</li>
+        </ul>
+
+        <hr class="divider" />
+
+        <div class="tree-header">
+            <span>✍️ 正文目录</span>
+            <button class="icon-btn" title="新建卷/章">➕</button>
+        </div>
+
+        <ul class="tree-list">
+            @foreach (var volume in NovelVolumes)
+            {
+                <li class="volume-node">
+                    <div class="volume-title" @onclick="() => ToggleVolume(volume)">
+                        <span class="toggle-icon">@(volume.IsExpanded ? "🔽" : "▶️")</span>
+                        <span class="title-text">@volume.Title</span>
+                    </div>
+
+                    @if (volume.IsExpanded)
+                    {
+                        <ul class="chapter-list">
+                            @foreach (var chapter in volume.Chapters)
+                            {
+                                <li class="chapter-node @(ActiveChapterId == chapter.Id ? "active" : "")"
+                                    @onclick="() => SelectChapter(chapter.Id)">
+                                    <span class="chapter-title">@chapter.Title</span>
+                                    <span class="word-count">@chapter.WordCount</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </li>
+            }
+        </ul>
+
+        <hr class="divider" />
+
+        <ul class="nav-list base-nav">
+            <li><span class="icon">📁</span> 单本素材</li>
+            <li><span class="icon">📈</span> 写作统计</li>
+            <li><span class="icon">📤</span> 导出设置</li>
+        </ul>
+    </div>
+</div>
