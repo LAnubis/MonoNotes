@@ -8,7 +8,13 @@
     [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
     [Parameter] public string CurrentChapterId { get; set; } = string.Empty;
 
-    private string ChapterTitle { get; set; } = "加载中...";
+    // 🌟 向外抛出标题已更改的事件
+    [Parameter] public EventCallback OnTitleChanged { get; set; }
+
+    // 🌟 标题分体存储
+    private string ChapterPrefix { get; set; } = "";
+    private string ChapterBody { get; set; } = "加载中...";
+
     private string Content { get; set; } = string.Empty;
     private string SaveStatus { get; set; } = "已同步";
 
@@ -17,18 +23,10 @@
     private CancellationTokenSource? _debounceCts;
     private DotNetObjectReference<WorkEditorDesk>? _objRef;
 
-    // 目录节点实体
-    public class TocItem
-    {
-        public int Level { get; set; }
-        public string Text { get; set; } = string.Empty;
-    }
+    public class TocItem { public int Level { get; set; } public string Text { get; set; } = string.Empty; }
     private List<TocItem> DocumentToc { get; set; } = new();
 
-    protected override void OnInitialized()
-    {
-        _objRef = DotNetObjectReference.Create(this);
-    }
+    protected override void OnInitialized() { _objRef = DotNetObjectReference.Create(this); }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -37,27 +35,34 @@
             SaveStatus = "正在读取...";
             var index = await Repository.GetWorkIndexAsync(CurrentWorkId);
             var chapter = index?.Volumes.SelectMany(v => v.Chapters).FirstOrDefault(c => c.Id == CurrentChapterId);
-            ChapterTitle = chapter?.Title ?? "未命名章节";
-            Content = await Repository.ReadChapterContentAsync(CurrentWorkId, CurrentChapterId);
 
+            var fullTitle = chapter?.Title ?? "未命名章节";
+
+            // 🌟 智能正则拆分：自动识别 "第 1 章"、"第12卷：" 等前缀格式
+            var match = Regex.Match(fullTitle, @"^(第\s*\d+\s*[卷章][：\s]*)(.*)$");
+            if (match.Success)
+            {
+                ChapterPrefix = match.Groups[1].Value; // "第 1 章：" (不可改)
+                ChapterBody = match.Groups[2].Value;   // "新章节" (可改)
+            }
+            else
+            {
+                ChapterPrefix = "";
+                ChapterBody = fullTitle;
+            }
+
+            Content = await Repository.ReadChapterContentAsync(CurrentWorkId, CurrentChapterId);
             GenerateToc();
             SaveStatus = "已同步";
-
-            // 🌟 每次切换章节，重新灌入数据到 Vditor
             await LoadVditorAsync();
         }
     }
 
     private async Task LoadVditorAsync()
     {
-        if (_objRef != null)
-        {
-            // 调用我们在 editor-entry.js 里写好的专属写作引擎
-            await JS.InvokeVoidAsync("writingVditor.init", "vditor-writing-area", Content, _objRef);
-        }
+        if (_objRef != null) { await JS.InvokeVoidAsync("writingVditor.init", "vditor-writing-area", Content, _objRef); }
     }
 
-    // 🌟 接收 Vditor (渲染模式) 传回来的实时内容
     [JSInvokable]
     public async Task OnVditorInput(string value)
     {
@@ -65,7 +70,14 @@
         await TriggerAutoSave();
     }
 
-    private async Task TriggerAutoSave()
+    // 🌟 监听标题输入框的变动
+    private async Task OnTitleInput(ChangeEventArgs e)
+    {
+        ChapterBody = e.Value?.ToString() ?? "";
+        await TriggerAutoSave(true); // 标记这是一个标题变动
+    }
+
+    private async Task TriggerAutoSave(bool isTitleChange = false)
     {
         SaveStatus = "正在输入...";
         _debounceCts?.Cancel();
@@ -73,40 +85,59 @@
 
         try
         {
-            // 停顿 1.5 秒后自动落盘
             await Task.Delay(1500, _debounceCts.Token);
             SaveStatus = "保存中...";
+
+            // 1. 保存正文
             await Repository.SaveChapterContentAsync(CurrentWorkId, CurrentChapterId, Content);
 
-            // 保存时重新提取一次目录
-            GenerateToc();
+            // 2. 🌟 保存完整标题到索引
+            if (isTitleChange)
+            {
+                var index = await Repository.GetWorkIndexAsync(CurrentWorkId);
+                if (index != null)
+                {
+                    var chapter = index.Volumes.SelectMany(v => v.Chapters).FirstOrDefault(c => c.Id == CurrentChapterId);
+                    if (chapter != null)
+                    {
+                        chapter.Title = ChapterPrefix + ChapterBody;
+                        await Repository.SaveWorkIndexAsync(index);
 
+                        // 3. 通知外部刷新左侧菜单
+                        if (OnTitleChanged.HasDelegate)
+                        {
+                            await OnTitleChanged.InvokeAsync();
+                        }
+                    }
+                }
+            }
+
+            GenerateToc();
             SaveStatus = $"已保存 {DateTime.Now:HH:mm:ss}";
             StateHasChanged();
         }
         catch (TaskCanceledException) { }
     }
 
-    // 正则提取目录大纲
     private void GenerateToc()
     {
         DocumentToc.Clear();
         if (string.IsNullOrWhiteSpace(Content)) return;
-        var lines = Content.Split('\n');
-        foreach (var line in lines)
+        foreach (var line in Content.Split('\n'))
         {
             var match = Regex.Match(line, @"^(#{1,6})\s+(.*)");
-            if (match.Success)
-            {
-                DocumentToc.Add(new TocItem { Level = match.Groups[1].Value.Length, Text = match.Groups[2].Value.Trim() });
-            }
+            if (match.Success) DocumentToc.Add(new TocItem { Level = match.Groups[1].Value.Length, Text = match.Groups[2].Value.Trim() });
         }
+    }
+
+    private async Task ScrollToTargetHeading(string headingText)
+    {
+        await JS.InvokeVoidAsync("writingVditor.scrollToHeading", "vditor-writing-area", headingText);
     }
 
     public void Dispose()
     {
         _objRef?.Dispose();
-        // 组件销毁时，清理 Vditor 实例释放内存
         _ = JS.InvokeVoidAsync("writingVditor.destroy", "vditor-writing-area");
     }
 }
@@ -116,7 +147,7 @@
         <div class="breadcrumb">
             <span class="muted">正文编辑</span>
             <span class="separator">/</span>
-            <span class="current">@ChapterTitle</span>
+            <span class="current">@(ChapterPrefix + ChapterBody)</span>
         </div>
 
         <div class="desk-tools">
@@ -127,34 +158,44 @@
     </div>
 
     <div class="editor-body-layout">
+        <div class="editor-content-box">
+            <div class="editor-main-area">
 
-        <div class="editor-paper-wrapper">
-            <div class="editor-paper">
-                <input type="text" class="chapter-title-input" value="@ChapterTitle" readonly placeholder="无标题章节" />
+                <div class="chapter-title-container">
+                    @if (!string.IsNullOrEmpty(ChapterPrefix))
+                    {
+                        <span class="chapter-prefix">@ChapterPrefix</span>
+                    }
+                    <input type="text" class="chapter-title-input"
+                           value="@ChapterBody"
+                           @oninput="OnTitleInput"
+                           placeholder="输入章节名称..." />
+                </div>
 
                 <div id="vditor-writing-area" class="chapter-content-textarea" style="background: transparent;"></div>
             </div>
-        </div>
 
-        <div class="editor-toc-sidebar">
-            <h4 class="toc-header">本文大纲</h4>
-            @if (!DocumentToc.Any())
-            {
-                <div class="toc-empty">暂无章节标题<br>请在正文使用 # 输入标题</div>
-            }
-            else
-            {
-                <ul class="toc-list">
-                    @foreach (var item in DocumentToc)
-                    {
-                        var indent = (item.Level - 1) * 14;
-                        <li class="toc-item" style="padding-left: @(indent)px;">
-                            <span class="toc-dot"></span> @item.Text
-                        </li>
-                    }
-                </ul>
-            }
-        </div>
+            <div class="editor-toc-sidebar hide-scrollbar">
+                <h4 class="toc-header">本文大纲</h4>
+                @if (!DocumentToc.Any())
+                {
+                    <div class="toc-empty">暂无章节标题<br>请在正文使用 # 输入标题</div>
+                }
+                else
+                {
+                    <ul class="toc-list">
+                        @foreach (var item in DocumentToc)
+                        {
+                            var indent = (item.Level - 1) * 14;
+                            <li class="toc-item" style="padding-left: @(indent)px;"
+                                @onclick="() => ScrollToTargetHeading(item.Text)">
+                                <span class="toc-dot"></span> @item.Text
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
 
+        </div>
     </div>
 </div>

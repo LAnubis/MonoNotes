@@ -75,6 +75,14 @@
         // 🌟 告诉父级：我要切到这个章节的编辑器
         await OnChapterSelected.InvokeAsync(chapterId);
     }
+
+    // 🌟 开放给外部（父组件）调用的强制刷新方法
+    public async Task RefreshAsync()
+    {
+        // 重新从硬盘读取 work-index.json 并刷新 UI
+        await LoadIndexAsync();
+        StateHasChanged();
+    }
 }
 
 <div class="work-sidebar-container">

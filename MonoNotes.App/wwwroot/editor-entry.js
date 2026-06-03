@@ -208,5 +208,29 @@ window.writingVditor = {
         }
         const el = document.getElementById(elementId);
         if (el) el.innerHTML = '';
+    },
+    // 🌟 完美适配 Vditor 内部滚动的大纲定位
+    scrollToHeading: function (elementId, headingText) {
+        const editor = this.instances[elementId];
+        if (!editor) return;
+
+        const editElement = editor.vditor.ir.element;
+        if (!editElement) return;
+
+        const headings = editElement.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        const targetText = headingText.trim();
+
+        for (let i = 0; i < headings.length; i++) {
+            let text = headings[i].textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/^#+\s*/, '').trim();
+
+            if (text.includes(targetText) || targetText.includes(text)) {
+                // 计算该标题距离 Vditor 顶部的距离，减去 10 像素作为呼吸留白
+                const targetOffset = headings[i].offsetTop - 10;
+
+                // 让 Vditor 内部的滚动容器丝滑滚动
+                editElement.scrollTo({ top: targetOffset, behavior: 'smooth' });
+                break;
+            }
+        }
     }
 };

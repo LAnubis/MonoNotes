@@ -1,13 +1,14 @@
 ﻿@code {
     private string? ActiveWorkId { get; set; } = null;
-
-    // 🌟 新增：记录当前正在查看的子视图（默认进入正文编辑器）
     private string CurrentSubView { get; set; } = "editor";
+
+    // 🌟 1. 声明对左侧菜单栏的引用
+    private MonoNotes.UI.Views.WorkSidebar _workSidebar;
 
     private void EnterWork(string workId)
     {
         ActiveWorkId = workId;
-        CurrentSubView = "editor"; // 每次进入一本书，默认重置为正文视图
+        CurrentSubView = "editor";
         StateHasChanged();
     }
 
@@ -17,21 +18,26 @@
         StateHasChanged();
     }
 
-    // 🌟 新增：处理侧边栏传来的视图切换请求
     private void HandleSubViewChanged(string viewName)
     {
         CurrentSubView = viewName;
     }
 
-    // 🌟 新增：记录当前正在阅读/编辑的章节 ID
     private string ActiveChapterId { get; set; } = string.Empty;
 
-
-    // 🌟 新增：专门处理章节被点击的事件
     private void HandleChapterSelected(string chapterId)
     {
         ActiveChapterId = chapterId;
-        CurrentSubView = "editor"; // 切回编辑器视图
+        CurrentSubView = "editor";
+    }
+
+    // 🌟 2. 接收编辑器标题修改的信号，通知侧边栏刷新！
+    private async Task HandleIndexUpdated()
+    {
+        if (_workSidebar != null)
+        {
+            await _workSidebar.RefreshAsync();
+        }
     }
 }
 
@@ -43,7 +49,8 @@
         }
         else
         {
-            <WorkSidebar CurrentWorkId="@ActiveWorkId"
+            <WorkSidebar @ref="_workSidebar"
+                         CurrentWorkId="@ActiveWorkId"
                          ActiveSubView="@CurrentSubView"
                          OnReturnClicked="ReturnToGlobal"
                          OnSubViewSelected="HandleSubViewChanged"
@@ -60,7 +67,9 @@
         {
             @if (CurrentSubView == "editor")
             {
-                <WorkEditorDesk CurrentWorkId="@ActiveWorkId" CurrentChapterId="@ActiveChapterId" />
+                <WorkEditorDesk CurrentWorkId="@ActiveWorkId"
+                                CurrentChapterId="@ActiveChapterId"
+                                OnTitleChanged="HandleIndexUpdated" />
             }
             else if (CurrentSubView == "foreshadowing")
             {

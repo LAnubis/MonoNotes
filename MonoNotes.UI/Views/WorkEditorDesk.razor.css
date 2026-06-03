@@ -5,13 +5,8 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background-color: #ffffff; /* 纯白背景，极致纯净 */
-}
-
-.editor-body-layout {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
+    background-color: #ffffff;
+    box-sizing: border-box;
 }
 
 /* =========================================
@@ -22,17 +17,17 @@
     justify-content: space-between;
     align-items: center;
     padding: 12px 30px;
-    border-bottom: 1px solid transparent; /* 预留边框位置，鼠标移入时显示 */
+    border-bottom: 1px solid transparent;
     color: #999;
     font-size: 13px;
     transition: all 0.3s ease;
+    flex-shrink: 0; /* 🌟 保证状态栏不会被挤压 */
 }
 
     .desk-topbar:hover {
         border-bottom: 1px solid #f0f0f0;
     }
 
-/* 面包屑导航 */
 .breadcrumb .muted {
     color: #aaa;
 }
@@ -47,7 +42,6 @@
     font-weight: 500;
 }
 
-/* 右侧工具组 */
 .desk-tools {
     display: flex;
     align-items: center;
@@ -56,7 +50,7 @@
 
 .save-status {
     font-size: 12px;
-    color: #8cc63f; /* 让人安心的浅绿色 */
+    color: #8cc63f;
 }
 
 .word-count-badge {
@@ -83,116 +77,112 @@
     }
 
 .foreshadow-btn:hover {
-    background-color: #fff8e1; /* 伏笔按钮特殊的亮黄色 Hover */
+    background-color: #fff8e1;
     color: #f57f17;
 }
 
+
 /* =========================================
-   3. 居中编辑区 (模拟纸张)
+   3. 🌟 核心排版：外层锁死不滚动，内容区自适应
 ========================================= */
-.editor-paper-wrapper {
-    flex: 1;
-    overflow-y: auto;
+.editor-body-layout {
     display: flex;
-    justify-content: center; /* 让中间的“纸张”居中 */
-    padding: 40px 20px 100px 20px;
+    justify-content: center;
+    flex: 1;
+    min-height: 0; /* 🌟 核心修复1：打破 Flex 默认无限撑开的魔咒 */
+    overflow: hidden; /* 绝对禁止整个页面滚动 */
 }
 
-    /* 隐藏与优化滚动条 */
-    .editor-paper-wrapper::-webkit-scrollbar {
-        width: 8px;
-    }
-
-    .editor-paper-wrapper::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    .editor-paper-wrapper::-webkit-scrollbar-thumb {
-        background: #e0e0e0;
-        border-radius: 4px;
-    }
-
-        .editor-paper-wrapper::-webkit-scrollbar-thumb:hover {
-            background: #bdbdbd;
-        }
-
-.editor-paper {
+/* 核心盒子：控制最大呼吸间距 */
+.editor-content-box {
+    display: flex;
     width: 100%;
-    max-width: 760px; /* 最佳阅读行长限制，防止眼球转动疲劳 */
+    height: 100%; /* 🌟 核心修复2：高度必须往下传递 */
+    padding: 0 40px;
+    justify-content: center;
+    gap: 40px;
+    box-sizing: border-box;
+}
+
+/* 🌟 编辑器主区域：纵向布局，高度占满 */
+.editor-main-area {
+    flex: 1;
+    max-width: 1000px;
     display: flex;
     flex-direction: column;
+    height: 100%; /* 🌟 继承高度 */
+    min-height: 0; /* 🌟 允许压缩 */
+    padding-top: 20px;
+    box-sizing: border-box;
+}
+/* 🌟 分体式标题栏容器 */
+.chapter-title-container {
+    display: flex;
+    align-items: baseline; /* 保证文字底边完美对齐 */
+    width: 100%;
+    margin-bottom: 20px;
+    padding: 0 20px;
+    flex-shrink: 0;
 }
 
-/* 标题输入框 */
+/* 🌟 前缀（第X章：），显示为灰色且不可选中 */
+.chapter-prefix {
+    font-size: 32px;
+    font-weight: bold;
+    color: #9ca3af;
+    margin-right: 4px;
+    user-select: none; /* 防止双击全选时把它带上 */
+}
+
+/* 🌟 可编辑的后缀标题框 */
 .chapter-title-input {
+    flex: 1;
     font-size: 32px;
     font-weight: bold;
     color: #222;
     border: none;
     outline: none;
     background: transparent;
-    margin-bottom: 30px;
     padding: 0;
-    line-height: 1.4;
+    min-width: 0;
 }
 
     .chapter-title-input::placeholder {
         color: #ddd;
     }
 
-/* 正文输入框 */
+/* 🌟 Vditor 容器：占满剩余所有空间 */
 .chapter-content-textarea {
     flex: 1;
-    font-size: 16px;
-    line-height: 1.8; /* 宽裕的行距，呼吸感强 */
-    color: #333;
-    border: none;
-    outline: none;
-    background: transparent;
-    resize: none; /* 禁止拖动右下角 */
-    padding: 0;
-    min-height: 60vh;
-    font-family: "Microsoft YaHei", "PingFang SC", sans-serif; /* 适合中文阅读的无衬线字体 */
-}
-
-    .chapter-content-textarea::placeholder {
-        color: #ccc;
-    }
-
-/* 即时渲染模式占位符 */
-.wysiwyg-container {
-    min-height: 60vh;
-    border: 2px dashed #e0e0e0;
-    border-radius: 12px;
+    height: 100%;
+    min-height: 0; /* 🌟 极其重要：逼迫 Vditor 在内部生成滚动条，而不是撑爆外层 */
     display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: #fbfbfb;
+    flex-direction: column;
 }
-
-.wysiwyg-placeholder-message {
-    text-align: center;
-    color: #888;
-    line-height: 1.8;
-}
-
-    .wysiwyg-placeholder-message h4 {
-        color: #1976d2;
-        margin-bottom: 10px;
-    }
-
 
 
 /* =========================================
-   5. 右侧目录栏 (TOC)
+   4. 🌟 右侧自制目录栏 (独立滚动，隐藏实体滚动条)
 ========================================= */
 .editor-toc-sidebar {
     width: 240px;
-    background-color: #fafafa;
+    height: 100%; /* 🌟 继承高度 */
+    flex-shrink: 0;
+    background-color: transparent;
     border-left: 1px solid #f0f0f0;
-    padding: 20px;
-    overflow-y: auto;
+    padding: 20px 0 40px 20px;
+    overflow-y: auto; /* 🌟 大纲可以自己独立滚动 */
 }
+
+/* 跨浏览器防滚动条代码 */
+.hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+    .hide-scrollbar::-webkit-scrollbar {
+        display: none !important;
+    }
 
 .toc-header {
     font-size: 14px;
@@ -244,47 +234,13 @@
     margin-right: 8px;
     flex-shrink: 0;
 }
-/* 🌟 主体横向布局 */
-.editor-body-layout {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-    gap: 30px; /* 🌟 增加右侧目录和左侧编辑器之间的空隙 */
+
+/* 🌟 去除 Vditor 原生边框，让它融入背景 */
+.vditor {
+    border: none !important;
 }
 
-/* 居中编辑区容器 */
-.editor-paper-wrapper {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    justify-content: center;
-    padding: 40px 0 100px 40px; /* 🌟 增加 left: 40px，让它和左侧菜单拉开距离 */
-}
-
-/* 核心纸张 */
-.editor-paper {
-    width: 100%;
-    max-width: 960px; /* 🌟 宽度变大，从 760px 增加到 960px (或你喜欢的宽度) */
-    display: flex;
-    flex-direction: column;
-}
-
-/* 标题输入框 */
-.chapter-title-input {
-    width: 100%; /* 🌟 保证和编辑器一样长 */
-    font-size: 32px;
-    font-weight: bold;
-    color: #222;
-    border: none;
-    outline: none;
-    background: transparent;
-    margin-bottom: 20px;
-    padding: 0;
-    line-height: 1.4;
-}
-
-/* Vditor 挂载点自身高度保障 */
-.chapter-content-textarea {
-    flex: 1;
-    min-height: 65vh;
+.vditor-toolbar {
+    border-bottom: 1px solid #f0f0f0 !important;
+    background-color: rgba(255, 255, 255, 0.95) !important;
 }
