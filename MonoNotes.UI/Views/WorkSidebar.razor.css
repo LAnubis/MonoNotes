@@ -145,3 +145,13 @@
 .chapter-node.active .word-count {
     color: #64b5f6; /* active 状态下字数颜色也相应变深 */
 }
+/* 找到现有的 .base-nav li，在它下面加上 active 状态 */
+.base-nav li.active {
+    background-color: #e3f2fd;
+    color: #1976d2;
+    font-weight: 500;
+}
+
+    .base-nav li.active .icon {
+        opacity: 1; /* 让选中时的图标更亮一点 */
+    }

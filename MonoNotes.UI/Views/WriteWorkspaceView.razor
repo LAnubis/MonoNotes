@@ -1,20 +1,26 @@
 ﻿@code {
-    // 当前激活的作品 ID。如果为 null，说明在全局“创作空间”；如果有值，说明进入了“单本工作台”。
     private string? ActiveWorkId { get; set; } = null;
 
-    // 从全局进入单本模式
+    // 🌟 新增：记录当前正在查看的子视图（默认进入正文编辑器）
+    private string CurrentSubView { get; set; } = "editor";
+
     private void EnterWork(string workId)
     {
         ActiveWorkId = workId;
+        CurrentSubView = "editor"; // 每次进入一本书，默认重置为正文视图
         StateHasChanged();
     }
 
-    // 从单本模式退回全局
     private void ReturnToGlobal()
     {
-        // TODO: 在这里触发“状态熔断”，强制保存当前工作台的内容
         ActiveWorkId = null;
         StateHasChanged();
+    }
+
+    // 🌟 新增：处理侧边栏传来的视图切换请求
+    private void HandleSubViewChanged(string viewName)
+    {
+        CurrentSubView = viewName;
     }
 }
 
@@ -26,18 +32,35 @@
         }
         else
         {
-            <WorkSidebar CurrentWorkId="@ActiveWorkId" OnReturnClicked="ReturnToGlobal" />
+            <WorkSidebar CurrentWorkId="@ActiveWorkId"
+                         ActiveSubView="@CurrentSubView"
+                         OnReturnClicked="ReturnToGlobal"
+                         OnSubViewSelected="HandleSubViewChanged" />
         }
     </div>
 
     <div class="main-content-region">
         @if (string.IsNullOrEmpty(ActiveWorkId))
         {
-            <GlobalDashboard />
+            <GlobalDashboard OnWorkSelected="EnterWork" />
         }
         else
         {
-            <WorkEditorDesk CurrentWorkId="@ActiveWorkId" />
+            @if (CurrentSubView == "editor")
+            {
+                <WorkEditorDesk CurrentWorkId="@ActiveWorkId" />
+            }
+            else if (CurrentSubView == "foreshadowing")
+            {
+                <ForeshadowingBoard CurrentWorkId="@ActiveWorkId" />
+            }
+            else
+            {
+                <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#999; flex-direction:column;">
+                    <span style="font-size: 48px; margin-bottom: 20px;">🚧</span>
+                    <h3>该模块（@CurrentSubView）正在施工中...</h3>
+                </div>
+            }
         }
     </div>
 </div>

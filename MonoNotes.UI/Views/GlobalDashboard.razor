@@ -1,4 +1,109 @@
-﻿<div style="padding: 20px; width: 100%;">
-    <h2>📊 创作空间数据看板 (占位)</h2>
-    <p>这里是首页、最近编辑的作品列表...</p>
+﻿@using MonoNotes.Core.Models
+
+@code {
+    [Parameter]
+    public EventCallback<string> OnWorkSelected { get; set; }
+    // 获取当天的问候语
+    private string Greeting => DateTime.Now.Hour switch
+    {
+        < 6 => "夜深了，注意休息，",
+        < 12 => "早安，今天也要文思泉涌，",
+        < 18 => "下午好，喝杯咖啡继续创作吧，",
+        _ => "晚上好，属于你的世界正在展开，"
+    };
+
+    // 模拟的最近编辑作品列表
+    private List<Work> RecentWorks = new()
+    {
+        new Work { Id = "work_001", Title = "长夜将明", WorkType = "novel", WordCount = 125400, LastEditedAt = DateTime.Now.AddHours(-2) },
+        new Work { Id = "work_002", Title = "赛博修仙录", WorkType = "novel", WordCount = 45000, LastEditedAt = DateTime.Now.AddDays(-1) },
+        new Work { Id = "work_003", Title = "短篇集：那些雨天", WorkType = "short", WordCount = 8200, LastEditedAt = DateTime.Now.AddDays(-3) }
+    };
+
+    // 模拟的当月打卡热力数据 (0-4 代表不同的字数档位，用于渲染颜色深浅)
+    private int[] HeatmapData = new int[30]
+    {
+        0, 1, 3, 4, 2, 0, 1,
+        2, 4, 4, 3, 1, 0, 2,
+        3, 3, 4, 1, 0, 2, 3,
+        4, 2, 1, 1, 0, 3, 4, 2, 4
+    };
+}
+
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <div class="header-text">
+            <h2>@Greeting 大作家。</h2>
+            <p class="subtitle">今天是你坚持写作的第 <strong>142</strong> 天，继续创造奇迹吧。</p>
+        </div>
+        <button class="primary-btn">➕ 新建作品</button>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: #e3f2fd; color: #1976d2;">📝</div>
+            <div class="stat-info">
+                <div class="stat-value">3,240 <span class="stat-unit">字</span></div>
+                <div class="stat-label">今日已写 (目标 5000)</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background: #f3e5f5; color: #7b1fa2;">📚</div>
+            <div class="stat-info">
+                <div class="stat-value">178,600 <span class="stat-unit">字</span></div>
+                <div class="stat-label">全库总字数</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background: #e8f5e9; color: #388e3c;">🔥</div>
+            <div class="stat-info">
+                <div class="stat-value">12 <span class="stat-unit">天</span></div>
+                <div class="stat-label">当前连续打卡</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="recent-works-section">
+            <h3 class="section-title">最近编辑</h3>
+            <div class="works-list">
+                @foreach (var work in RecentWorks)
+                {
+                    <div class="work-card">
+                        <div class="work-icon">@(work.WorkType == "novel" ? "📖" : "📝")</div>
+                        <div class="work-details">
+                            <h4 class="work-title">@work.Title</h4>
+                            <div class="work-meta">
+                                <span>@work.WordCount.ToString("N0") 字</span>
+                                <span class="separator">•</span>
+                                <span>@work.LastEditedAt.ToString("MM-dd HH:mm") 修改</span>
+                            </div>
+                        </div>
+                        <button class="open-btn" @onclick="() => OnWorkSelected.InvokeAsync(work.Id)">进入写作</button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="heatmap-section">
+            <h3 class="section-title">近30天创作热力图</h3>
+            <div class="heatmap-card">
+                <div class="heatmap-grid">
+                    @foreach (var level in HeatmapData)
+                    {
+                        <div class="heatmap-cell level-@level"></div>
+                    }
+                </div>
+                <div class="heatmap-legend">
+                    <span>少</span>
+                    <div class="legend-color level-0"></div>
+                    <div class="legend-color level-1"></div>
+                    <div class="legend-color level-2"></div>
+                    <div class="legend-color level-3"></div>
+                    <div class="legend-color level-4"></div>
+                    <span>多</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
