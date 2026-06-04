@@ -1,37 +1,54 @@
-﻿.materials-container {
+﻿/* ====================================================================
+   🎨 MonoDraft - 万能设定素材库终极样式表 (Consolidated & Optimized)
+   ==================================================================== */
+
+/* --------------------------------------------------------------------
+   1. 基础布局与主容器 (Layout & Main Canvas)
+   -------------------------------------------------------------------- */
+.materials-container {
     padding: 30px 50px;
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: #f9f9fb;
+    background: #fcfcfc;
     box-sizing: border-box;
 }
 
-/* 顶部控制台 */
 .materials-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 24px;
 }
 
-    .materials-header h2 {
-        margin: 0;
-        font-size: 24px;
-        color: #222;
-    }
+.header-left h2 {
+    margin: 0;
+    font-size: 24px;
+    color: #222;
+}
 
 .header-right {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
 }
 
+.materials-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 40px;
+}
+
+/* --------------------------------------------------------------------
+   2. 交互控制与通用控制按钮 (UI Controls & Button System)
+   -------------------------------------------------------------------- */
+/* 视图切换组合键 (卡片/列表) */
 .view-toggles {
     display: flex;
     background: #eee;
     padding: 4px;
     border-radius: 8px;
+    margin-right: 8px;
 }
 
 .toggle-btn {
@@ -52,6 +69,7 @@
         box-shadow: 0 2px 6px rgba(0,0,0,0.05);
     }
 
+/* 标准核心蓝色按钮 */
 .btn-primary {
     background: #1976d2;
     color: white;
@@ -60,11 +78,29 @@
     border-radius: 6px;
     font-weight: bold;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s;
 }
 
     .btn-primary:hover {
         background: #1565c0;
+        transform: translateY(-1px);
+    }
+
+/* 描边虚心主色按钮 */
+.btn-outline-primary {
+    background: transparent;
+    color: #1976d2;
+    border: 1px solid #1976d2;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+    .btn-outline-primary:hover {
+        background: #f0f7ff;
+        transform: translateY(-1px);
     }
 
 .btn-outline {
@@ -78,16 +114,18 @@
     margin-top: 10px;
 }
 
-/* 分类 Tabs */
+/* --------------------------------------------------------------------
+   3. 分类导航 Tabs 菜单 (Category Tabs)
+   -------------------------------------------------------------------- */
 .category-tabs {
     display: flex;
-    gap: 12px;
+    gap: 16px;
     border-bottom: 2px solid #eaeaea;
     margin-bottom: 24px;
 }
 
 .tab-item {
-    padding: 12px 16px;
+    padding: 10px 4px;
     cursor: pointer;
     font-size: 15px;
     color: #666;
@@ -107,21 +145,16 @@
         border-bottom-color: #1976d2;
     }
 
-.tab-icon {
-    margin-right: 6px;
-}
-
-/* 内容区 */
-.materials-content {
-    flex: 1;
-    overflow-y: auto;
-    padding-bottom: 40px;
-}
-
+/* --------------------------------------------------------------------
+   4. 空白数据占位状态 (Empty State Canvas)
+   -------------------------------------------------------------------- */
 .empty-state {
     text-align: center;
     padding: 80px 0;
     color: #888;
+    background: #fff;
+    border-radius: 12px;
+    border: 1px dashed #ddd;
 }
 
 .empty-icon {
@@ -130,16 +163,18 @@
     opacity: 0.5;
 }
 
-/* 🌟 卡片瀑布流视图 */
+/* --------------------------------------------------------------------
+   5. 响应式瀑布流卡片网格视图 (Grid / Cards View)
+   -------------------------------------------------------------------- */
 .cards-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 20px;
 }
 
 .material-card {
     background: #fff;
-    border: 1px solid #e0e0e0;
+    border: 1px solid #eaeaea;
     border-radius: 12px;
     padding: 20px;
     cursor: pointer;
@@ -159,26 +194,27 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
 .avatar-box {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     background: #f0f4f8;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 24px;
+    font-size: 20px;
     border: 1px solid #e2e8f0;
+    flex-shrink: 0;
 }
 
 .card-title-area {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
     gap: 4px;
+    overflow: hidden;
 }
 
 .card-title {
@@ -192,21 +228,35 @@
     color: #666;
     line-height: 1.5;
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
 
-/* 角标 */
-.badge-readonly {
-    background: #ffebee;
-    color: #c62828;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-weight: bold;
+/* 卡片内部属性和关系标记预览区 */
+.card-props-preview {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 12px;
 }
 
+.prop-tag {
+    font-size: 11px;
+    background: #f5f7fa;
+    color: #5c728a;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid #e4e7ed;
+}
+
+.relation-preview {
+    background: #e3f2fd !important;
+    color: #1976d2 !important;
+    border-color: #bbdefb !important;
+}
+
+/* 状态角标 */
 .badge-derived {
     background: #e3f2fd;
     color: #1565c0;
@@ -214,13 +264,26 @@
     padding: 2px 6px;
     border-radius: 4px;
     font-weight: bold;
+    width: fit-content;
 }
 
-/* 🌟 表格视图 */
+.badge-readonly {
+    background: #ffebee;
+    color: #c62828;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+    width: fit-content;
+}
+
+/* --------------------------------------------------------------------
+   6. 高密度紧凑数据表格视图 (List / Table View)
+   -------------------------------------------------------------------- */
 .list-view {
     background: #fff;
     border-radius: 12px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid #eaeaea;
     overflow: hidden;
 }
 
@@ -231,48 +294,671 @@
 }
 
     .material-table th {
-        background: #f8f9fa;
+        background: #f9f9f9;
         padding: 12px 16px;
         font-size: 13px;
         color: #666;
-        font-weight: bold;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid #eaeaea;
     }
 
     .material-table td {
         padding: 12px 16px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid #f0f0f0;
         font-size: 14px;
+        cursor: pointer;
     }
 
-.list-row {
-    transition: background 0.2s;
-    cursor: pointer;
+.list-row:hover {
+    background: #f0f7ff;
 }
-
-    .list-row:hover {
-        background: #f4f8fb;
-    }
 
 .icon-cell {
-    font-size: 20px;
     text-align: center;
+    font-size: 18px;
 }
 
-.name-cell {
+/* --------------------------------------------------------------------
+   7. 侧边属性编辑抽屉与全局遮罩 (Sidebar Drawer & Overlays)
+   -------------------------------------------------------------------- */
+.drawer-overlay, .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(2px);
+    z-index: 1000;
+    animation: fadeIn 0.3s forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.settings-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 540px; /* 柔性拓宽，适配高维度的双向关系表单 */
+    background: #fff;
+    box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+    z-index: 1001;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+}
+
+    .settings-drawer.open {
+        transform: translateX(0);
+    }
+
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #eee;
+}
+
+.drawer-title-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.drawer-icon {
+    font-size: 24px;
+}
+
+.drawer-header h3 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.close-btn {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    color: #999;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+    .close-btn:hover {
+        color: #d32f2f;
+    }
+
+.drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+}
+
+.drawer-footer {
+    padding: 20px 24px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
+}
+
+.drawer-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+    .drawer-section label {
+        font-size: 13px;
+        font-weight: bold;
+        color: #444;
+    }
+
+.section-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.field-hint {
+    font-size: 12px;
+    color: #999;
+    font-weight: normal;
+}
+
+.drawer-divider {
+    border: 0;
+    height: 1px;
+    background: #eaeaea;
+    margin: 24px 0;
+}
+
+/* 抽屉各类表单控件 */
+.drawer-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+    .drawer-input:focus {
+        border-color: #1976d2;
+    }
+
+    .drawer-input:disabled {
+        background: #f5f5f5;
+        color: #888;
+        cursor: not-allowed;
+        border-color: #eaeaea;
+    }
+
+.title-input {
+    font-size: 18px;
     font-weight: bold;
     color: #222;
 }
 
-.desc-cell {
-    color: #666;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 300px;
+.desc-input {
+    min-height: 100px;
+    resize: vertical;
+    line-height: 1.5;
 }
 
-.time-cell {
-    color: #999;
+/* 软引用只读警告框 */
+.locked-alert {
+    background: #fff3e0;
+    color: #e65100;
+    padding: 10px 14px;
+    border-radius: 6px;
     font-size: 13px;
+    margin-bottom: 20px;
+    border: 1px solid #ffe0b2;
 }
+
+/* --------------------------------------------------------------------
+   8. 抽屉子板块：万能 KV 自定义数值属性 (Custom KV Fields List)
+   -------------------------------------------------------------------- */
+.custom-fields-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.field-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid #eaeaea;
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+
+.field-key {
+    flex: 1;
+    font-size: 13px;
+    font-weight: bold;
+    color: #555;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.field-value-input {
+    flex: 2;
+    border: 1px solid transparent;
+    background: #f9f9f9;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    outline: none;
+    transition: all 0.2s;
+}
+
+    .field-value-input:focus:not(:disabled) {
+        border-color: #1976d2;
+        background: #fff;
+    }
+
+    .field-value-input:disabled {
+        background: transparent;
+        color: #666;
+    }
+
+.delete-field-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+    .delete-field-btn:hover {
+        opacity: 1;
+    }
+
+.add-field-box {
+    display: flex;
+    gap: 8px;
+    background: #f5f7fa;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px dashed #dcdfe6;
+}
+
+.add-input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid #dcdfe6;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    outline: none;
+}
+
+    .add-input:focus {
+        border-color: #1976d2;
+    }
+
+/* --------------------------------------------------------------------
+   9. 抽屉子板块：四大分类完全割离的双向网状羁绊区 (Relational Network)
+   -------------------------------------------------------------------- */
+.relation-block {
+    background: #fafafa;
+    border: 1px solid #e9e9e9;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.block-title {
+    font-size: 13.5px;
+    font-weight: bold;
+    color: #444;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+}
+
+.relations-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.relation-tag {
+    display: inline-flex;
+    align-items: center;
+    background: #fff;
+    border: 1px solid #dcdfe6;
+    padding: 2px 2px 2px 10px;
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+    .relation-tag:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        border-color: #1976d2;
+    }
+
+.rel-icon {
+    margin-right: 6px;
+    font-size: 14px;
+}
+
+.rel-name {
+    color: #222;
+    font-weight: bold;
+    margin-right: 6px;
+}
+
+/* 核心对称关系的描述徽章小标签 */
+.rel-desc-badge {
+    font-size: 11px;
+    background: #e8f5e9;
+    color: #2e7d32;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: bold;
+    margin-right: 4px;
+}
+
+    /* 细分四态：不同类型的对端标签在视觉上进行色彩降噪与归类 */
+    .rel-desc-badge.color-faction {
+        background: #e3f2fd;
+        color: #1565c0;
+    }
+
+    .rel-desc-badge.color-geo {
+        background: #fff3e0;
+        color: #e65100;
+    }
+
+    .rel-desc-badge.color-item {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+
+.rel-remove {
+    background: #f0f0f0;
+    color: #aaa;
+    border: none;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+    .rel-remove:hover {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+/* 三合一高密度对称配置表单行 */
+.relation-form-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 10px;
+    background: #fff;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px dashed #dcdfe6;
+}
+
+.relation-select {
+    flex: 2; /* 让选择框变长一点 */
+    padding: 6px 8px;
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+    background: #fff;
+}
+
+.relation-label-input {
+    flex: 1; /* 输入框稍微变短 */
+    padding: 6px 8px;
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+    .relation-label-input:focus {
+        border-color: #1976d2;
+    }
+
+.relation-add-btn {
+    background: #1976d2;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+    .relation-add-btn:hover {
+        background: #1565c0;
+    }
+
+/* --------------------------------------------------------------------
+   10. 抽屉子板块：世界观专属序列进化时间线 (Timeline Tree Structure)
+   -------------------------------------------------------------------- */
+.level-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding-left: 10px;
+    border-left: 2px solid #bbdefb;
+}
+
+.level-node {
+    display: flex;
+    gap: 12px;
+    position: relative;
+}
+
+.level-index {
+    position: absolute;
+    left: -21px;
+    top: 0;
+    width: 20px;
+    height: 20px;
+    background: #1976d2;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 11px;
+    font-weight: bold;
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 1px #bbdefb;
+}
+
+.level-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: #fff;
+    border: 1px solid #eaeaea;
+    padding: 12px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+}
+
+.level-name-input {
+    font-size: 14px;
+    font-weight: bold;
+    border: none;
+    border-bottom: 1px dashed #ccc;
+    padding-bottom: 4px;
+    outline: none;
+    color: #222;
+    background: transparent;
+}
+
+    .level-name-input:focus {
+        border-bottom-color: #1976d2;
+    }
+
+.level-desc-input {
+    font-size: 13px;
+    border: none;
+    outline: none;
+    resize: vertical;
+    min-height: 40px;
+    color: #666;
+    background: transparent;
+}
+
+.level-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+    .level-actions button {
+        background: #f5f5f5;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        color: #666;
+        cursor: pointer;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 12px;
+        transition: all 0.2s;
+    }
+
+        .level-actions button:hover:not(:disabled) {
+            background: #e0e0e0;
+        }
+
+        .level-actions button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .level-actions button.danger:hover {
+            background: #ffebee;
+            color: #c62828;
+            border-color: #ffcdd2;
+        }
+
+.add-level-btn {
+    width: 100%;
+    padding: 10px;
+    border-style: dashed;
+}
+
+/* --------------------------------------------------------------------
+   11. 浮顶悬浮窗：全局资源模板引入面板 (Global Materials Import Modal)
+   -------------------------------------------------------------------- */
+.import-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    max-height: 80vh;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    z-index: 1002;
+    display: flex;
+    flex-direction: column;
+    animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -45%);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #eee;
+}
+
+    .modal-header h3 {
+        margin: 0;
+        font-size: 18px;
+    }
+
+.modal-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    background: #fcfcfc;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+}
+
+.template-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.template-item {
+    background: #fff;
+    border: 1px solid #eaeaea;
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+}
+
+    .template-item:hover {
+        border-color: #bbdefb;
+        box-shadow: 0 4px 12px rgba(25,118,210,0.05);
+    }
+
+.tpl-name {
+    font-size: 15px;
+    font-weight: bold;
+    color: #222;
+    margin-bottom: 4px;
+}
+
+.tpl-desc {
+    font-size: 12px;
+    color: #888;
+}
+
+.tpl-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.action-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+}
+
+.derive-btn {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+    .derive-btn:hover {
+        background: #bbdefb;
+    }
+
+.ref-btn {
+    background: #fbe9e7;
+    color: #d84315;
+}
+
+    .ref-btn:hover {
+        background: #ffccbc;
+    }

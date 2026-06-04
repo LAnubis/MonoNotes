@@ -1,15 +1,21 @@
 ﻿@code {
     private string? ActiveWorkId { get; set; } = null;
     private string CurrentSubView { get; set; } = "editor";
-    // 🌟 新增：记录全局大厅的子视图（默认是 dashboard）
+    // 记录全局大厅的子视图（默认是 dashboard）
     private string GlobalSubView { get; set; } = "dashboard";
     private MonoNotes.UI.Views.WorkSidebar _workSidebar;
-    // 🌟 新增：处理全局菜单切换
+
+    // 🌟 新增：追踪当前选中的卷ID和章ID
+    private string ActiveVolumeId { get; set; } = string.Empty;
+    private string ActiveChapterId { get; set; } = string.Empty;
+
+    // 处理全局菜单切换
     private void HandleGlobalMenuChanged(string menuName)
     {
         GlobalSubView = menuName;
         StateHasChanged();
     }
+
     private void EnterWork(string workId)
     {
         ActiveWorkId = workId;
@@ -28,12 +34,32 @@
         CurrentSubView = viewName;
     }
 
-    private string ActiveChapterId { get; set; } = string.Empty;
-
+    // 🌟 升级：接收章选中事件
     private void HandleChapterSelected(string chapterId)
     {
         ActiveChapterId = chapterId;
-        CurrentSubView = "editor";
+        ActiveVolumeId = string.Empty; // 清空卷选中态
+
+        // 如果当前不在正文也不在大纲，切回正文
+        if (CurrentSubView != "editor" && CurrentSubView != "outline")
+        {
+            CurrentSubView = "editor";
+        }
+        StateHasChanged();
+    }
+
+    // 🌟 新增：接收卷选中事件
+    private void HandleVolumeSelected(string volumeId)
+    {
+        ActiveVolumeId = volumeId;
+        ActiveChapterId = string.Empty; // 清空章选中态
+
+        // 智能切换：如果你在写正文时点击了“卷”，系统智能切换到“大纲模式”
+        if (CurrentSubView == "editor")
+        {
+            CurrentSubView = "outline";
+        }
+        StateHasChanged();
     }
 
     private async Task HandleIndexUpdated()
@@ -44,7 +70,7 @@
         }
     }
 
-    // 🌟 新增：接收从控制台传来的章节ID，并进入正文模式
+    // 接收从控制台传来的章节ID，并进入正文模式
     private void HandleEnterEditorFromOverview(string chapterId)
     {
         if (!string.IsNullOrEmpty(chapterId))
@@ -69,7 +95,8 @@
                          ActiveSubView="@CurrentSubView"
                          OnReturnClicked="ReturnToGlobal"
                          OnSubViewSelected="HandleSubViewChanged"
-                         OnChapterSelected="HandleChapterSelected" />
+                         OnChapterSelected="HandleChapterSelected"
+                         OnVolumeSelected="HandleVolumeSelected" />
         }
     </div>
 
@@ -103,6 +130,17 @@
                 <WorkEditorDesk CurrentWorkId="@ActiveWorkId"
                                 CurrentChapterId="@ActiveChapterId"
                                 OnTitleChanged="HandleIndexUpdated" />
+            }
+            else if (CurrentSubView == "outline")
+            {
+                <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; background: #fdfdfd;">
+                    <h2 style="font-size: 24px; color: #333; margin-bottom: 16px;">🗺️ 大纲工作台 (WorkOutlineDesk)</h2>
+                    <p style="color: #666; margin-bottom: 8px;">专门用来写大纲的独立模块即将空投...</p>
+                    <div style="background: #e3f2fd; color: #1565c0; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-align: center;">
+                        当前选中的 卷ID：@(string.IsNullOrEmpty(ActiveVolumeId) ? "无" : ActiveVolumeId) <br />
+                        当前选中的 章ID：@(string.IsNullOrEmpty(ActiveChapterId) ? "无" : ActiveChapterId)
+                    </div>
+                </div>
             }
             else if (CurrentSubView == "foreshadowing")
             {

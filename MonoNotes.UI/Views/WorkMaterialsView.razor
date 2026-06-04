@@ -6,102 +6,182 @@
     [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
 
     private List<MaterialItem> AllMaterials = new();
-
-    // 当前选中的分类，默认显示角色
     private MaterialType CurrentCategory = MaterialType.Character;
-
-    // 当前视图模式 (grid: 卡片视图, list: 表格视图)
     private string ViewMode = "grid";
 
-    // 过滤出当前分类的素材
+    private bool IsDrawerOpen = false;
+    private MaterialItem? EditingItem;
+    private string NewFieldKey = "";
+    private string NewFieldValue = "";
+
+    // 极简输入绑定
+    private string NewCharId = ""; private string NewCharLabel = "";
+    private string NewFactionId = ""; private string NewFactionLabel = "";
+    private string NewGeoId = ""; private string NewGeoLabel = "";
+    private string NewItemId = "";
+
+    private bool IsImportModalOpen = false;
+    private List<MaterialItem> GlobalTemplates = new();
+
     private List<MaterialItem> FilteredMaterials => AllMaterials.Where(m => m.Type == CurrentCategory).OrderByDescending(m => m.UpdatedAt).ToList();
+    private List<MaterialItem> FilteredGlobalTemplates => GlobalTemplates.Where(m => m.Type == CurrentCategory).OrderByDescending(m => m.UpdatedAt).ToList();
 
-    protected override async Task OnParametersSetAsync()
-    {
-        await LoadMaterials();
-    }
+    protected override async Task OnParametersSetAsync() { await LoadMaterials(); }
+    private async Task LoadMaterials() { if (!string.IsNullOrEmpty(CurrentWorkId)) AllMaterials = await Repository.GetLocalMaterialsAsync(CurrentWorkId); }
 
-    private async Task LoadMaterials()
-    {
-        if (!string.IsNullOrEmpty(CurrentWorkId))
-        {
-            AllMaterials = await Repository.GetLocalMaterialsAsync(CurrentWorkId);
-        }
-    }
-
-    // 新建一张空白设定卡片
     private async Task CreateNewMaterial()
     {
-        var newItem = new MaterialItem
-        {
-            Type = CurrentCategory,
-            Name = $"新{GetCategoryName(CurrentCategory)}"
-        };
-
+        var newItem = new MaterialItem { Type = CurrentCategory, Name = $"新{GetCategoryName(CurrentCategory)}" };
         AllMaterials.Add(newItem);
         await Repository.SaveLocalMaterialsAsync(CurrentWorkId, AllMaterials);
+        OpenDrawer(newItem);
+    }
+
+    private void OpenDrawer(MaterialItem item)
+    {
+        EditingItem = item;
+        NewFieldKey = ""; NewFieldValue = "";
+        ClearRelationInputs();
+        IsDrawerOpen = true;
+    }
+
+    private void ClearRelationInputs()
+    {
+        NewCharId = ""; NewCharLabel = "";
+        NewFactionId = ""; NewFactionLabel = "";
+        NewGeoId = ""; NewGeoLabel = "";
+        NewItemId = "";
+    }
+
+    private async Task CloseDrawer()
+    {
+        IsDrawerOpen = false;
+        if (EditingItem != null && !EditingItem.IsReadonlyReference)
+        {
+            EditingItem.UpdatedAt = DateTime.Now;
+            await Repository.SaveLocalMaterialsAsync(CurrentWorkId, AllMaterials);
+        }
+        await Task.Delay(300);
+        EditingItem = null;
+    }
+
+    private void AddBidirectionalRelation(MaterialType targetType)
+    {
+        if (EditingItem == null || EditingItem.IsReadonlyReference) return;
+
+        string targetId = ""; string label = "";
+
+        switch (targetType)
+        {
+            case MaterialType.Character: targetId = NewCharId; label = NewCharLabel; break;
+            case MaterialType.Faction: targetId = NewFactionId; label = NewFactionLabel; break;
+            case MaterialType.Geography: targetId = NewGeoId; label = NewGeoLabel; break;
+            case MaterialType.Item: targetId = NewItemId; label = "持有"; break;
+        }
+
+        if (string.IsNullOrEmpty(targetId)) return;
+        if (string.IsNullOrWhiteSpace(label)) return;
+
+        var targetItem = AllMaterials.FirstOrDefault(m => m.Id == targetId);
+        if (targetItem == null) return;
+
+        if (!EditingItem.Relations.Any(r => r.TargetId == targetId))
+            EditingItem.Relations.Add(new MaterialRelation { TargetId = targetId, Description = label.Trim() });
+
+        if (!targetItem.Relations.Any(r => r.TargetId == EditingItem.Id))
+            targetItem.Relations.Add(new MaterialRelation { TargetId = EditingItem.Id, Description = label.Trim() });
+
+        ClearRelationInputs();
         StateHasChanged();
     }
 
+    private void RemoveBidirectionalRelation(string targetId)
+    {
+        if (EditingItem == null || EditingItem.IsReadonlyReference) return;
+        EditingItem.Relations.RemoveAll(r => r.TargetId == targetId);
+        var targetItem = AllMaterials.FirstOrDefault(m => m.Id == targetId);
+        if (targetItem != null) targetItem.Relations.RemoveAll(r => r.TargetId == EditingItem.Id);
+        StateHasChanged();
+    }
+
+    private List<MaterialRelation> GetFilteredRelations(MaterialType type)
+    {
+        if (EditingItem == null) return new();
+        return EditingItem.Relations.Where(r => { var t = AllMaterials.FirstOrDefault(m => m.Id == r.TargetId); return t != null && t.Type == type; }).ToList();
+    }
+
+    private IEnumerable<string> GetRelationTags(MaterialType sourceType, MaterialType targetType)
+    {
+        string[] defaults = Array.Empty<string>();
+
+        if (targetType == MaterialType.Character)
+        {
+            defaults = new[] { "道侣", "夫妻", "兄弟", "师徒", "死敌", "父子", "朋友" };
+        }
+        else if (targetType == MaterialType.Faction)
+        {
+            if (sourceType == MaterialType.Faction)
+                defaults = new[] { "死敌", "世代交好", "同盟", "附属势力", "上级宗门", "暗中控制", "竞争对手" };
+            else
+                defaults = new[] { "掌门", "太上长老", "真传弟子", "内门弟子", "外门弟子", "客卿", "死敌", "叛徒" };
+        }
+        else if (targetType == MaterialType.Geography)
+        {
+            if (sourceType == MaterialType.Faction)
+                defaults = new[] { "大本营", "发源地", "势力范围", "资源产地", "分舵" };
+            else
+                defaults = new[] { "出生地", "隐居地", "历练之地", "葬身之处", "洞府" };
+        }
+
+        var usedCustoms = AllMaterials.SelectMany(m => m.Relations)
+            .Where(r => { var t = AllMaterials.FirstOrDefault(x => x.Id == r.TargetId); return t != null && t.Type == targetType; })
+            .Select(r => r.Description).Where(d => !string.IsNullOrEmpty(d) && d != "持有");
+
+        return defaults.Concat(usedCustoms).Distinct();
+    }
+
+    private void AddCustomField() { if (EditingItem == null || EditingItem.IsReadonlyReference || string.IsNullOrWhiteSpace(NewFieldKey)) return; string key = NewFieldKey.Trim(); if (!EditingItem.CustomFields.ContainsKey(key)) { EditingItem.CustomFields[key] = string.IsNullOrWhiteSpace(NewFieldValue) ? "-" : NewFieldValue.Trim(); NewFieldKey = ""; NewFieldValue = ""; } }
+    private void RemoveCustomField(string key) { if (EditingItem != null && !EditingItem.IsReadonlyReference) EditingItem.CustomFields.Remove(key); }
+    private void UpdateCustomFieldValue(string key, string newValue) { if (EditingItem != null && !EditingItem.IsReadonlyReference) EditingItem.CustomFields[key] = newValue; }
+
+    private void AddLevelStage() { if (EditingItem == null || EditingItem.IsReadonlyReference) return; EditingItem.LevelStages.Add(new LevelStage { Name = "新境界" }); }
+    private void RemoveLevelStage(LevelStage stage) { if (EditingItem != null && !EditingItem.IsReadonlyReference) EditingItem.LevelStages.Remove(stage); }
+    private void MoveLevelStage(int index, int direction) { if (EditingItem == null || EditingItem.IsReadonlyReference) return; int newIndex = index + direction; if (newIndex >= 0 && newIndex < EditingItem.LevelStages.Count) { var temp = EditingItem.LevelStages[index]; EditingItem.LevelStages[index] = EditingItem.LevelStages[newIndex]; EditingItem.LevelStages[newIndex] = temp; } }
+
+    private async Task OpenImportModal() { GlobalTemplates = await Repository.GetGlobalMaterialsAsync(); IsImportModalOpen = true; StateHasChanged(); }
+    private void CloseImportModal() => IsImportModalOpen = false;
+    private async Task DeriveFromGlobal(MaterialItem template) { await Repository.DeriveMaterialToLocalAsync(CurrentWorkId, template); await LoadMaterials(); CloseImportModal(); }
+    private async Task PromoteToGlobal() { if (EditingItem == null) return; await Repository.PromoteToGlobalTemplateAsync(CurrentWorkId, EditingItem); await LoadMaterials(); await CloseDrawer(); }
+
     private void SetCategory(MaterialType type) { CurrentCategory = type; }
     private void SetViewMode(string mode) { ViewMode = mode; }
-
-    private string GetCategoryName(MaterialType type) => type switch
-    {
-        MaterialType.Character => "角色",
-        MaterialType.Faction => "势力",
-        MaterialType.Geography => "地理",
-        MaterialType.Item => "物品",
-        MaterialType.Worldview => "世界观",
-        _ => "未知"
-    };
-
-    private string GetCategoryIcon(MaterialType type) => type switch
-    {
-        MaterialType.Character => "🧑",
-        MaterialType.Faction => "🏛️",
-        MaterialType.Geography => "🗺️",
-        MaterialType.Item => "⚔️",
-        MaterialType.Worldview => "🌍",
-        _ => "📌"
-    };
+    private string GetCategoryName(MaterialType type) => type switch { MaterialType.Character => "角色", MaterialType.Faction => "势力", MaterialType.Geography => "地理", MaterialType.Item => "物品", MaterialType.Worldview => "世界观", _ => "未知" };
+    private string GetCategoryIcon(MaterialType type) => type switch { MaterialType.Character => "🧑", MaterialType.Faction => "🏛️", MaterialType.Geography => "🗺️", MaterialType.Item => "⚔️", MaterialType.Worldview => "🌍", _ => "📌" };
 }
 
 <div class="materials-container">
-
     <div class="materials-header">
-        <div class="header-left">
-            <h2>📚 小说设定素材库</h2>
-        </div>
+        <div class="header-left"><h2>📚 本书专属设定集</h2></div>
         <div class="header-right">
             <div class="view-toggles">
-                <button class="toggle-btn @(ViewMode == "grid" ? "active" : "")" @onclick="@(() => SetViewMode("grid"))" title="卡片视图">📱 卡片</button>
-                <button class="toggle-btn @(ViewMode == "list" ? "active" : "")" @onclick="@(() => SetViewMode("list"))" title="列表视图">📄 列表</button>
+                <button class="toggle-btn @(ViewMode == "grid" ? "active" : "")" @onclick="@(() => SetViewMode("grid"))">📱</button>
+                <button class="toggle-btn @(ViewMode == "list" ? "active" : "")" @onclick="@(() => SetViewMode("list"))">📄</button>
             </div>
-
-            <button class="btn-primary" @onclick="CreateNewMaterial">
-                ➕ 新建@(GetCategoryName(CurrentCategory))
-            </button>
+            <button class="btn-outline-primary" @onclick="OpenImportModal">📥 引入全局模板</button>
+            <button class="btn-primary" @onclick="CreateNewMaterial">➕ 原创@(GetCategoryName(CurrentCategory))</button>
         </div>
     </div>
-
     <div class="category-tabs">
         @foreach (MaterialType type in Enum.GetValues(typeof(MaterialType)))
         {
-            <div class="tab-item @(CurrentCategory == type ? "active" : "")" @onclick="() => SetCategory(type)">
-                <span class="tab-icon">@GetCategoryIcon(type)</span> @GetCategoryName(type)
-            </div>
+            <div class="tab-item @(CurrentCategory == type ? "active" : "")" @onclick="() => SetCategory(type)"><span class="tab-icon">@GetCategoryIcon(type)</span> @GetCategoryName(type)</div>
         }
     </div>
 
     <div class="materials-content">
-        @if (!FilteredMaterials.Any())
+        @if (!AllMaterials.Any(m => m.Type == CurrentCategory))
         {
-            <div class="empty-state">
-                <div class="empty-icon">@GetCategoryIcon(CurrentCategory)</div>
-                <p>这里空空如也，快来创建你的第一个@(GetCategoryName(CurrentCategory))设定吧！</p>
-                <button class="btn-outline" @onclick="CreateNewMaterial">立即创建</button>
-            </div>
+            <div class="empty-state"><p>本书暂无@(GetCategoryName(CurrentCategory))设定。</p><button class="btn-primary" @onclick="CreateNewMaterial" style="margin-right: 12px;">立即原创</button><button class="btn-outline-primary" @onclick="OpenImportModal">从全局引入</button></div>
         }
         else
         {
@@ -110,11 +190,9 @@
                 <div class="cards-grid">
                     @foreach (var item in FilteredMaterials)
                     {
-                        <div class="material-card">
+                        <div class="material-card" @onclick="() => OpenDrawer(item)">
                             <div class="card-header">
-                                <div class="avatar-box">
-                                    @(string.IsNullOrEmpty(item.AvatarUrl) ? GetCategoryIcon(item.Type) : "")
-                                </div>
+                                <div class="avatar-box">@(string.IsNullOrEmpty(item.AvatarUrl) ? GetCategoryIcon(item.Type) : "")</div>
                                 <div class="card-title-area">
                                     <h3 class="card-title">@item.Name</h3>
                                     @if (item.IsReadonlyReference)
@@ -123,60 +201,285 @@
                                     }
                                     else if (!string.IsNullOrEmpty(item.DerivedFromId))
                                     {
+
                                         <span class="badge-derived">🧬 派生</span>
                                     }
                                 </div>
                             </div>
-                            <div class="card-desc">
-                                @(string.IsNullOrEmpty(item.Description) ? "（暂无简介，点击编辑）" : item.Description)
+                            <div class="card-desc">@(string.IsNullOrEmpty(item.Description) ? "（暂无简介）" : item.Description)</div>
+                            <div class="card-props-preview">
+                                @foreach (var kvp in item.CustomFields.Take(2))
+                                {
+                                    <span class="prop-tag">@kvp.Key: @kvp.Value</span>
+                                }
+                                @if (item.Relations.Any())
+                                {
+                                    <span class="prop-tag relation-preview">⛓️ @item.Relations.Count 羁绊</span>
+                                }
                             </div>
                         </div>
                     }
                 </div>
             }
-            else if (ViewMode == "list")
+            else
             {
                 <div class="list-view">
                     <table class="material-table">
-                        <thead>
-                            <tr>
-                                <th width="60">图标</th>
-                                <th width="200">名称</th>
-                                <th>简介</th>
-                                <th width="120">来源状态</th>
-                                <th width="150">最后更新</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th width="60">图标</th><th width="200">名称</th><th>状态</th><th width="150">最后更新</th></tr></thead>
                         <tbody>
                             @foreach (var item in FilteredMaterials)
                             {
-                                <tr class="list-row">
+                                <tr class="list-row" @onclick="() => OpenDrawer(item)">
                                     <td class="icon-cell">@GetCategoryIcon(item.Type)</td>
                                     <td class="name-cell">@item.Name</td>
-                                    <td class="desc-cell">@(string.IsNullOrEmpty(item.Description) ? "-" : item.Description)</td>
-                                    <td>
-                                        @if (item.IsReadonlyReference)
-                                        {
-                                            <span class="badge-readonly">🔗 引用</span>
-                                        }
-                                        else if (!string.IsNullOrEmpty(item.DerivedFromId))
-                                        {
+                                    <td>@if (item.IsReadonlyReference) {
+                                        <span class="badge-readonly">🔗 引用</span>
+                                    } else if (!string.IsNullOrEmpty(item.DerivedFromId))
+                                    {
 
-                                            <span class="badge-derived">🧬 派生</span>
-                                        }
-                                        else
-                                        {
+                                        <span class="badge-derived">🧬 派生</span>
+                                    }
+                                    else
+                                    {
 
-                                            <span style="color:#999; font-size:12px;">单本原创</span>
-                                        }
-                                    </td>
-                                    <td class="time-cell">@item.UpdatedAt.ToString("MM-dd HH:mm")</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                                        <span style="color:#aaa;font-size:12px;">单本原创</span>
+                                    }
+                                </td>
+                                <td class="time-cell">@item.UpdatedAt.ToString("MM-dd HH:mm")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+</div>
+
+@if (IsDrawerOpen)
+{
+    <div class="drawer-overlay" @onclick="CloseDrawer"></div>
+}
+
+<div class="settings-drawer @(IsDrawerOpen ? "open" : "")" style="width: 520px;">
+    @if (EditingItem != null)
+    {
+        bool isLocked = EditingItem.IsReadonlyReference;
+
+        <div class="drawer-header">
+            <div class="drawer-title-box"><span class="drawer-icon">@GetCategoryIcon(EditingItem.Type)</span><h3>@(isLocked ? "查看设定 (只读)" : $"配置【{EditingItem.Name}】")</h3></div>
+            <button class="close-btn" @onclick="CloseDrawer">✖</button>
+        </div>
+
+        <div class="drawer-body">
+            @if (isLocked)
+            {
+                <div class="locked-alert">⚠️ 全局只读引用，不可在此修改。</div>
+            }
+
+            <div class="drawer-section"><label>名称</label><input type="text" class="drawer-input title-input" @bind="EditingItem.Name" disabled="@isLocked" /></div>
+
+            @if (EditingItem.Type == MaterialType.Worldview)
+            {
+                <div class="drawer-section">
+                    <label>📈 境界与等级序列</label>
+                    <div class="level-timeline">
+                        @for (int i = 0; i < EditingItem.LevelStages.Count; i++)
+                        {
+                            var stage = EditingItem.LevelStages[i]; int idx = i;
+                            <div class="level-node">
+                                <div class="level-index">@(i + 1)</div>
+                                <div class="level-content">
+                                    <input type="text" class="level-name-input" @bind="stage.Name" disabled="@isLocked" />
+                                    <textarea class="level-desc-input" @bind="stage.Description" disabled="@isLocked"></textarea>
+                                </div>
+                                @if (!isLocked)
+                                {
+                                    <div class="level-actions"><button @onclick="() => MoveLevelStage(idx, -1)" disabled="@(idx == 0)">⬆</button><button @onclick="() => MoveLevelStage(idx, 1)" disabled="@(idx == EditingItem.LevelStages.Count - 1)">⬇</button><button class="danger" @onclick="() => RemoveLevelStage(stage)">✖</button></div>
+                                }
+                            </div>
+                        }
+                    </div>
+                    @if (!isLocked)
+                    {
+                        <button class="btn-outline-primary add-level-btn" @onclick="AddLevelStage">➕ 添加下一境界</button>
+                    }
+                </div>
+            }
+
+            <div class="drawer-section"><label>描述简介</label><textarea class="drawer-input desc-input" @bind="EditingItem.Description" disabled="@isLocked"></textarea></div>
+
+            <hr class="drawer-divider" />
+
+            <!-- 🌟 世界观完全屏蔽所有羁绊区 -->
+            @if (EditingItem.Type != MaterialType.Worldview)
+            {
+                <datalist id="dl-char-relations">@foreach(var t in GetRelationTags(EditingItem.Type, MaterialType.Character)){
+                    <option value="@t" />
+                }
+            </datalist>
+            <datalist id="dl-faction-relations">@foreach(var t in GetRelationTags(EditingItem.Type, MaterialType.Faction)){
+                <option value="@t" />
+            }
+        </datalist>
+        <datalist id="dl-geo-relations">@foreach(var t in GetRelationTags(EditingItem.Type, MaterialType.Geography)){
+            <option value="@t" />
+        }
+    </datalist>
+
+    <!-- 1. 👥 角色羁绊 (仅角色展示) -->
+    @if (EditingItem.Type == MaterialType.Character)
+    {
+        <div class="relation-block">
+            <div class="block-title">👥 角色羁绊与人际关系</div>
+            <div class="relations-list">
+                @foreach (var rel in GetFilteredRelations(MaterialType.Character))
+                {
+                    var target = AllMaterials.FirstOrDefault(m => m.Id == rel.TargetId); if (target != null)
+                    {
+                        <div class="relation-tag" @onclick="() => OpenDrawer(target)"><span class="rel-name">@target.Name</span><span class="rel-desc-badge">@rel.Description</span>@if (!isLocked) {
+                            <button class="rel-remove" @onclick:stopPropagation="true" @onclick="() => RemoveBidirectionalRelation(rel.TargetId)">×</button>
+                        }
+                    </div>
+                }
+            }
+        </div>
+        @if (!isLocked)
+        {
+            <div class="relation-form-row">
+                <select class="relation-select" @bind="NewCharId">
+                    <option value="">-- 选择角色 --</option>
+                    @foreach (var m in AllMaterials.Where(x => x.Type == MaterialType.Character && x.Id != EditingItem.Id && !EditingItem.Relations.Any(r => r.TargetId == x.Id)))
+                    {
+                        <option value="@m.Id">👤 @m.Name</option>
+                    }
+                </select>
+                <input type="text" list="dl-char-relations" class="relation-label-input" placeholder="选择或输入标签" @bind="NewCharLabel" />
+                <button class="relation-add-btn" @onclick="() => AddBidirectionalRelation(MaterialType.Character)">绑定</button>
+            </div>
+        }
+    </div>
+}
+
+<!-- 2. 🏛️ 势力归属 (角色、势力、地理展示) -->
+@if (EditingItem.Type == MaterialType.Character || EditingItem.Type == MaterialType.Faction || EditingItem.Type == MaterialType.Geography)
+{
+    <div class="relation-block">
+        <div class="block-title">🏛️ 势力交集与归属</div>
+        <div class="relations-list">
+            @foreach (var rel in GetFilteredRelations(MaterialType.Faction))
+            {
+                var target = AllMaterials.FirstOrDefault(m => m.Id == rel.TargetId); if (target != null)
+                {
+                    <div class="relation-tag" @onclick="() => OpenDrawer(target)"><span class="rel-name">@target.Name</span><span class="rel-desc-badge color-faction">@rel.Description</span>@if (!isLocked) {
+                        <button class="rel-remove" @onclick:stopPropagation="true" @onclick="() => RemoveBidirectionalRelation(rel.TargetId)">×</button>
+                    }
                 </div>
             }
         }
     </div>
+    @if (!isLocked)
+    {
+        <div class="relation-form-row">
+            <select class="relation-select" @bind="NewFactionId">
+                <option value="">-- 选择势力 --</option>
+                @foreach (var m in AllMaterials.Where(x => x.Type == MaterialType.Faction && x.Id != EditingItem.Id && !EditingItem.Relations.Any(r => r.TargetId == x.Id)))
+                {
+                    <option value="@m.Id">🏛️ @m.Name</option>
+                }
+            </select>
+            <input type="text" list="dl-faction-relations" class="relation-label-input" placeholder="选择或输入标签" @bind="NewFactionLabel" />
+            <button class="relation-add-btn" @onclick="() => AddBidirectionalRelation(MaterialType.Faction)">绑定</button>
+        </div>
+    }
 </div>
+                }
+
+<!-- 3. 🗺️ 地理场景 (角色、势力展示) -->
+                @if (EditingItem.Type == MaterialType.Character || EditingItem.Type == MaterialType.Faction)
+{
+    <div class="relation-block">
+        <div class="block-title">🗺️ 关联地理与场景</div>
+        <div class="relations-list">
+            @foreach (var rel in GetFilteredRelations(MaterialType.Geography))
+            {
+                var target = AllMaterials.FirstOrDefault(m => m.Id == rel.TargetId); if (target != null)
+                {
+                    <div class="relation-tag" @onclick="() => OpenDrawer(target)"><span class="rel-name">@target.Name</span><span class="rel-desc-badge color-geo">@rel.Description</span>@if (!isLocked) {
+                        <button class="rel-remove" @onclick:stopPropagation="true" @onclick="() => RemoveBidirectionalRelation(rel.TargetId)">×</button>
+                    }
+                </div>
+            }
+        }
+    </div>
+    @if (!isLocked)
+    {
+        <div class="relation-form-row">
+            <select class="relation-select" @bind="NewGeoId">
+                <option value="">-- 选择地理 --</option>
+                @foreach (var m in AllMaterials.Where(x => x.Type == MaterialType.Geography && x.Id != EditingItem.Id && !EditingItem.Relations.Any(r => r.TargetId == x.Id)))
+                {
+                    <option value="@m.Id">🗺️ @m.Name</option>
+                }
+            </select>
+            <input type="text" list="dl-geo-relations" class="relation-label-input" placeholder="选择或输入标签" @bind="NewGeoLabel" />
+            <button class="relation-add-btn" @onclick="() => AddBidirectionalRelation(MaterialType.Geography)">绑定</button>
+        </div>
+    }
+</div>
+                }
+
+
+            }
+
+<hr class="drawer-divider" />
+<div class="drawer-section">
+    <label>🛠️ 自定义数值与属性扩展</label>
+    <div class="custom-fields-list">@foreach (var key in EditingItem.CustomFields.Keys.ToList()) {
+        <div class="field-row"><div class="field-key">@key</div><input type="text" class="field-value-input" value="@EditingItem.CustomFields[key]" @onchange="(e) => UpdateCustomFieldValue(key, e.Value?.ToString() ?? string.Empty)" disabled="@isLocked" />@if (!isLocked) {
+            <button class="delete-field-btn" @onclick="() => RemoveCustomField(key)">🗑️</button>
+        }
+    </div>
+}
+</div>
+                @if (!isLocked)
+{
+    <div class="add-field-box"><input type="text" class="add-input" placeholder="属性名" @bind="NewFieldKey" /><input type="text" class="add-input" placeholder="值" @bind="NewFieldValue" /><button class="add-field-btn" @onclick="AddCustomField">➕</button></div>
+}
+</div>
+</div>
+<div class="drawer-footer" style="display:flex; gap:12px;">
+    @if (!isLocked && string.IsNullOrEmpty(EditingItem.DerivedFromId))
+    {
+        <button class="btn-outline-primary" style="flex:1;" @onclick="PromoteToGlobal">⬆️ 沉淀到全局</button>
+    }
+    <button class="btn-primary" style="flex:2;" @onclick="CloseDrawer">@(isLocked ? "关闭" : "💾 保存并关闭")</button>
+</div>
+    }
+</div>
+
+@if (IsImportModalOpen)
+{
+    <div class="modal-overlay" @onclick="CloseImportModal"></div>
+    <div class="import-modal">
+        <div class="modal-header"><h3>📥 引入 @(GetCategoryName(CurrentCategory)) 模板</h3><button class="close-btn" @onclick="CloseImportModal">✖</button></div>
+        <div class="modal-body">
+            @if (!FilteredGlobalTemplates.Any())
+            {
+                <div class="empty-state" style="padding:40px 0;">全局库中暂无此分类模板。请先在外部左侧菜单进入“全局模板库”创建。</div>
+            }
+            else
+            {
+                <div class="template-list">
+                    @foreach (var template in FilteredGlobalTemplates)
+                    {
+                        <div class="template-item">
+                            <div class="tpl-info"><div class="tpl-name">@GetCategoryIcon(template.Type) @template.Name</div><div class="tpl-desc">@(string.IsNullOrEmpty(template.Description) ? "暂无简介" : template.Description)</div></div>
+                            <div class="tpl-actions"><button class="action-btn derive-btn" @onclick="() => DeriveFromGlobal(template)">🧬 派生 (复制到本书)</button></div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}

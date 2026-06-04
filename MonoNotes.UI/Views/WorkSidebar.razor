@@ -8,9 +8,15 @@
     [Parameter] public EventCallback OnReturnClicked { get; set; }
     [Parameter] public string ActiveSubView { get; set; } = "editor";
     [Parameter] public EventCallback<string> OnSubViewSelected { get; set; }
+
     [Parameter] public EventCallback<string> OnChapterSelected { get; set; }
+    // 🌟 新增：卷被选中时的事件 (向外传递 VolumeId)
+    [Parameter] public EventCallback<string> OnVolumeSelected { get; set; }
 
     private string ActiveChapterId { get; set; } = string.Empty;
+    // 🌟 新增：用于记录选中的卷
+    private string ActiveVolumeId { get; set; } = string.Empty;
+
     private WorkIndex? CurrentWorkIndex;
     private List<Volume> NovelVolumes => CurrentWorkIndex?.Volumes ?? new();
     private string CurrentWorkTitle { get; set; } = "未命名作品";
@@ -60,7 +66,6 @@
         if (!string.IsNullOrWhiteSpace(_editingWorkTitle) && _editingWorkTitle != CurrentWorkTitle)
         {
             CurrentWorkTitle = _editingWorkTitle;
-            // 调用我们刚写的底层方法，将新书名保存到硬盘
             await Repository.UpdateWorkTitleAsync(CurrentWorkId, _editingWorkTitle);
         }
         _isEditingWorkTitle = false;
@@ -72,7 +77,6 @@
         if (e.Key == "Escape") _isEditingWorkTitle = false;
     }
 
-    // 自动汉化数字
     private string GetChineseNumber(int number)
     {
         string[] cn = { "零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十" };
@@ -105,8 +109,11 @@
     private async Task AddNewVolume(string title = "")
     {
         if (CurrentWorkIndex == null) return;
-        CurrentWorkIndex.Volumes.Add(new Volume { Title = "新建卷" });
+        var newVol = new Volume { Title = "新建卷" };
+        CurrentWorkIndex.Volumes.Add(newVol);
         await SaveAndRecalculateIndexAsync();
+        // 🌟 新建后自动选中该卷
+        await SelectVolume(newVol.Id);
     }
 
     private async Task AddNewChapter(Volume volume)
@@ -121,10 +128,32 @@
 
     private void ToggleVolume(Volume vol) { vol.IsExpanded = !vol.IsExpanded; }
 
+    // ==========================================
+    // 🌟 核心：智能选中卷/章逻辑
+    // ==========================================
+    private async Task SelectVolume(string volumeId)
+    {
+        ActiveVolumeId = volumeId;
+        ActiveChapterId = string.Empty; // 选中卷时清空章选中态
+
+        // 智能切换：卷只有大纲没有正文，所以强制跳到大纲视图
+        if (ActiveSubView != "outline")
+        {
+            await OnSubViewSelected.InvokeAsync("outline");
+        }
+        await OnVolumeSelected.InvokeAsync(volumeId);
+    }
+
     private async Task SelectChapter(string chapterId)
     {
         ActiveChapterId = chapterId;
-        await OnSubViewSelected.InvokeAsync("editor");
+        ActiveVolumeId = string.Empty; // 选中章时清空卷选中态
+
+        // 智能切换：如果不在正文也不在大纲，切回正文
+        if (ActiveSubView != "editor" && ActiveSubView != "outline")
+        {
+            await OnSubViewSelected.InvokeAsync("editor");
+        }
         await OnChapterSelected.InvokeAsync(chapterId);
     }
 
@@ -243,11 +272,13 @@
             }
         </div>
     </div>
+
     <div class="sidebar-nav">
-        <button class="nav-tab @(ActiveSubView == "editor" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("editor"))">📝 正文</button>
-        <button class="nav-tab @(ActiveSubView == "materials" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("materials"))">📚 设定</button>
-        <button class="nav-tab @(ActiveSubView == "foreshadowing" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("foreshadowing"))">💡 伏笔</button>
-        <button class="nav-tab @(ActiveSubView == "details" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("details"))">ℹ️ 详情</button>
+        <button class="nav-tab @(ActiveSubView == "editor" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("editor"))">正文</button>
+        <button class="nav-tab @(ActiveSubView == "outline" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("outline"))">大纲</button>
+        <button class="nav-tab @(ActiveSubView == "materials" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("materials"))">设定</button>
+        <button class="nav-tab @(ActiveSubView == "foreshadowing" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("foreshadowing"))">伏笔</button>
+        <button class="nav-tab @(ActiveSubView == "details" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("details"))">详情</button>
     </div>
 
     <div class="tree-container">
@@ -260,12 +291,13 @@
             @foreach (var volume in NovelVolumes)
             {
                 <li class="volume-node">
-                    <div class="volume-title"
+                    <div class="volume-title @(ActiveVolumeId == volume.Id && ActiveSubView == "outline" ? "active" : "")"
+                         @onclick="() => SelectVolume(volume.Id)"
                          @oncontextmenu="(e) => ShowContextMenu(e, volume)"
                          @oncontextmenu:preventDefault="true">
 
-                        <span class="toggle-icon" @onclick="() => ToggleVolume(volume)">@(volume.IsExpanded ? "🔽" : "▶️")</span>
-                        <span class="title-text" style="flex:1;" @onclick="() => ToggleVolume(volume)">@volume.Title</span>
+                        <span class="toggle-icon" @onclick="() => ToggleVolume(volume)" @onclick:stopPropagation="true">@(volume.IsExpanded ? "🔽" : "▶️")</span>
+                        <span class="title-text" style="flex:1;">@volume.Title</span>
                         <button class="icon-btn" style="font-size: 10px;" @onclick="() => AddNewChapter(volume)" @onclick:stopPropagation="true">➕</button>
                     </div>
 
@@ -274,7 +306,7 @@
                         <ul class="chapter-list">
                             @foreach (var chapter in volume.Chapters)
                             {
-                                <li class="chapter-node @(ActiveChapterId == chapter.Id && ActiveSubView == "editor" ? "active" : "")"
+                                <li class="chapter-node @(ActiveChapterId == chapter.Id && (ActiveSubView == "editor" || ActiveSubView == "outline") ? "active" : "")"
                                     @oncontextmenu="(e) => ShowContextMenu(e, chapter)"
                                     @oncontextmenu:preventDefault="true">
 

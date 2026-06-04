@@ -8,7 +8,7 @@
     border-right: 1px solid #f0f0f0;
     display: flex;
     flex-direction: column;
-    flex-shrink: 0; /* 绝对禁止被挤压变形 */
+    flex-shrink: 0;
 }
 
 /* =========================================
@@ -44,37 +44,42 @@
 }
 
 /* =========================================
-   3. 导航切换 (正文/伏笔/设置)
+   3. 🌟 新版导航切换 (纯文字单行均分排版)
 ========================================= */
 .sidebar-nav {
     display: flex;
+    padding: 8px 6px;
     border-bottom: 1px solid #f0f0f0;
     background-color: #fff;
     flex-shrink: 0;
+    gap: 4px;
+    /* 去掉了 flex-wrap: wrap，让它们保持在同一行 */
+    justify-content: space-between;
 }
 
 .nav-tab {
-    flex: 1;
+    flex: 1; /* 5个按钮自动均分 100% 宽度 */
     background: none;
-    border: none;
-    padding: 10px 0;
-    font-size: 13px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 6px 0;
+    font-size: 13px; /* 去掉图标后字号稍微提一点，显得更清晰 */
     color: #666;
     cursor: pointer;
-    border-bottom: 2px solid transparent;
     transition: all 0.2s;
+    text-align: center;
+    white-space: nowrap; /* 强制文字不换行 */
 }
 
     .nav-tab:hover {
-        color: #333;
-        background: #fbfbfb;
+        background: #f5f5f5;
     }
 
     .nav-tab.active {
         color: #1976d2;
         font-weight: bold;
-        border-bottom-color: #1976d2;
-        background: #f0f4ff;
+        background: #e3f2fd;
+        border-color: #bbdefb;
     }
 
 /* =========================================
@@ -84,7 +89,6 @@
     flex: 1;
     overflow-y: auto;
     padding: 16px 12px;
-    /* 隐藏实体滚动条但保留滚动能力 */
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
@@ -122,7 +126,7 @@
     margin-bottom: 4px;
 }
 
-/* 卷标题 */
+/* 🌟 卷标题与高亮状态 */
 .volume-title {
     display: flex;
     align-items: center;
@@ -139,12 +143,17 @@
         background-color: #f0f0f0;
     }
 
-/* 章标题 */
+    .volume-title.active {
+        background-color: #e3f2fd;
+        color: #1976d2;
+    }
+
+/* 🌟 章标题与高亮状态 */
 .chapter-node {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 6px 8px 6px 28px; /* 缩进 */
+    padding: 6px 8px 6px 28px;
     border-radius: 6px;
     cursor: pointer;
     transition: background 0.2s;
@@ -202,8 +211,6 @@
     text-align: center;
 }
 
-
-
 /* 重命名时的输入框 */
 .rename-input {
     flex: 1;
@@ -224,7 +231,6 @@
 /* =========================================
    7. 右键菜单 (Context Menu)
 ========================================= */
-/* 透明遮罩层，用于点空白处关闭菜单 */
 .sidebar-modal-overlay {
     position: fixed;
     top: 0;

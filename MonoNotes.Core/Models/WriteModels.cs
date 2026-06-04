@@ -55,6 +55,7 @@ namespace MonoNotes.Core.Models
         public string Title { get; set; } = "新卷";
         public bool IsExpanded { get; set; } = true;
         public List<Chapter> Chapters { get; set; } = new();
+        public string Outline { get; set; } = ""; // 卷大纲：本卷的剧情主线与预期目标
     }
 
     public class Chapter
@@ -64,5 +65,6 @@ namespace MonoNotes.Core.Models
         /// <summary> 物理文件相对路径，例如: Chapters/c_001.md </summary>
         public string FilePath { get; set; } = string.Empty;
         public int WordCount { get; set; } = 0;
+        public string Outline { get; set; } = ""; // 章节细纲：本章的起承转合与爽点备忘
     }
 }

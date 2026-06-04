@@ -21,7 +21,7 @@
     color: #999;
     font-size: 13px;
     transition: all 0.3s ease;
-    flex-shrink: 0; /* 🌟 保证状态栏不会被挤压 */
+    flex-shrink: 0;
 }
 
     .desk-topbar:hover {
@@ -66,9 +66,10 @@
     border: none;
     cursor: pointer;
     color: #666;
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: background 0.2s;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    font-weight: bold;
 }
 
     .tool-btn:hover {
@@ -81,60 +82,69 @@
     color: #f57f17;
 }
 
+.toggle-outline-btn {
+    border: 1px solid #d9e2ec;
+    background: #f0f4f8;
+    color: #476282;
+    font-size: 12px;
+}
+
+    .toggle-outline-btn.active {
+        background: #e3f2fd;
+        color: #1565c0;
+        border-color: #bbdefb;
+    }
 
 /* =========================================
-   3. 🌟 核心排版：外层锁死不滚动，内容区自适应
+   3. 核心排版：左侧编辑器
 ========================================= */
 .editor-body-layout {
     display: flex;
     justify-content: center;
     flex: 1;
-    min-height: 0; /* 🌟 核心修复1：打破 Flex 默认无限撑开的魔咒 */
-    overflow: hidden; /* 绝对禁止整个页面滚动 */
+    min-height: 0;
+    overflow: hidden;
 }
 
-/* 核心盒子：控制最大呼吸间距 */
 .editor-content-box {
     display: flex;
     width: 100%;
-    height: 100%; /* 🌟 核心修复2：高度必须往下传递 */
+    height: 100%;
     padding: 0 40px;
     justify-content: center;
     gap: 40px;
     box-sizing: border-box;
 }
 
-/* 🌟 编辑器主区域：纵向布局，高度占满 */
 .editor-main-area {
     flex: 1;
-    max-width: 1000px;
+    max-width: 1000px; /* 沉浸式宽屏，收起侧边栏时自动居中扩展 */
     display: flex;
     flex-direction: column;
-    height: 100%; /* 🌟 继承高度 */
-    min-height: 0; /* 🌟 允许压缩 */
+    height: 100%;
+    min-height: 0;
     padding-top: 20px;
     box-sizing: border-box;
+    transition: all 0.3s ease;
 }
-/* 🌟 分体式标题栏容器 */
+
 .chapter-title-container {
     display: flex;
-    align-items: baseline; /* 保证文字底边完美对齐 */
+    align-items: baseline;
     width: 100%;
     margin-bottom: 20px;
     padding: 0 20px;
     flex-shrink: 0;
 }
 
-/* 🌟 前缀（第X章：），显示为灰色且不可选中 */
 .chapter-prefix {
     font-size: 32px;
     font-weight: bold;
     color: #9ca3af;
     margin-right: 4px;
-    user-select: none; /* 防止双击全选时把它带上 */
+    user-select: none;
 }
 
-/* 🌟 可编辑的后缀标题框 */
 .chapter-title-input {
     flex: 1;
     font-size: 32px;
@@ -151,30 +161,54 @@
         color: #ddd;
     }
 
-/* 🌟 Vditor 容器：占满剩余所有空间 */
 .chapter-content-textarea {
     flex: 1;
     height: 100%;
-    min-height: 0; /* 🌟 极其重要：逼迫 Vditor 在内部生成滚动条，而不是撑爆外层 */
+    min-height: 0;
     display: flex;
     flex-direction: column;
 }
 
+.vditor {
+    border: none !important;
+}
+
+.vditor-toolbar {
+    border-bottom: 1px solid #f0f0f0 !important;
+    background-color: rgba(255, 255, 255, 0.95) !important;
+}
 
 /* =========================================
-   4. 🌟 右侧自制目录栏 (独立滚动，隐藏实体滚动条)
+   4. 🌟 右侧：贴脸大纲面板 (折叠+三体合一)
 ========================================= */
-.editor-toc-sidebar {
-    width: 240px;
-    height: 100%; /* 🌟 继承高度 */
-    flex-shrink: 0;
+.outline-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
     background-color: transparent;
     border-left: 1px solid #f0f0f0;
     padding: 20px 0 40px 20px;
-    overflow-y: auto; /* 🌟 大纲可以自己独立滚动 */
+    overflow-y: auto;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* 跨浏览器防滚动条代码 */
+    /* 🌟 核心抽屉折叠动画 */
+    .outline-sidebar.open {
+        width: 280px;
+        flex-shrink: 0;
+        opacity: 1;
+    }
+
+    .outline-sidebar.closed {
+        width: 0;
+        padding-left: 0;
+        padding-right: 0;
+        border-left: none;
+        opacity: 0;
+        overflow: hidden;
+        margin-left: -40px;
+    }
+
 .hide-scrollbar {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -184,21 +218,83 @@
         display: none !important;
     }
 
-.toc-header {
-    font-size: 14px;
-    color: #333;
+/* 面板区块通用样式 */
+.sidebar-block {
+    display: flex;
+    flex-direction: column;
+}
+
+.block-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #444;
     font-weight: bold;
-    margin-top: 0;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 1px dashed #e0e0e0;
+    margin: 0 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed #eaeaea;
+}
+
+.ol-icon {
+    font-size: 15px;
+}
+
+/* 大纲输入框 */
+.outline-block {
+    flex-shrink: 0;
+}
+
+.outline-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid transparent;
+    background: #f9f9fb;
+    resize: vertical;
+    outline: none;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #444;
+    padding: 10px;
+    border-radius: 8px;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+    .outline-textarea:focus {
+        background: #fff;
+        border-color: #1976d2;
+        box-shadow: 0 0 0 2px rgba(25,118,210,0.1);
+    }
+
+    .outline-textarea::placeholder {
+        color: #bbb;
+        font-weight: normal;
+    }
+
+.chapter-textarea {
+    min-height: 160px;
+}
+
+.volume-textarea {
+    min-height: 100px;
+    font-style: italic;
+    color: #666;
+    background: #fdfdfd;
+    border: 1px solid #f0f0f0;
+}
+
+/* 本文导航 TOC 样式 */
+.toc-block {
+    flex: 1;
+    min-height: 200px;
 }
 
 .toc-empty {
     font-size: 12px;
     color: #aaa;
     text-align: center;
-    margin-top: 40px;
+    margin-top: 20px;
     line-height: 1.8;
 }
 
@@ -233,14 +329,4 @@
     background-color: #ccc;
     margin-right: 8px;
     flex-shrink: 0;
-}
-
-/* 🌟 去除 Vditor 原生边框，让它融入背景 */
-.vditor {
-    border: none !important;
-}
-
-.vditor-toolbar {
-    border-bottom: 1px solid #f0f0f0 !important;
-    background-color: rgba(255, 255, 255, 0.95) !important;
 }
