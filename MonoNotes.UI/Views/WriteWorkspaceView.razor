@@ -131,16 +131,12 @@
                                 CurrentChapterId="@ActiveChapterId"
                                 OnTitleChanged="HandleIndexUpdated" />
             }
-            else if (CurrentSubView == "outline")
+          else if (CurrentSubView == "outline")
             {
-                <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; background: #fdfdfd;">
-                    <h2 style="font-size: 24px; color: #333; margin-bottom: 16px;">🗺️ 大纲工作台 (WorkOutlineDesk)</h2>
-                    <p style="color: #666; margin-bottom: 8px;">专门用来写大纲的独立模块即将空投...</p>
-                    <div style="background: #e3f2fd; color: #1565c0; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-align: center;">
-                        当前选中的 卷ID：@(string.IsNullOrEmpty(ActiveVolumeId) ? "无" : ActiveVolumeId) <br />
-                        当前选中的 章ID：@(string.IsNullOrEmpty(ActiveChapterId) ? "无" : ActiveChapterId)
-                    </div>
-                </div>
+                <WorkOutlineDesk CurrentWorkId="@ActiveWorkId"
+                                 CurrentVolumeId="@ActiveVolumeId"
+                                 CurrentChapterId="@ActiveChapterId"
+                                 OnTitleChanged="HandleIndexUpdated" />
             }
             else if (CurrentSubView == "foreshadowing")
             {

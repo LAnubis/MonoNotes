@@ -1,0 +1,237 @@
+﻿@using MonoNotes.Core.Models
+@using MonoNotes.Storage
+@using System.Text.RegularExpressions
+@inject WriteSpaceRepository Repository
+@inject IJSRuntime JS
+@implements IDisposable
+
+@code {
+    [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
+    [Parameter] public string CurrentVolumeId { get; set; } = string.Empty;
+    [Parameter] public string CurrentChapterId { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnTitleChanged { get; set; }
+
+    private WorkIndex? IndexData;
+    private Volume? ActiveVolume;
+    private Chapter? ActiveChapter;
+
+    // 分体存储
+    private string Prefix { get; set; } = "";
+    private string Body { get; set; } = "加载中...";
+    private string OutlineContent { get; set; } = string.Empty;
+    private string SaveStatus { get; set; } = "已同步";
+
+    // 判断当前是在写卷大纲，还是章细纲
+    private bool IsVolumeMode => string.IsNullOrEmpty(CurrentChapterId) && !string.IsNullOrEmpty(CurrentVolumeId);
+
+    private int WordCount => string.IsNullOrWhiteSpace(OutlineContent) ? 0 : OutlineContent.Length;
+
+    private CancellationTokenSource? _debounceCts;
+    private DotNetObjectReference<WorkOutlineDesk>? _objRef;
+
+    public class TocItem { public int Level { get; set; } public string Text { get; set; } = string.Empty; }
+    private List<TocItem> DocumentToc { get; set; } = new();
+
+    protected override void OnInitialized() { _objRef = DotNetObjectReference.Create(this); }
+
+   
+
+    private void ParseTitle(string fullTitle)
+    {
+        var match = Regex.Match(fullTitle, @"^(第\s*\d+\s*[卷章][：\s]*)(.*)$");
+        if (match.Success) { Prefix = match.Groups[1].Value; Body = match.Groups[2].Value; }
+        else { Prefix = ""; Body = fullTitle; }
+    }
+
+    private async Task LoadVditorAsync()
+    {
+        // 使用一个独立的 ID 以免与正文编辑器冲突
+        if (_objRef != null) { await JS.InvokeVoidAsync("writingVditor.init", "vditor-outline-area", OutlineContent, _objRef); }
+    }
+
+    [JSInvokable]
+    public async Task OnVditorInput(string value)
+    {
+        OutlineContent = value;
+        await TriggerAutoSave(false);
+    }
+
+    private async Task OnTitleInput(ChangeEventArgs e)
+    {
+        Body = e.Value?.ToString() ?? "";
+        await TriggerAutoSave(true);
+    }
+
+    private async Task TriggerAutoSave(bool isTitleChange)
+    {
+        SaveStatus = "正在输入...";
+        _debounceCts?.Cancel();
+        _debounceCts = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(1500, _debounceCts.Token);
+            SaveStatus = "保存中...";
+
+            if (IndexData != null)
+            {
+                if (ActiveChapter != null)
+                {
+                    ActiveChapter.Outline = OutlineContent;
+                    if (isTitleChange) ActiveChapter.Title = Prefix + Body;
+                }
+                else if (ActiveVolume != null)
+                {
+                    ActiveVolume.Outline = OutlineContent;
+                    if (isTitleChange) ActiveVolume.Title = Prefix + Body;
+                }
+
+                await Repository.SaveWorkIndexAsync(IndexData);
+
+                if (isTitleChange && OnTitleChanged.HasDelegate)
+                {
+                    await OnTitleChanged.InvokeAsync();
+                }
+            }
+
+            GenerateToc();
+            SaveStatus = $"已保存 {DateTime.Now:HH:mm:ss}";
+            StateHasChanged();
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private void GenerateToc()
+    {
+        DocumentToc.Clear();
+        if (string.IsNullOrWhiteSpace(OutlineContent)) return;
+        foreach (var line in OutlineContent.Split('\n'))
+        {
+            var match = Regex.Match(line, @"^(#{1,6})\s+(.*)");
+            if (match.Success) DocumentToc.Add(new TocItem { Level = match.Groups[1].Value.Length, Text = match.Groups[2].Value.Trim() });
+        }
+    }
+
+    private async Task ScrollToTargetHeading(string headingText)
+    {
+        await JS.InvokeVoidAsync("writingVditor.scrollToHeading", "vditor-outline-area", headingText);
+    }
+
+    public void Dispose()
+    {
+        _objRef?.Dispose();
+        _ = JS.InvokeVoidAsync("writingVditor.destroy", "vditor-outline-area");
+    }
+
+    private bool _shouldInitVditor = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // 🌟 清空状态
+        if (string.IsNullOrEmpty(CurrentWorkId) || (string.IsNullOrEmpty(CurrentVolumeId) && string.IsNullOrEmpty(CurrentChapterId)))
+        {
+            ActiveChapter = null;
+            ActiveVolume = null;
+            return;
+        }
+
+        SaveStatus = "正在读取...";
+        IndexData = await Repository.GetWorkIndexAsync(CurrentWorkId);
+        if (IndexData == null) return;
+
+        if (!string.IsNullOrEmpty(CurrentChapterId))
+        {
+            ActiveVolume = IndexData.Volumes.FirstOrDefault(v => v.Chapters.Any(c => c.Id == CurrentChapterId));
+            ActiveChapter = ActiveVolume?.Chapters.FirstOrDefault(c => c.Id == CurrentChapterId);
+            ParseTitle(ActiveChapter?.Title ?? "未命名章节");
+            OutlineContent = ActiveChapter?.Outline ?? "";
+        }
+        else if (!string.IsNullOrEmpty(CurrentVolumeId))
+        {
+            ActiveVolume = IndexData.Volumes.FirstOrDefault(v => v.Id == CurrentVolumeId);
+            ActiveChapter = null;
+            ParseTitle(ActiveVolume?.Title ?? "未命名卷");
+            OutlineContent = ActiveVolume?.Outline ?? "";
+        }
+
+        GenerateToc();
+        SaveStatus = "已同步";
+        _shouldInitVditor = true; // 🌟 标记延后渲染
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_shouldInitVditor && (ActiveChapter != null || ActiveVolume != null))
+        {
+            _shouldInitVditor = false;
+            await LoadVditorAsync();
+        }
+    }
+}
+
+<div class="editor-desk-container">
+@if (ActiveChapter == null && ActiveVolume == null)
+    {
+        <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; color:#999; background:#f9f9fb;">
+            <div style="font-size:64px; margin-bottom:20px; opacity:0.4;">🗺️</div>
+            <p>请在左侧目录树中，选择一卷或一章开始编写大纲。</p>
+        </div>
+    }
+    else
+    {
+        <div class="desk-topbar outline-topbar">
+            <div class="breadcrumb">
+                <span class="muted">🗺️ @(IsVolumeMode ? "卷大纲规划" : "本章细纲编写")</span>
+                <span class="separator">/</span>
+                <span class="current">@(Prefix + Body)</span>
+            </div>
+
+            <div class="desk-tools">
+                <span class="save-status"><span class="icon">☁️</span> @SaveStatus</span>
+                <span class="word-count-badge" style="background:#e8f5e9; color:#2e7d32;">@WordCount 字</span>
+            </div>
+        </div>
+
+        <div class="editor-body-layout">
+            <div class="editor-content-box">
+
+                <div class="editor-main-area">
+                    <div class="chapter-title-container">
+                        @if (!string.IsNullOrEmpty(Prefix))
+                        {
+                            <span class="chapter-prefix">@Prefix</span>
+                        }
+                        <input type="text" class="chapter-title-input outline-title"
+                        value="@Body"
+                        @oninput="OnTitleInput"
+                        placeholder="@(IsVolumeMode ? "输入卷名..." : "输入章名...")" />
+                    </div>
+
+                    <div id="vditor-outline-area" class="chapter-content-textarea" style="background: transparent;"></div>
+                </div>
+
+                <div class="editor-toc-sidebar hide-scrollbar">
+                    <h4 class="toc-header">大纲目录</h4>
+                    @if (!DocumentToc.Any())
+                    {
+                        <div class="toc-empty">暂无标题导航<br>请在左侧使用 # 输入标题</div>
+                    }
+                    else
+                    {
+                        <ul class="toc-list">
+                            @foreach (var item in DocumentToc)
+                            {
+                                var indent = (item.Level - 1) * 14;
+                                <li class="toc-item" style="padding-left: @(indent)px;"
+                                @onclick="() => ScrollToTargetHeading(item.Text)">
+                                    <span class="toc-dot"></span> @item.Text
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+
+            </div>
+        </div>
+    }
+</div>

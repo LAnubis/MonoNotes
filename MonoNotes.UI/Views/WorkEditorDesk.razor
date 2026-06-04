@@ -8,7 +8,7 @@
 @code {
     [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
     [Parameter] public string CurrentChapterId { get; set; } = string.Empty;
-
+    private bool _shouldInitVditor = false;
     // 🌟 向外抛出标题已更改的事件
     [Parameter] public EventCallback OnTitleChanged { get; set; }
 
@@ -40,39 +40,34 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (!string.IsNullOrEmpty(CurrentWorkId) && !string.IsNullOrEmpty(CurrentChapterId))
+        // 🌟 修复：如果传入空 ID，彻底清空实体，展示空状态
+        if (string.IsNullOrEmpty(CurrentWorkId) || string.IsNullOrEmpty(CurrentChapterId))
         {
-            SaveStatus = "正在读取...";
-
-            // 🌟 获取完整的 Index 树，并提取当前卷和章的引用
-            IndexData = await Repository.GetWorkIndexAsync(CurrentWorkId);
-            if (IndexData != null)
-            {
-                ActiveVolume = IndexData.Volumes.FirstOrDefault(v => v.Chapters.Any(c => c.Id == CurrentChapterId));
-                ActiveChapter = ActiveVolume?.Chapters.FirstOrDefault(c => c.Id == CurrentChapterId);
-            }
-
-            var fullTitle = ActiveChapter?.Title ?? "未命名章节";
-
-            // 🌟 智能正则拆分
-            var match = Regex.Match(fullTitle, @"^(第\s*\d+\s*[卷章][：\s]*)(.*)$");
-            if (match.Success)
-            {
-                ChapterPrefix = match.Groups[1].Value;
-                ChapterBody = match.Groups[2].Value;
-            }
-            else
-            {
-                ChapterPrefix = "";
-                ChapterBody = fullTitle;
-            }
-
-            Content = await Repository.ReadChapterContentAsync(CurrentWorkId, CurrentChapterId);
-            _lastSavedWordCount = Content.Length;
-            GenerateToc();
-            SaveStatus = "已同步";
-            await LoadVditorAsync();
+            ActiveChapter = null;
+            ActiveVolume = null;
+            return;
         }
+
+        SaveStatus = "正在读取...";
+        IndexData = await Repository.GetWorkIndexAsync(CurrentWorkId);
+        if (IndexData != null)
+        {
+            ActiveVolume = IndexData.Volumes.FirstOrDefault(v => v.Chapters.Any(c => c.Id == CurrentChapterId));
+            ActiveChapter = ActiveVolume?.Chapters.FirstOrDefault(c => c.Id == CurrentChapterId);
+        }
+
+        var fullTitle = ActiveChapter?.Title ?? "未命名章节";
+        var match = Regex.Match(fullTitle, @"^(第\s*\d+\s*[卷章][：\s]*)(.*)$");
+        if (match.Success) { ChapterPrefix = match.Groups[1].Value; ChapterBody = match.Groups[2].Value; }
+        else { ChapterPrefix = ""; ChapterBody = fullTitle; }
+
+        Content = await Repository.ReadChapterContentAsync(CurrentWorkId, CurrentChapterId);
+        _lastSavedWordCount = Content.Length;
+        GenerateToc();
+        SaveStatus = "已同步";
+
+        // 🌟 修复：标记需要渲染，但不要在这里调用 JS
+        _shouldInitVditor = true;
     }
 
     private async Task LoadVditorAsync()
@@ -167,87 +162,100 @@
         _objRef?.Dispose();
         _ = JS.InvokeVoidAsync("writingVditor.destroy", "vditor-writing-area");
     }
+
+    // 🌟 修复：等待 HTML 标签真正在浏览器渲染完毕后，再唤醒 Vditor
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_shouldInitVditor && ActiveChapter != null)
+        {
+            _shouldInitVditor = false;
+            await LoadVditorAsync();
+        }
+    }
 }
 
 <div class="editor-desk-container">
-    <div class="desk-topbar">
-        <div class="breadcrumb">
-            <span class="muted">正文编辑</span>
-            <span class="separator">/</span>
-            <span class="current">@(ChapterPrefix + ChapterBody)</span>
+    @if (ActiveChapter == null || ActiveVolume == null)
+    {
+        <div class="empty-editor-state">
+            <div class="empty-icon">✍️</div>
+            <p>请在左侧目录树中，选择一个章节开始创作。</p>
         </div>
-
-        <div class="desk-tools">
-            <span class="save-status"><span class="icon">☁️</span> @SaveStatus</span>
-            <span class="word-count-badge">@WordCount 字</span>
-            <button class="tool-btn foreshadow-btn" title="标记伏笔">💡 设为伏笔</button>
-            <button class="tool-btn toggle-outline-btn @(ShowOutlinePanel ? "active" : "")" @onclick="() => ShowOutlinePanel = !ShowOutlinePanel">
-                @(ShowOutlinePanel ? "👉 收起面板" : "👈 展开大纲")
-            </button>
-        </div>
-    </div>
-
-    <div class="editor-body-layout">
-        <div class="editor-content-box">
-
-            <div class="editor-main-area">
-                <div class="chapter-title-container">
-                    @if (!string.IsNullOrEmpty(ChapterPrefix))
-                    {
-                        <span class="chapter-prefix">@ChapterPrefix</span>
-                    }
-                    <input type="text" class="chapter-title-input"
-                           value="@ChapterBody"
-                           @oninput="OnTitleInput"
-                           placeholder="输入章节名称..." />
-                </div>
-                <div id="vditor-writing-area" class="chapter-content-textarea" style="background: transparent;"></div>
+    }
+    else
+    {
+        <div class="desk-topbar">
+            <div class="breadcrumb">
+                <span class="muted">正文编辑</span>
+                <span class="separator">/</span>
+                <span class="current">@(ChapterPrefix + ChapterBody)</span>
             </div>
 
-            <div class="outline-sidebar hide-scrollbar @(ShowOutlinePanel ? "open" : "closed")">
+            <div class="desk-tools">
+                <span class="save-status"><span class="icon">☁️</span> @SaveStatus</span>
+                <span class="word-count-badge">@WordCount 字</span>
+                <button class="tool-btn foreshadow-btn" title="标记伏笔">💡 设为伏笔</button>
+                <button class="tool-btn toggle-outline-btn @(ShowOutlinePanel ? "active" : "")" @onclick="() => ShowOutlinePanel = !ShowOutlinePanel">
+                    @(ShowOutlinePanel ? "👉 收起提词器" : "👈 展开提词器")
+                </button>
+            </div>
+        </div>
 
-                @if (ActiveChapter != null && ActiveVolume != null)
-                {
+        <div class="editor-body-layout">
+            <div class="editor-content-box">
+
+                <div class="editor-main-area">
+                    <div class="chapter-title-container">
+                        @if (!string.IsNullOrEmpty(ChapterPrefix))
+                        {
+                            <span class="chapter-prefix">@ChapterPrefix</span>
+                        }
+                        <input type="text" class="chapter-title-input"
+                               value="@ChapterBody"
+                               @oninput="OnTitleInput"
+                               placeholder="输入章节名称..." />
+                    </div>
+                    <div id="vditor-writing-area" class="chapter-content-textarea" style="background: transparent;"></div>
+                </div>
+
+                <div class="outline-sidebar hide-scrollbar @(ShowOutlinePanel ? "open" : "closed")">
+
                     <div class="sidebar-block outline-block">
                         <h4 class="block-header"><span class="ol-icon">🎯</span> 本章细纲与爽点</h4>
-                        <textarea class="outline-textarea chapter-textarea"
-                                  @bind="ActiveChapter.Outline"
-                                  @onblur="SaveOutlines"
-                                  placeholder="写下本章的起承转合：&#10;1. 遇到什么危机？&#10;2. 如何装逼打脸？&#10;3. 留下什么悬念？"></textarea>
+                        <div class="readonly-outline-card chapter-outline-card">
+                            @(string.IsNullOrWhiteSpace(ActiveChapter.Outline) ? "（暂无细纲，可前往大纲模式编写）" : ActiveChapter.Outline)
+                        </div>
                     </div>
 
                     <div class="sidebar-block outline-block">
                         <h4 class="block-header"><span class="ol-icon">📚</span> 卷大纲：@ActiveVolume.Title</h4>
-                        <textarea class="outline-textarea volume-textarea"
-                                  @bind="ActiveVolume.Outline"
-                                  @onblur="SaveOutlines"
-                                  placeholder="本卷的核心目标、主要出场势力与大结局走向..."></textarea>
+                        <div class="readonly-outline-card volume-outline-card">
+                            @(string.IsNullOrWhiteSpace(ActiveVolume.Outline) ? "（暂无卷大纲）" : ActiveVolume.Outline)
+                        </div>
                     </div>
-                }
 
-                <div class="sidebar-block toc-block">
-                    <h4 class="block-header"><span class="ol-icon">📑</span> 正文导航</h4>
-                    @if (!DocumentToc.Any())
-                    {
-                        <div class="toc-empty">暂无章节内标题<br>请在正文使用 # 输入标题</div>
-                    }
-                    else
-                    {
-                        <ul class="toc-list">
-                            @foreach (var item in DocumentToc)
-                            {
-                                var indent = (item.Level - 1) * 14;
-                                <li class="toc-item" style="padding-left: @(indent)px;"
-                                    @onclick="() => ScrollToTargetHeading(item.Text)">
-                                    <span class="toc-dot"></span> @item.Text
-                                </li>
-                            }
-                        </ul>
-                    }
+                    <div class="sidebar-block toc-block">
+                        <h4 class="block-header"><span class="ol-icon">📑</span> 正文导航</h4>
+                        @if (!DocumentToc.Any())
+                        {
+                            <div class="toc-empty">暂无章节内标题<br>请在正文使用 # 输入标题</div>
+                        }
+                        else
+                        {
+                            <ul class="toc-list">
+                                @foreach (var item in DocumentToc)
+                                {
+                                    var indent = (item.Level - 1) * 14;
+                                    <li class="toc-item" style="padding-left: @(indent)px;"
+                                        @onclick="() => ScrollToTargetHeading(item.Text)">
+                                        <span class="toc-dot"></span> @item.Text
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
                 </div>
-
             </div>
-
         </div>
-    </div>
+    }
 </div>
