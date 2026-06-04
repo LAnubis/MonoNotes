@@ -14,7 +14,7 @@
     // 🌟 标题分体存储
     private string ChapterPrefix { get; set; } = "";
     private string ChapterBody { get; set; } = "加载中...";
-
+    private int _lastSavedWordCount = 0; // 🌟 新增：用于计算本次写了多少字的增量
     private string Content { get; set; } = string.Empty;
     private string SaveStatus { get; set; } = "已同步";
 
@@ -52,6 +52,7 @@
             }
 
             Content = await Repository.ReadChapterContentAsync(CurrentWorkId, CurrentChapterId);
+            _lastSavedWordCount = Content.Length; // 🌟 新增：初始化基准字数
             GenerateToc();
             SaveStatus = "已同步";
             await LoadVditorAsync();
@@ -87,7 +88,13 @@
         {
             await Task.Delay(1500, _debounceCts.Token);
             SaveStatus = "保存中...";
-
+            int currentWords = Content.Length;
+            int diff = currentWords - _lastSavedWordCount;
+            if (diff > 0)
+            {
+                await Repository.AddDailyWordCountAsync(diff);
+                _lastSavedWordCount = currentWords; // 更新基准
+            }
             // 1. 保存正文
             await Repository.SaveChapterContentAsync(CurrentWorkId, CurrentChapterId, Content);
 

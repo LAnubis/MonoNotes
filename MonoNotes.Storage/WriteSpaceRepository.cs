@@ -131,5 +131,64 @@ namespace MonoNotes.Storage
                 }
             }
         }
+
+        /// <summary>
+        /// 更新小说的元数据标题 (project.json)
+        /// </summary>
+        public async Task UpdateWorkTitleAsync(string workId, string newTitle)
+        {
+            var metaPath = Path.Combine(_writeSpaceRoot, "Works", workId, "project.json");
+            var meta = await JsonSafeWriter.ReadSafeAsync<WorkMeta>(metaPath);
+            if (meta != null)
+            {
+                meta.Title = newTitle;
+                meta.LastEditedAt = DateTime.Now;
+                await JsonSafeWriter.WriteAtomicallyAsync(metaPath, meta);
+            }
+        }
+
+        // ==========================================
+        // 🌟 每日字数统计 (热力图引擎)
+        // ==========================================
+        public async Task AddDailyWordCountAsync(int count)
+        {
+            if (count <= 0) return;
+            var statsPath = Path.Combine(_writeSpaceRoot, "daily-stats.json");
+            Dictionary<string, int> stats = new();
+
+            if (File.Exists(statsPath))
+            {
+                stats = await JsonSafeWriter.ReadSafeAsync<Dictionary<string, int>>(statsPath) ?? new();
+            }
+
+            string today = DateTime.Now.ToString("yyyy-MM-dd");
+            if (stats.ContainsKey(today)) stats[today] += count;
+            else stats[today] = count;
+
+            await JsonSafeWriter.WriteAtomicallyAsync(statsPath, stats);
+        }
+
+        public async Task<Dictionary<string, int>> GetDailyStatsAsync()
+        {
+            var statsPath = Path.Combine(_writeSpaceRoot, "daily-stats.json");
+            if (File.Exists(statsPath))
+            {
+                return await JsonSafeWriter.ReadSafeAsync<Dictionary<string, int>>(statsPath) ?? new();
+            }
+            return new Dictionary<string, int>();
+        }
+
+        /// <summary>
+        /// 保存更新后的小说详情与元数据 (project.json)
+        /// </summary>
+        public async Task SaveWorkMetaAsync(WorkMeta meta)
+        {
+            if (meta == null || string.IsNullOrEmpty(meta.Id)) return;
+
+            var metaPath = Path.Combine(_writeSpaceRoot, "Works", meta.Id, "project.json");
+            meta.LastEditedAt = DateTime.Now;
+
+            await JsonSafeWriter.WriteAtomicallyAsync(metaPath, meta);
+        }
     }
 }

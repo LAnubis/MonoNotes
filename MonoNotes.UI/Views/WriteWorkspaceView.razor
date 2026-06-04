@@ -2,13 +2,12 @@
     private string? ActiveWorkId { get; set; } = null;
     private string CurrentSubView { get; set; } = "editor";
 
-    // 🌟 1. 声明对左侧菜单栏的引用
     private MonoNotes.UI.Views.WorkSidebar _workSidebar;
 
     private void EnterWork(string workId)
     {
         ActiveWorkId = workId;
-        CurrentSubView = "editor";
+        CurrentSubView = "overview";
         StateHasChanged();
     }
 
@@ -31,13 +30,23 @@
         CurrentSubView = "editor";
     }
 
-    // 🌟 2. 接收编辑器标题修改的信号，通知侧边栏刷新！
     private async Task HandleIndexUpdated()
     {
         if (_workSidebar != null)
         {
             await _workSidebar.RefreshAsync();
         }
+    }
+
+    // 🌟 新增：接收从控制台传来的章节ID，并进入正文模式
+    private void HandleEnterEditorFromOverview(string chapterId)
+    {
+        if (!string.IsNullOrEmpty(chapterId))
+        {
+            ActiveChapterId = chapterId;
+        }
+        CurrentSubView = "editor";
+        StateHasChanged();
     }
 }
 
@@ -65,7 +74,12 @@
         }
         else
         {
-            @if (CurrentSubView == "editor")
+            @if (CurrentSubView == "overview")
+            {
+                <WorkOverviewDesk CurrentWorkId="@ActiveWorkId"
+                                  OnEnterEditor="HandleEnterEditorFromOverview" />
+            }
+            else if (CurrentSubView == "editor")
             {
                 <WorkEditorDesk CurrentWorkId="@ActiveWorkId"
                                 CurrentChapterId="@ActiveChapterId"
@@ -75,12 +89,9 @@
             {
                 <ForeshadowingBoard CurrentWorkId="@ActiveWorkId" />
             }
-            else
+            else if (CurrentSubView == "details")
             {
-                <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#999; flex-direction:column;">
-                    <span style="font-size: 48px; margin-bottom: 20px;">🚧</span>
-                    <h3>该模块（@CurrentSubView）正在施工中...</h3>
-                </div>
+                <WorkDetailsView CurrentWorkId="@ActiveWorkId" />
             }
         }
     </div>

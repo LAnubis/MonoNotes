@@ -27,6 +27,11 @@ namespace MonoNotes.Core.Models
 
         // 缓存数据：字数统计（可随时从 Markdown 重新计算）
         public int WordCountCache { get; set; } = 0;
+
+        // 在 WorkMeta 类中追加这些属性
+        public string Synopsis { get; set; } = "暂无简介...";
+        public string Tags { get; set; } = ""; // 逗号分隔的标签
+        public string CoverUrl { get; set; } = ""; // 封面图路径
     }
 
     // 2. 对应物理路径: Writespaces/Works/work_xxx/work-index.json

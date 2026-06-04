@@ -1,5 +1,6 @@
 ﻿@using MonoNotes.Core.Models
 @using MonoNotes.Storage
+@using System.Text.RegularExpressions
 @inject WriteSpaceRepository Repository
 
 @code {
@@ -7,14 +8,19 @@
     [Parameter] public EventCallback OnReturnClicked { get; set; }
     [Parameter] public string ActiveSubView { get; set; } = "editor";
     [Parameter] public EventCallback<string> OnSubViewSelected { get; set; }
+    [Parameter] public EventCallback<string> OnChapterSelected { get; set; }
 
     private string ActiveChapterId { get; set; } = string.Empty;
-
-    // 🌟 换成真实的索引对象
     private WorkIndex? CurrentWorkIndex;
     private List<Volume> NovelVolumes => CurrentWorkIndex?.Volumes ?? new();
+    private string CurrentWorkTitle { get; set; } = "未命名作品";
 
-    // 🌟 当 CurrentWorkId 发生变化时（比如你从大厅点进了一本书），触发加载
+    public async Task RefreshAsync()
+    {
+        await LoadIndexAsync();
+        StateHasChanged();
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (!string.IsNullOrEmpty(CurrentWorkId))
@@ -25,89 +31,226 @@
 
     private async Task LoadIndexAsync()
     {
-        CurrentWorkIndex = await Repository.GetWorkIndexAsync(CurrentWorkId);
+        var allWorks = await Repository.GetAllWorksAsync();
+        var meta = allWorks.FirstOrDefault(w => w.Id == CurrentWorkId);
+        if (meta != null) CurrentWorkTitle = meta.Title;
 
-        // 如果是空书（刚新建的），默认给它建一卷和一章
+        CurrentWorkIndex = await Repository.GetWorkIndexAsync(CurrentWorkId);
         if (CurrentWorkIndex != null && !CurrentWorkIndex.Volumes.Any())
         {
-            await AddNewVolume("第一卷：风起云涌");
+            await AddNewVolume();
             await AddNewChapter(CurrentWorkIndex.Volumes.First());
         }
     }
 
-    // 🌟 新建卷
+    // ==========================================
+    // 🌟 书名双击修改逻辑
+    // ==========================================
+    private bool _isEditingWorkTitle = false;
+    private string _editingWorkTitle = "";
+
+    private void StartEditWorkTitle()
+    {
+        _editingWorkTitle = CurrentWorkTitle;
+        _isEditingWorkTitle = true;
+    }
+
+    private async Task CommitWorkTitle()
+    {
+        if (!string.IsNullOrWhiteSpace(_editingWorkTitle) && _editingWorkTitle != CurrentWorkTitle)
+        {
+            CurrentWorkTitle = _editingWorkTitle;
+            // 调用我们刚写的底层方法，将新书名保存到硬盘
+            await Repository.UpdateWorkTitleAsync(CurrentWorkId, _editingWorkTitle);
+        }
+        _isEditingWorkTitle = false;
+    }
+
+    private async Task HandleWorkTitleKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await CommitWorkTitle();
+        if (e.Key == "Escape") _isEditingWorkTitle = false;
+    }
+
+    // 自动汉化数字
+    private string GetChineseNumber(int number)
+    {
+        string[] cn = { "零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十" };
+        if (number <= 10) return cn[number];
+        if (number < 20) return "十" + (number % 10 == 0 ? "" : cn[number % 10]);
+        if (number < 100) return cn[number / 10] + "十" + (number % 10 == 0 ? "" : cn[number % 10]);
+        return number.ToString();
+    }
+
+    private async Task SaveAndRecalculateIndexAsync()
+    {
+        if (CurrentWorkIndex == null) return;
+        int volIndex = 1;
+        foreach (var vol in CurrentWorkIndex.Volumes)
+        {
+            vol.Title = $"第{GetChineseNumber(volIndex)}卷";
+            volIndex++;
+            int chapIndex = 1;
+            foreach (var chap in vol.Chapters)
+            {
+                var match = Regex.Match(chap.Title, @"^(第\s*\d+\s*[卷章][：\s]*)(.*)$");
+                string body = match.Success ? match.Groups[2].Value : chap.Title;
+                chap.Title = $"第 {chapIndex} 章：{(string.IsNullOrWhiteSpace(body) ? "新章节" : body)}";
+                chapIndex++;
+            }
+        }
+        await Repository.SaveWorkIndexAsync(CurrentWorkIndex);
+    }
+
     private async Task AddNewVolume(string title = "")
     {
         if (CurrentWorkIndex == null) return;
-        var volTitle = string.IsNullOrEmpty(title) ? $"第 {CurrentWorkIndex.Volumes.Count + 1} 卷" : title;
-
-        CurrentWorkIndex.Volumes.Add(new Volume { Title = volTitle });
-        await Repository.SaveWorkIndexAsync(CurrentWorkIndex);
+        CurrentWorkIndex.Volumes.Add(new Volume { Title = "新建卷" });
+        await SaveAndRecalculateIndexAsync();
     }
 
-    // 🌟 新建章
     private async Task AddNewChapter(Volume volume)
     {
         if (CurrentWorkIndex == null) return;
-
-        var newChapter = new Chapter { Title = $"第 {volume.Chapters.Count + 1} 章：新章节" };
+        var newChapter = new Chapter { Id = Guid.NewGuid().ToString("N"), Title = "新章节" };
         volume.Chapters.Add(newChapter);
-        volume.IsExpanded = true; // 新建后自动展开该卷
-
-        await Repository.SaveWorkIndexAsync(CurrentWorkIndex);
-
-        // 新建完自动选中它
+        volume.IsExpanded = true;
+        await SaveAndRecalculateIndexAsync();
         await SelectChapter(newChapter.Id);
     }
 
-    private void ToggleVolume(Volume vol)
-    {
-        vol.IsExpanded = !vol.IsExpanded;
-    }
+    private void ToggleVolume(Volume vol) { vol.IsExpanded = !vol.IsExpanded; }
 
-    [Parameter]
-    public EventCallback<string> OnChapterSelected { get; set; }
-
-    // 修改现有的 SelectChapter 方法
     private async Task SelectChapter(string chapterId)
     {
         ActiveChapterId = chapterId;
-        // 🌟 告诉父级：我要切到这个章节的编辑器
+        await OnSubViewSelected.InvokeAsync("editor");
         await OnChapterSelected.InvokeAsync(chapterId);
     }
 
-    // 🌟 开放给外部（父组件）调用的强制刷新方法
-    public async Task RefreshAsync()
+    // ==========================================
+    // 🌟 右键菜单与重命名逻辑 (已移除拖拽)
+    // ==========================================
+    private bool _showContextMenu = false;
+    private double _menuX = 0;
+    private double _menuY = 0;
+    private object? _contextTarget;
+
+    private bool _canRenameTarget = false;
+    private bool _canDeleteTarget = false;
+
+    private object? _editingItem;
+    private string _editingPrefix = "";
+    private string _editingBody = "";
+
+    private void ShowContextMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, object target)
     {
-        // 重新从硬盘读取 work-index.json 并刷新 UI
-        await LoadIndexAsync();
-        StateHasChanged();
+        _contextTarget = target;
+        _menuX = e.ClientX;
+        _menuY = e.ClientY;
+
+        if (target is Volume v)
+        {
+            _canRenameTarget = false;
+            _canDeleteTarget = CurrentWorkIndex?.Volumes.LastOrDefault() == v;
+        }
+        else if (target is Chapter c)
+        {
+            _canRenameTarget = true;
+            var vol = CurrentWorkIndex?.Volumes.FirstOrDefault(vol => vol.Chapters.Contains(c));
+            _canDeleteTarget = vol?.Chapters.LastOrDefault() == c;
+        }
+        _showContextMenu = true;
+    }
+
+    private void CloseContextMenu() { _showContextMenu = false; }
+
+    private void StartRename()
+    {
+        if (_contextTarget is Chapter c)
+        {
+            _editingItem = c;
+            var match = Regex.Match(c.Title, @"^(第\s*\d+\s*[卷章][：\s]*)(.*)$");
+            if (match.Success)
+            {
+                _editingPrefix = match.Groups[1].Value;
+                _editingBody = match.Groups[2].Value;
+            }
+            else
+            {
+                _editingPrefix = "";
+                _editingBody = c.Title;
+            }
+        }
+        CloseContextMenu();
+    }
+
+    private async Task CommitRename()
+    {
+        if (_editingItem is Chapter c && !string.IsNullOrWhiteSpace(_editingBody))
+        {
+            c.Title = _editingPrefix + _editingBody;
+            await SaveAndRecalculateIndexAsync();
+        }
+        _editingItem = null;
+    }
+
+    private async Task HandleRenameKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await CommitRename();
+        if (e.Key == "Escape") _editingItem = null;
+    }
+
+    private async Task DeleteTarget()
+    {
+        if (_contextTarget == null || CurrentWorkIndex == null || !_canDeleteTarget) return;
+
+        if (_contextTarget is Volume v) CurrentWorkIndex.Volumes.Remove(v);
+        else if (_contextTarget is Chapter c)
+        {
+            var vol = CurrentWorkIndex.Volumes.FirstOrDefault(vol => vol.Chapters.Contains(c));
+            vol?.Chapters.Remove(c);
+        }
+        await SaveAndRecalculateIndexAsync();
+        CloseContextMenu();
     }
 }
 
-<div class="work-sidebar-container">
-    <div class="sidebar-header back-btn" @onclick="OnReturnClicked">
-        <span class="icon">⬅️</span> 返回创作空间
+@if (_showContextMenu)
+{
+    <div class="sidebar-modal-overlay" @onclick="CloseContextMenu" @oncontextmenu="CloseContextMenu" @oncontextmenu:preventDefault="true"></div>
+}
+
+<div class="sidebar-container">
+    <div class="sidebar-top">
+        <button class="back-btn" @onclick="OnReturnClicked">← 返回大厅</button>
+
+        <div style="display:flex; align-items:center;">
+            <span style="margin-right:6px;">📖</span>
+            @if (_isEditingWorkTitle)
+            {
+                <input class="rename-input" style="font-weight:bold; width:100%;"
+                       @bind="_editingWorkTitle"
+                       @bind:event="oninput"
+                       @onkeyup="HandleWorkTitleKey"
+                       @onblur="CommitWorkTitle" autofocus />
+            }
+            else
+            {
+                <div class="work-title" style="cursor:pointer;" title="双击修改作品名" @ondblclick="StartEditWorkTitle">
+                    @CurrentWorkTitle
+                </div>
+            }
+        </div>
     </div>
 
-    <div class="sidebar-scroll-area">
-        <ul class="nav-list base-nav">
-            <li class="@(ActiveSubView == "overview" ? "active" : "")"
-                @onclick="@(() => OnSubViewSelected.InvokeAsync("overview"))">
-                <span class="icon">📊</span> 概览
-            </li>
-            <li class="@(ActiveSubView == "outline" ? "active" : "")"
-                @onclick="@(() => OnSubViewSelected.InvokeAsync("outline"))">
-                <span class="icon">📌</span> 大纲
-            </li>
-            <li class="@(ActiveSubView == "foreshadowing" ? "active" : "")"
-                @onclick="@(() => OnSubViewSelected.InvokeAsync("foreshadowing"))">
-                <span class="icon">💡</span> 伏笔看板
-            </li>
-        </ul>
+    <div class="sidebar-nav">
+        <button class="nav-tab @(ActiveSubView == "editor" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("editor"))">📝 正文</button>
+        <button class="nav-tab @(ActiveSubView == "foreshadowing" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("foreshadowing"))">💡 伏笔</button>
+        <button class="nav-tab @(ActiveSubView == "details" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("details"))">ℹ️ 详情</button>
+    </div>
 
-        <hr class="divider" />
-
+    <div class="tree-container">
         <div class="tree-header">
             <span>✍️ 正文目录</span>
             <button class="icon-btn" title="新建卷" @onclick="@(() => AddNewVolume(""))">➕</button>
@@ -117,13 +260,13 @@
             @foreach (var volume in NovelVolumes)
             {
                 <li class="volume-node">
-                    <div class="volume-title" @onclick="() => ToggleVolume(volume)">
-                        <span class="toggle-icon">@(volume.IsExpanded ? "🔽" : "▶️")</span>
-                        <span class="title-text">@volume.Title</span>
-                        <button class="icon-btn" style="margin-left:auto; font-size: 10px;"
-                                @onclick="() => AddNewChapter(volume)" @onclick:stopPropagation="true">
-                            ➕
-                        </button>
+                    <div class="volume-title"
+                         @oncontextmenu="(e) => ShowContextMenu(e, volume)"
+                         @oncontextmenu:preventDefault="true">
+
+                        <span class="toggle-icon" @onclick="() => ToggleVolume(volume)">@(volume.IsExpanded ? "🔽" : "▶️")</span>
+                        <span class="title-text" style="flex:1;" @onclick="() => ToggleVolume(volume)">@volume.Title</span>
+                        <button class="icon-btn" style="font-size: 10px;" @onclick="() => AddNewChapter(volume)" @onclick:stopPropagation="true">➕</button>
                     </div>
 
                     @if (volume.IsExpanded)
@@ -132,9 +275,21 @@
                             @foreach (var chapter in volume.Chapters)
                             {
                                 <li class="chapter-node @(ActiveChapterId == chapter.Id && ActiveSubView == "editor" ? "active" : "")"
-                                    @onclick="() => SelectChapter(chapter.Id)">
-                                    <span class="chapter-title">@chapter.Title</span>
-                                    <span class="word-count">@chapter.WordCount</span>
+                                    @oncontextmenu="(e) => ShowContextMenu(e, chapter)"
+                                    @oncontextmenu:preventDefault="true">
+
+                                    @if (_editingItem == chapter)
+                                    {
+                                        <div style="display:flex; align-items:center; flex:1; overflow:hidden;">
+                                            <span style="color: #9ca3af; font-size: 13px; margin-right: 4px; white-space:nowrap; user-select: none;">@_editingPrefix</span>
+                                            <input class="rename-input" @bind="_editingBody" @bind:event="oninput" @onkeyup="HandleRenameKey" @onblur="CommitRename" autofocus />
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="chapter-title" @onclick="() => SelectChapter(chapter.Id)">@chapter.Title</span>
+                                        <span class="word-count">@chapter.WordCount</span>
+                                    }
                                 </li>
                             }
                         </ul>
@@ -142,22 +297,30 @@
                 </li>
             }
         </ul>
-
-        <hr class="divider" />
-
-        <ul class="nav-list base-nav">
-            <li class="@(ActiveSubView == "materials" ? "active" : "")"
-                @onclick="@(() => OnSubViewSelected.InvokeAsync("materials"))">
-                <span class="icon">📁</span> 单本素材
-            </li>
-            <li class="@(ActiveSubView == "statistics" ? "active" : "")"
-                @onclick="@(() => OnSubViewSelected.InvokeAsync("statistics"))">
-                <span class="icon">📈</span> 写作统计
-            </li>
-            <li class="@(ActiveSubView == "export" ? "active" : "")"
-                @onclick="@(() => OnSubViewSelected.InvokeAsync("export"))">
-                <span class="icon">📤</span> 导出设置
-            </li>
-        </ul>
     </div>
 </div>
+
+@if (_showContextMenu)
+{
+    <div class="custom-context-menu" style="left: @(_menuX)px; top: @(_menuY)px;" @onclick:stopPropagation="true">
+        @if (_canRenameTarget)
+        {
+            <div class="menu-item" @onclick="StartRename">✏️ 修改章节名</div>
+        }
+        else
+        {
+            <div class="menu-item" style="color:#ccc; cursor:not-allowed;" title="卷名由系统自动生成，不可修改">✏️ 修改卷名 (系统默认)</div>
+        }
+
+        <div class="menu-divider"></div>
+
+        @if (_canDeleteTarget)
+        {
+            <div class="menu-item" style="color: #ff4d4f;" @onclick="DeleteTarget">🗑️ 从目录移除</div>
+        }
+        else
+        {
+            <div class="menu-item" style="color: #ccc; cursor:not-allowed;" title="为保证结构，只允许删除末尾项">🗑️ 从目录移除 (受限)</div>
+        }
+    </div>
+}

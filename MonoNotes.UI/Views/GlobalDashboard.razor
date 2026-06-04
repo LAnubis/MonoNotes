@@ -3,140 +3,159 @@
 @inject WriteSpaceRepository Repository
 
 @code {
-    [Parameter]
-    public EventCallback<string> OnWorkSelected { get; set; }
+    [Parameter] public EventCallback<string> OnWorkSelected { get; set; }
 
-    // 获取当天的问候语
-    private string Greeting => DateTime.Now.Hour switch
-    {
-        < 6 => "夜深了，注意休息，",
-        < 12 => "早安，今天也要文思泉涌，",
-        < 18 => "下午好，喝杯咖啡继续创作吧，",
-        _ => "晚上好，属于你的世界正在展开，"
-    };
+    private List<WorkMeta> Works = new();
 
-    // 🌟 换成真实的元数据列表
-    private List<WorkMeta> RecentWorks = new();
+    // 🌟 核心逻辑：自动过滤出近 7 天修改过的作品，并按时间倒序排列
+    private List<WorkMeta> RecentWorks => Works
+        .Where(w => w.LastEditedAt >= DateTime.Now.AddDays(-7))
+        .OrderByDescending(w => w.LastEditedAt)
+        .ToList();
 
-    // 全库总字数统计
-    private int TotalWordCount => RecentWorks.Sum(w => w.WordCountCache);
+    private int TodayWordCount = 0;
+    private int TotalWordCount = 0;
+    private Dictionary<string, int> DailyStats = new();
+    private List<DateTime> HeatmapDays = Enumerable.Range(0, 90).Select(i => DateTime.Now.Date.AddDays(-89 + i)).ToList();
 
-    // 页面初始化时，从硬盘读取所有作品
     protected override async Task OnInitializedAsync()
     {
         await LoadWorksAsync();
+        await LoadStatsAsync();
     }
 
     private async Task LoadWorksAsync()
     {
-        // 🌟 真正从底层 JSON 索引中读取数据
-        RecentWorks = await Repository.GetAllWorksAsync();
+        Works = await Repository.GetAllWorksAsync();
     }
 
-    // 🌟 实现新建作品的核心逻辑
+    private async Task LoadStatsAsync()
+    {
+        DailyStats = await Repository.GetDailyStatsAsync();
+        string todayStr = DateTime.Now.ToString("yyyy-MM-dd");
+        if (DailyStats.ContainsKey(todayStr)) TodayWordCount = DailyStats[todayStr];
+        TotalWordCount = DailyStats.Values.Sum();
+    }
+
     private async Task CreateNewWork()
     {
-        // 1. 在硬盘上创建文件夹和基础的 JSON 索引
-        var newWork = await Repository.CreateNewWorkAsync("未命名小说", "novel");
-
-        // 2. 重新加载列表，让新书出现在页面上
-        await LoadWorksAsync();
-
-        // 3. （可选）如果你希望新建后直接进入这本新书，取消下面这句的注释
-        // await OnWorkSelected.InvokeAsync(newWork.Id);
+        var newWork = await Repository.CreateNewWorkAsync("未命名新作", "novel");
+        await OnWorkSelected.InvokeAsync(newWork.Id);
     }
 
-    // 模拟的当月打卡热力数据 (这部分未来可以挂载到真实的打卡表上，暂时保留 UI)
-    private int[] HeatmapData = new int[30]
+    private string GetHeatColor(int words)
     {
-        0, 1, 3, 4, 2, 0, 1, 2, 4, 4, 3, 1, 0, 2, 3, 3, 4, 1, 0, 2, 3, 4, 2, 1, 1, 0, 3, 4, 2, 4
+        if (words == 0) return "#ebedf0";
+        if (words < 1000) return "#9be9a8";
+        if (words < 3000) return "#40c463";
+        if (words < 6000) return "#30a14e";
+        return "#216e39";
+    }
+
+    private string GetStatusText(string status) => status switch
+    {
+        "serializing" => "连载中",
+        "finished" => "已完结",
+        "paused" => "暂停更新",
+        _ => "构思草稿"
     };
 }
 
 <div class="dashboard-container">
     <div class="dashboard-header">
-        <div class="header-text">
-            <h2>@Greeting 大作家。</h2>
-            <p class="subtitle">今天是你坚持写作的第 <strong>142</strong> 天，继续创造奇迹吧。</p>
+        <div class="header-titles">
+            <h1>👋 欢迎回到写作台</h1>
+            <p class="subtitle">键盘敲击的每一次，都是世界运转的齿轮。</p>
         </div>
-        <button class="primary-btn" @onclick="CreateNewWork">➕ 新建作品</button>
-    </div>
-
-    <div class="stats-row">
-        <div class="stat-card">
-            <div class="stat-icon" style="background: #e3f2fd; color: #1976d2;">📝</div>
-            <div class="stat-info">
-                <div class="stat-value">0 <span class="stat-unit">字</span></div>
-                <div class="stat-label">今日已写 (目标 5000)</div>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon" style="background: #f3e5f5; color: #7b1fa2;">📚</div>
-            <div class="stat-info">
-                <div class="stat-value">@TotalWordCount.ToString("N0") <span class="stat-unit">字</span></div>
-                <div class="stat-label">全库总字数</div>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon" style="background: #e8f5e9; color: #388e3c;">🔥</div>
-            <div class="stat-info">
-                <div class="stat-value">12 <span class="stat-unit">天</span></div>
-                <div class="stat-label">当前连续打卡</div>
-            </div>
+        <div class="header-actions">
+            <button class="btn-primary-large" @onclick="CreateNewWork">
+                <span class="icon">➕</span> 新建作品
+            </button>
         </div>
     </div>
 
-    <div class="dashboard-grid">
-        <div class="recent-works-section">
-            <h3 class="section-title">最近编辑</h3>
-            <div class="works-list">
-                @if (!RecentWorks.Any())
-                {
-                    <div style="text-align: center; color: #999; padding: 40px 0;">
-                        <div style="font-size: 40px; margin-bottom: 10px;">📭</div>
-                        这里空空如也，点击右上角新建第一部作品吧！
-                    </div>
-                }
-                else
-                {
-                    @foreach (var work in RecentWorks)
-                    {
-                        <div class="work-card">
-                            <div class="work-icon">@(work.WorkType == "novel" ? "📖" : "📝")</div>
-                            <div class="work-details">
-                                <h4 class="work-title">@work.Title</h4>
-                                <div class="work-meta">
-                                    <span>@work.WordCountCache.ToString("N0") 字</span>
-                                    <span class="separator">•</span>
-                                    <span>@work.LastEditedAt.ToString("MM-dd HH:mm") 修改</span>
-                                </div>
-                            </div>
-                            <button class="open-btn" @onclick="() => OnWorkSelected.InvokeAsync(work.Id)">进入写作</button>
-                        </div>
-                    }
-                }
-            </div>
+    <div class="dashboard-stats-row">
+        <div class="stat-card primary">
+            <div class="stat-label">🔥 今日打字 (字)</div>
+            <div class="stat-value">@TodayWordCount.ToString("N0")</div>
+            <div class="stat-desc">保持热爱，笔耕不辍</div>
         </div>
 
-        <div class="heatmap-section">
-            <h3 class="section-title">近30天创作热力图</h3>
-            <div class="heatmap-card">
-                <div class="heatmap-grid">
-                    @foreach (var level in HeatmapData)
-                    {
-                        <div class="heatmap-cell level-@level"></div>
-                    }
-                </div>
-                <div class="heatmap-legend">
+        <div class="stat-card">
+            <div class="stat-label">📚 累计创作 (字)</div>
+            <div class="stat-value">@TotalWordCount.ToString("N0")</div>
+            <div class="stat-desc">所有作品总和</div>
+        </div>
+
+        <div class="stat-card heatmap-card">
+            <div class="heatmap-header">
+                <div class="stat-label">近 90 天创作热力图</div>
+                <div class="heat-legend">
                     <span>少</span>
-                    <div class="legend-color level-0"></div>
-                    <div class="legend-color level-1"></div>
-                    <div class="legend-color level-2"></div>
-                    <div class="legend-color level-3"></div>
-                    <div class="legend-color level-4"></div>
+                    <div class="heat-box" style="background-color: #ebedf0;"></div>
+                    <div class="heat-box" style="background-color: #9be9a8;"></div>
+                    <div class="heat-box" style="background-color: #40c463;"></div>
+                    <div class="heat-box" style="background-color: #30a14e;"></div>
+                    <div class="heat-box" style="background-color: #216e39;"></div>
                     <span>多</span>
                 </div>
             </div>
+            <div class="heatmap-grid">
+                @foreach (var day in HeatmapDays)
+                {
+                    string dateKey = day.ToString("yyyy-MM-dd");
+                    int words = DailyStats.ContainsKey(dateKey) ? DailyStats[dateKey] : 0;
+                    string color = GetHeatColor(words);
+
+                    <div class="heat-box" style="background-color: @color;" title="@dateKey : 写作 @words 字"></div>
+                }
+            </div>
         </div>
+    </div>
+
+    <div class="recent-works-section">
+        <div class="section-header">
+            <h2>🕒 最近修改 <span class="header-tip">(近 7 天)</span></h2>
+        </div>
+
+        @if (!RecentWorks.Any())
+        {
+            <div class="empty-state">
+                <span class="empty-icon">📭</span>
+                <p>近 7 天没有修改过作品，去新建或打开一部作品写点什么吧！</p>
+            </div>
+        }
+        else
+        {
+            <div class="recent-works-list">
+                @foreach (var work in RecentWorks)
+                {
+                    <div class="list-item-card" @onclick="() => OnWorkSelected.InvokeAsync(work.Id)">
+                        <div class="item-cover">
+                            @if (string.IsNullOrEmpty(work.CoverUrl))
+                            {
+                                <span class="no-cover-icon">📖</span>
+                            }
+                            else
+                            {
+                                <img src="@work.CoverUrl" alt="cover" />
+                            }
+                        </div>
+
+                        <div class="item-info">
+                            <div class="item-title" title="@work.Title">@work.Title</div>
+                            <div class="item-meta">
+                                <span class="item-time">更新于 @work.LastEditedAt.ToString("MM-dd HH:mm")</span>
+                            </div>
+                        </div>
+
+                        <div class="item-actions">
+                            <div class="work-status @work.Status">@GetStatusText(work.Status)</div>
+                            <div class="enter-btn">进入写作 →</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
     </div>
 </div>

@@ -1,0 +1,172 @@
+﻿@using MonoNotes.Core.Models
+@using MonoNotes.Storage
+@inject WriteSpaceRepository Repository
+
+@code {
+    [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
+
+    // 🌟 当用户点击“继续写作”或某一章时触发，把要编辑的 ChapterId 传出去
+    [Parameter] public EventCallback<string> OnEnterEditor { get; set; }
+
+    private WorkMeta? Meta;
+    private WorkIndex? Index;
+
+    private int TotalChapters = 0;
+    private int TotalWordCount = 0;
+    private int CreateDays = 1;
+
+    // 默认继续写作的章节（最后一章）
+    private Chapter? LastChapter;
+    // 最近的章节列表
+    private List<Chapter> RecentChapters = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrEmpty(CurrentWorkId)) return;
+
+        // 1. 加载元数据 (取书名、简介、封面)
+        var allWorks = await Repository.GetAllWorksAsync();
+        Meta = allWorks.FirstOrDefault(w => w.Id == CurrentWorkId);
+
+        // 2. 加载目录结构 (计算字数、章数，提取最近章节)
+        Index = await Repository.GetWorkIndexAsync(CurrentWorkId);
+
+        if (Index != null)
+        {
+            var allChapters = Index.Volumes.SelectMany(v => v.Chapters).ToList();
+            TotalChapters = allChapters.Count;
+            TotalWordCount = allChapters.Sum(c => c.WordCount);
+
+            if (allChapters.Any())
+            {
+                LastChapter = allChapters.Last();
+                // 取最后 3 章作为快速导航
+                RecentChapters = allChapters.TakeLast(3).Reverse().ToList();
+            }
+        }
+
+        if (Meta != null)
+        {
+            CreateDays = (int)(DateTime.Now - Meta.CreatedAt).TotalDays;
+            if (CreateDays < 1) CreateDays = 1;
+        }
+    }
+
+    private async Task ContinueWriting()
+    {
+        if (LastChapter != null)
+        {
+            await OnEnterEditor.InvokeAsync(LastChapter.Id);
+        }
+        else
+        {
+            // 如果连一章都没有，传空字符串，让外部去处理（或者默认跳进编辑器让他新建）
+            await OnEnterEditor.InvokeAsync(string.Empty);
+        }
+    }
+}
+
+<div class="overview-container">
+    @if (Meta == null)
+    {
+        <div class="loading-state">正在加载小说档案...</div>
+    }
+    else
+    {
+        <!-- 🌟 顶部：名片区 Hero Section -->
+        <div class="hero-section">
+            <div class="book-cover">
+                @if (string.IsNullOrEmpty(Meta.CoverUrl))
+                {
+                    <span class="no-cover-icon">📖</span>
+                }
+                else
+                {
+                    <img src="@Meta.CoverUrl" alt="cover" />
+                }
+            </div>
+
+            <div class="hero-info">
+                <div class="title-row">
+                    <h1 class="book-title">@Meta.Title</h1>
+                    <span class="status-badge @Meta.Status">
+                        @(Meta.Status switch { "serializing" => "连载中", "finished" => "已完结", "paused" => "暂停更新", _ => "构思草稿" })
+                    </span>
+                </div>
+
+                <div class="tags-row">
+                    @if (!string.IsNullOrWhiteSpace(Meta.Tags))
+                    {
+                        @foreach (var tag in Meta.Tags.Split(new[] { ',', '，' }, StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            <span class="book-tag"># @tag.Trim()</span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="book-tag" style="opacity: 0.5;">暂无标签，可去详情页添加</span>
+                    }
+                </div>
+
+                <div class="synopsis-box">
+                    @(string.IsNullOrWhiteSpace(Meta.Synopsis) ? "（在这个世界，写下你的第一个设定吧...）" : Meta.Synopsis)
+                </div>
+
+                <!-- 🚀 核心召唤按钮 -->
+                <button class="continue-btn" @onclick="ContinueWriting">
+                    <span class="btn-icon">✍️</span> 继续写作
+                    <span class="btn-sub">（前往最新章节）</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 🌟 中部：数据与快捷导航 -->
+        <div class="dashboard-grid">
+            <!-- 左侧：专属数据面板 -->
+            <div class="data-panel">
+                <h3>📊 本书进度</h3>
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <div class="stat-num">@TotalWordCount.ToString("N0")</div>
+                        <div class="stat-lbl">累计字数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-num">@TotalChapters</div>
+                        <div class="stat-lbl">总章节</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-num">@CreateDays</div>
+                        <div class="stat-lbl">创作天数</div>
+                    </div>
+                </div>
+
+                <!-- 占位：未来可以在这里做伏笔抽出 -->
+                <div class="todo-panel">
+                    <h4>💡 待回收的伏笔</h4>
+                    <div class="todo-empty">正在构思中，尚未埋下伏笔...</div>
+                </div>
+            </div>
+
+            <!-- 右侧：最新章节列表 -->
+            <div class="recent-panel">
+                <h3>🕒 最新章节</h3>
+                @if (RecentChapters.Any())
+                {
+                    <div class="recent-list">
+                        @foreach (var chap in RecentChapters)
+                        {
+                            <div class="recent-item" @onclick="() => OnEnterEditor.InvokeAsync(chap.Id)">
+                                <div class="chap-title">@chap.Title</div>
+                                <div class="chap-words">@chap.WordCount 字</div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="recent-empty">目录空空如也，快去写下第一章吧！</div>
+                }
+            </div>
+        </div>
+    }
+</div>
