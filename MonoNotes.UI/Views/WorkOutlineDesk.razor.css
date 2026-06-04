@@ -1,13 +1,14 @@
 ﻿/* =========================================
-   1. 整体布局与大纲专属配色
+   1. 整体布局与大纲专属配色 (纯白无瑕)
 ========================================= */
 .editor-desk-container {
     display: flex;
     flex-direction: column;
     height: 100%;
-    /* 🌟 修复 1：去掉泛蓝背景色，改为纯白 */
+    width: 100%;
     background-color: #ffffff;
     box-sizing: border-box;
+    overflow: hidden;
 }
 
 .desk-topbar {
@@ -18,15 +19,13 @@
     border-bottom: 1px solid #eaeaec;
     color: #999;
     font-size: 13px;
-    transition: all 0.3s ease;
     flex-shrink: 0;
     background: #fff;
 }
-/* 顶部细线保留，作为大纲模式的视觉暗示 */
+
 .outline-topbar {
     border-bottom: 2px solid #e3f2fd;
 }
-/* 🌟 顶部加入蓝色细线提示是大纲模式 */
 
 .breadcrumb .muted {
     color: #888;
@@ -52,6 +51,7 @@
 .save-status {
     font-size: 12px;
     color: #8cc63f;
+    font-weight: bold;
 }
 
 .word-count-badge {
@@ -62,13 +62,15 @@
 }
 
 /* =========================================
-   2. 核心编辑区域布局 (复用正文的骨架)
+   2. 🌟 核心自适应：多层解耦锁死 min-width
 ========================================= */
 .editor-body-layout {
     display: flex;
     justify-content: center;
     flex: 1;
+    width: 100%;
     min-height: 0;
+    min-width: 0; /* 🌟 允许在此层级内部压缩 */
     overflow: hidden;
 }
 
@@ -76,19 +78,22 @@
     display: flex;
     width: 100%;
     height: 100%;
-    padding: 0 40px;
+    padding: 0 30px;
     justify-content: center;
-    gap: 40px;
+    gap: 30px;
     box-sizing: border-box;
+    min-width: 0; /* 🌟 解除子项固有宽度限制 */
 }
 
+/* 大纲中间编辑主区域 */
 .editor-main-area {
     flex: 1;
-    max-width: 1000px;
+    max-width: 850px;
     display: flex;
     flex-direction: column;
     height: 100%;
     min-height: 0;
+    min-width: 0; /* 🌟 强迫 Vditor 必须随父级缩减 */
     padding-top: 20px;
     box-sizing: border-box;
 }
@@ -98,12 +103,12 @@
     align-items: baseline;
     width: 100%;
     margin-bottom: 20px;
-    padding: 0 20px;
+    padding: 0 10px;
     flex-shrink: 0;
 }
 
 .chapter-prefix {
-    font-size: 32px;
+    font-size: 28px;
     font-weight: bold;
     color: #9ca3af;
     margin-right: 4px;
@@ -112,7 +117,7 @@
 
 .chapter-title-input {
     flex: 1;
-    font-size: 32px;
+    font-size: 28px;
     font-weight: bold;
     border: none;
     outline: none;
@@ -125,7 +130,7 @@
 .outline-title {
     color: #1565c0;
 }
-/* 🌟 大纲的标题默认偏蓝，以防和正文混淆 */
+
 .chapter-title-input::placeholder {
     color: #ddd;
 }
@@ -134,81 +139,25 @@
     flex: 1;
     height: 100%;
     min-height: 0;
+    min-width: 0; /* 🌟 锁死 Vditor 容器 */
     display: flex;
     flex-direction: column;
+    width: 100%;
 }
 
 .vditor {
     border: none !important;
+    width: 100% !important;
     background: transparent !important;
 }
 
 .vditor-toolbar {
     border-bottom: 1px solid #f0f0f0 !important;
-    background-color: rgba(250, 251, 253, 0.95) !important;
+    background-color: rgba(255, 255, 255, 0.95) !important;
 }
 
 /* =========================================
-   3. 右侧大纲导航 (TOC)
-========================================= */
-
-
-.hide-scrollbar {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-
-    .hide-scrollbar::-webkit-scrollbar {
-        display: none !important;
-    }
-
-.toc-header {
-    font-size: 14px;
-    color: #333;
-    font-weight: bold;
-    margin-top: 0;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 1px dashed #e0e0e0;
-}
-
-.toc-empty {
-    font-size: 12px;
-    color: #aaa;
-    text-align: center;
-    margin-top: 40px;
-    line-height: 1.8;
-}
-
-
-.toc-item {
-    font-size: 13px;
-    color: #555;
-    padding: 6px 0;
-    cursor: pointer;
-    transition: color 0.2s;
-    display: flex;
-    align-items: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-    .toc-item:hover {
-        color: #1976d2;
-    }
-
-.toc-dot {
-    display: inline-block;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background-color: #ccc;
-    margin-right: 8px;
-    flex-shrink: 0;
-}
-/* =========================================
-   🌟 大纲右侧导航 TOC 样式更新
+   3. 🌟 右侧大纲导航 (TOC - 表头固定，内容独立滚动)
 ========================================= */
 .editor-toc-sidebar {
     width: 240px;
@@ -217,7 +166,6 @@
     background-color: transparent;
     border-left: 1px solid #eaeaec;
     padding: 20px 0 0 20px;
-    /* 🌟 核心：变为 Flex 布局 */
     display: flex;
     flex-direction: column;
 }
@@ -238,10 +186,8 @@
     padding: 0;
     margin: 0;
     flex: 1;
-    /* 🌟 核心：开启内部独立滚动 */
     overflow-y: auto;
     padding-bottom: 40px;
-    /* 🌟 核心：隐藏滚动条 */
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
@@ -283,4 +229,33 @@
     background-color: #ccc;
     margin-right: 8px;
     flex-shrink: 0;
+}
+
+/* =========================================
+   🌟 小屏幕响应式防护
+========================================= */
+@media (max-width: 1200px) {
+    .editor-content-box {
+        padding: 0 15px;
+        gap: 15px;
+    }
+
+    .editor-toc-sidebar {
+        width: 180px;
+        padding-left: 10px;
+    }
+
+    .chapter-title-input {
+        font-size: 24px;
+    }
+
+    .chapter-prefix {
+        font-size: 24px;
+    }
+}
+
+@media (max-width: 950px) {
+    .editor-toc-sidebar {
+        display: none;
+    }
 }

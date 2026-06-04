@@ -83,49 +83,17 @@
             </div>
 
             <div class="main-column">
-
-                <div class="settings-card">
+                <div class="settings-card" style="height: 100%; display: flex; flex-direction: column;">
                     <h3 class="card-title">📜 故事简介与大纲</h3>
                     <div class="form-group">
                         <label>内容简介 (对外展示的卖点)</label>
-                        <textarea class="form-control" style="height: 100px;" @bind="Meta.Synopsis" placeholder="一句话或一段话概括你的故事核心..."></textarea>
+                        <textarea class="form-control" style="height: 150px;" @bind="Meta.Synopsis" placeholder="一句话或一段话概括你的故事核心..."></textarea>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="flex: 1;">
                         <label>核心大纲 (写给自己的起承转合)</label>
-                        <textarea class="form-control" style="height: 180px;" @bind="Meta.Outline" placeholder="卷1：废柴退婚... 卷2：惊艳宗门... 卷3：拯救大陆..."></textarea>
+                        <textarea class="form-control" style="height: 350px;" @bind="Meta.Outline" placeholder="卷1：废柴退婚... 卷2：惊艳宗门... 卷3：拯救大陆..."></textarea>
                     </div>
                 </div>
-
-                <div class="settings-row">
-                    <div class="settings-card flex-1">
-                        <h3 class="card-title">🧑 核心角色设定</h3>
-                        <div class="form-group">
-                            <textarea class="form-control" style="height: 200px;" @bind="Meta.CharacterSettings" placeholder="男主：林动，性格坚毅，武器重剑...&#10;反派：张三，极其腹黑..."></textarea>
-                        </div>
-                    </div>
-                    <div class="settings-card flex-1">
-                        <h3 class="card-title">🌍 世界观与等级</h3>
-                        <div class="form-group">
-                            <textarea class="form-control" style="height: 200px;" @bind="Meta.WorldviewSettings" placeholder="战力体系：炼气 -> 筑基 -> 金丹...&#10;灵气复苏的赛博世界..."></textarea>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="settings-row">
-                    <div class="settings-card flex-1">
-                        <h3 class="card-title">🗺️ 核心地理与势力</h3>
-                        <div class="form-group">
-                            <textarea class="form-control" style="height: 200px;" @bind="Meta.GeographySettings" placeholder="四大宗门：剑宗、魔宗...&#10;主要国家：大夏帝国..."></textarea>
-                        </div>
-                    </div>
-                    <div class="settings-card flex-1">
-                        <h3 class="card-title">⚔️ 关键物品与法宝</h3>
-                        <div class="form-group">
-                            <textarea class="form-control" style="height: 200px;" @bind="Meta.ItemSettings" placeholder="神器：开天斧，获取地点在魔兽山脉...&#10;消耗品：回血丹..."></textarea>
-                        </div>
-                    </div>
-                </div>
-
             </div>
         </div>
     }
@@ -190,17 +158,6 @@
         gap: 24px;
     }
 
-    .settings-row {
-        display: flex;
-        gap: 24px;
-        flex-wrap: wrap;
-    }
-
-    .flex-1 {
-        flex: 1;
-        min-width: 250px;
-    }
-
     .settings-card {
         background: #fff;
         padding: 24px;
@@ -209,10 +166,6 @@
         box-shadow: 0 2px 10px rgba(0,0,0,0.02);
         margin-bottom: 24px;
     }
-
-        .settings-card.flex-1 {
-            margin-bottom: 0;
-        }
 
     .card-title {
         font-size: 16px;

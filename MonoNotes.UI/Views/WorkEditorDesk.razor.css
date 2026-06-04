@@ -1,12 +1,14 @@
 ﻿/* =========================================
-   1. 整体布局容器
+   1. 整体布局容器 (锁定视口，绝对禁止溢出)
 ========================================= */
 .editor-desk-container {
     display: flex;
     flex-direction: column;
     height: 100%;
+    width: 100%;
     background-color: #ffffff;
     box-sizing: border-box;
+    overflow: hidden;
 }
 
 /* =========================================
@@ -17,16 +19,11 @@
     justify-content: space-between;
     align-items: center;
     padding: 12px 30px;
-    border-bottom: 1px solid transparent;
+    border-bottom: 1px solid #f0f0f0;
     color: #999;
     font-size: 13px;
-    transition: all 0.3s ease;
     flex-shrink: 0;
 }
-
-    .desk-topbar:hover {
-        border-bottom: 1px solid #f0f0f0;
-    }
 
 .breadcrumb .muted {
     color: #aaa;
@@ -51,6 +48,7 @@
 .save-status {
     font-size: 12px;
     color: #8cc63f;
+    font-weight: bold;
 }
 
 .word-count-badge {
@@ -96,13 +94,15 @@
     }
 
 /* =========================================
-   3. 核心排版：左侧编辑器
+   3. 🌟 核心自适应：多层解耦锁死 min-width
 ========================================= */
 .editor-body-layout {
     display: flex;
     justify-content: center;
     flex: 1;
+    width: 100%;
     min-height: 0;
+    min-width: 0; /* 🌟 核心修复1：允许在此层级内部压缩 */
     overflow: hidden;
 }
 
@@ -110,22 +110,24 @@
     display: flex;
     width: 100%;
     height: 100%;
-    padding: 0 40px;
+    padding: 0 30px;
     justify-content: center;
-    gap: 40px;
+    gap: 30px;
     box-sizing: border-box;
+    min-width: 0; /* 🌟 核心修复2：解除子项固有宽度限制 */
 }
 
+/* 🌟 编辑器核心主区域 (弹性伸缩，Vditor 随它一起缩) */
 .editor-main-area {
     flex: 1;
-    max-width: 1000px; /* 沉浸式宽屏，收起侧边栏时自动居中扩展 */
+    max-width: 850px; /* 略微收紧，最大物理宽度更优雅 */
     display: flex;
     flex-direction: column;
     height: 100%;
     min-height: 0;
+    min-width: 0; /* 🌟 核心修复3：强迫 Vditor 必须跟随着父级缩减，不准撑开！ */
     padding-top: 20px;
     box-sizing: border-box;
-    transition: all 0.3s ease;
 }
 
 .chapter-title-container {
@@ -133,12 +135,12 @@
     align-items: baseline;
     width: 100%;
     margin-bottom: 20px;
-    padding: 0 20px;
+    padding: 0 10px;
     flex-shrink: 0;
 }
 
 .chapter-prefix {
-    font-size: 32px;
+    font-size: 28px;
     font-weight: bold;
     color: #9ca3af;
     margin-right: 4px;
@@ -147,7 +149,7 @@
 
 .chapter-title-input {
     flex: 1;
-    font-size: 32px;
+    font-size: 28px;
     font-weight: bold;
     color: #222;
     border: none;
@@ -165,12 +167,15 @@
     flex: 1;
     height: 100%;
     min-height: 0;
+    min-width: 0; /* 🌟 核心修复4：锁死 Vditor 容器 */
     display: flex;
     flex-direction: column;
+    width: 100%;
 }
 
 .vditor {
     border: none !important;
+    width: 100% !important;
 }
 
 .vditor-toolbar {
@@ -179,7 +184,7 @@
 }
 
 /* =========================================
-   4. 🌟 右侧：贴脸大纲面板 (折叠+三体合一)
+   4. 🌟 右侧提词器面板 (防挤压，宽度雷打不动)
 ========================================= */
 .outline-sidebar {
     display: flex;
@@ -189,13 +194,12 @@
     border-left: 1px solid #f0f0f0;
     padding: 20px 0 40px 20px;
     overflow-y: auto;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
 }
 
-    /* 🌟 核心抽屉折叠动画 */
     .outline-sidebar.open {
         width: 280px;
-        flex-shrink: 0;
+        flex-shrink: 0; /* 🌟 绝对不允许被中间压缩，保障显示完整 */
         opacity: 1;
     }
 
@@ -206,7 +210,7 @@
         border-left: none;
         opacity: 0;
         overflow: hidden;
-        margin-left: -40px;
+        margin-left: -20px;
     }
 
 .hide-scrollbar {
@@ -218,7 +222,7 @@
         display: none !important;
     }
 
-/* 面板区块通用样式 */
+/* 区块通用样式 */
 .sidebar-block {
     display: flex;
     flex-direction: column;
@@ -234,62 +238,53 @@
     margin: 0 0 10px 0;
     padding-bottom: 8px;
     border-bottom: 1px dashed #eaeaea;
+    flex-shrink: 0;
 }
 
 .ol-icon {
     font-size: 15px;
 }
 
-/* 大纲输入框 */
-.outline-block {
-    flex-shrink: 0;
-}
-
-.outline-textarea {
-    width: 100%;
-    box-sizing: border-box;
-    border: 1px solid transparent;
-    background: #f9f9fb;
-    resize: vertical;
-    outline: none;
-    font-size: 13px;
-    line-height: 1.6;
-    color: #444;
-    padding: 10px;
-    border-radius: 8px;
-    transition: all 0.2s;
-    font-family: inherit;
-}
-
-    .outline-textarea:focus {
-        background: #fff;
-        border-color: #1976d2;
-        box-shadow: 0 0 0 2px rgba(25,118,210,0.1);
-    }
-
-    .outline-textarea::placeholder {
-        color: #bbb;
-        font-weight: normal;
-    }
-
-.chapter-textarea {
-    min-height: 160px;
-}
-
-.volume-textarea {
-    min-height: 100px;
-    font-style: italic;
-    color: #666;
+/* 🌟 提词器卡片：高度锁死，内部无感滚动，隐藏滚动条 */
+.readonly-outline-card {
     background: #fdfdfd;
-    border: 1px solid #f0f0f0;
+    border: 1px solid #eaeaea;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #444;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.01);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
-/* 本文导航 TOC 样式 */
+    .readonly-outline-card::-webkit-scrollbar {
+        display: none !important;
+    }
+
+.chapter-outline-card {
+    max-height: 200px;
+    min-height: 100px;
+    border-left: 4px solid #1976d2;
+}
+
+.volume-outline-card {
+    max-height: 140px;
+    min-height: 80px;
+    font-style: italic;
+    color: #777;
+    border-left: 4px solid #9ca3af;
+}
+
+/* 🌟 独立目录导航：表头固定，内容独立无感滚动 */
 .toc-block {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 200px;
+    min-height: 180px;
 }
 
 .toc-list {
@@ -297,10 +292,8 @@
     padding: 0;
     margin: 0;
     flex: 1;
-    /* 🌟 核心：开启内部独立滚动 */
     overflow-y: auto;
     padding-bottom: 20px;
-    /* 🌟 核心：隐藏滚动条 */
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
@@ -343,39 +336,38 @@
     margin-right: 8px;
     flex-shrink: 0;
 }
-/* 🌟 右侧只读提词器卡片样式 */
-.readonly-outline-card {
-    background: #fdfdfd;
-    border: 1px solid #eaeaea;
-    padding: 12px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    color: #444;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    /* 🌟 核心：开启纵向滚动 */
-    overflow-y: auto;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.01);
-    /* 🌟 核心：隐藏滚动条但保留滚动能力 */
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
 
-    .readonly-outline-card::-webkit-scrollbar {
-        display: none !important;
+/* =========================================
+   🌟 小屏幕响应式极端防御 (宽度阶梯压缩)
+========================================= */
+@media (max-width: 1300px) {
+    .editor-content-box {
+        padding: 0 15px;
+        gap: 15px;
     }
 
-/* 🌟 分别设定卷和章的最大高度 */
-.chapter-outline-card {
-    max-height: 260px; /* 超过此高度即发生内部无感滚动 */
-    min-height: 120px;
-    border-left: 4px solid #1976d2;
+    .outline-sidebar.open {
+        width: 240px;
+    }
 }
 
-.volume-outline-card {
-    max-height: 160px;
-    min-height: 80px;
-    font-style: italic;
-    color: #777;
-    border-left: 4px solid #9ca3af;
+@media (max-width: 1100px) {
+    .outline-sidebar.open {
+        width: 200px;
+    }
+
+    .chapter-title-input {
+        font-size: 24px;
+    }
+
+    .chapter-prefix {
+        font-size: 24px;
+    }
+}
+
+@media (max-width: 950px) {
+    /* 屏幕实在太小时，优先把大纲目录隐藏，确保提词器卡片和正文能完美显示 */
+    .toc-block {
+        display: none;
+    }
 }
