@@ -1,0 +1,258 @@
+﻿@using MonoNotes.Core.Models
+@using MonoNotes.Storage
+@inject WriteSpaceRepository Repository
+
+@code {
+    private List<MaterialItem> GlobalMaterials = new();
+    private MaterialType CurrentCategory = MaterialType.Character;
+    private string ViewMode = "grid";
+
+    // 🌟 抽屉状态与编辑对象
+    private bool IsDrawerOpen = false;
+    private MaterialItem? EditingItem;
+
+    // 用于新增自定义属性的临时变量
+    private string NewFieldKey = "";
+    private string NewFieldValue = "";
+
+    private List<MaterialItem> FilteredMaterials => GlobalMaterials
+        .Where(m => m.Type == CurrentCategory)
+        .OrderByDescending(m => m.UpdatedAt)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        GlobalMaterials = await Repository.GetGlobalMaterialsAsync();
+    }
+
+    private async Task CreateNewGlobalTemplate()
+    {
+        var newItem = new MaterialItem
+        {
+            Type = CurrentCategory,
+            Name = $"新{GetCategoryName(CurrentCategory)}模板"
+        };
+        GlobalMaterials.Add(newItem);
+        await Repository.SaveGlobalMaterialsAsync(GlobalMaterials);
+
+        // 创建完毕后直接打开抽屉进行编辑！
+        OpenDrawer(newItem);
+    }
+
+    // 🌟 打开抽屉
+    private void OpenDrawer(MaterialItem item)
+    {
+        EditingItem = item;
+        NewFieldKey = "";
+        NewFieldValue = "";
+        IsDrawerOpen = true;
+    }
+
+    // 🌟 关闭并自动保存
+    private async Task CloseDrawer()
+    {
+        IsDrawerOpen = false;
+        if (EditingItem != null)
+        {
+            EditingItem.UpdatedAt = DateTime.Now;
+            await Repository.SaveGlobalMaterialsAsync(GlobalMaterials);
+        }
+        await Task.Delay(300); // 等待动画完成再清空数据
+        EditingItem = null;
+    }
+
+    // ==========================================
+    // 🌟 自定义属性 (Custom Fields) 管理逻辑
+    // ==========================================
+    private void AddCustomField()
+    {
+        if (EditingItem == null || string.IsNullOrWhiteSpace(NewFieldKey)) return;
+
+        string key = NewFieldKey.Trim();
+        if (!EditingItem.CustomFields.ContainsKey(key))
+        {
+            EditingItem.CustomFields[key] = string.IsNullOrWhiteSpace(NewFieldValue) ? "-" : NewFieldValue.Trim();
+            NewFieldKey = "";
+            NewFieldValue = "";
+        }
+    }
+
+    private void RemoveCustomField(string key)
+    {
+        if (EditingItem != null && EditingItem.CustomFields.ContainsKey(key))
+        {
+            EditingItem.CustomFields.Remove(key);
+        }
+    }
+
+    private void UpdateCustomFieldValue(string key, string newValue)
+    {
+        if (EditingItem != null && EditingItem.CustomFields.ContainsKey(key))
+        {
+            EditingItem.CustomFields[key] = newValue;
+        }
+    }
+
+    // 基础辅助方法
+    private void SetCategory(MaterialType type) { CurrentCategory = type; }
+    private void SetViewMode(string mode) { ViewMode = mode; }
+    private string GetCategoryName(MaterialType type) => type switch { MaterialType.Character => "角色", MaterialType.Faction => "势力", MaterialType.Geography => "地理", MaterialType.Item => "物品", MaterialType.Worldview => "世界观", _ => "未知" };
+    private string GetCategoryIcon(MaterialType type) => type switch { MaterialType.Character => "🧑", MaterialType.Faction => "🏛️", MaterialType.Geography => "🗺️", MaterialType.Item => "⚔️", MaterialType.Worldview => "🌍", _ => "📌" };
+}
+
+<div class="global-materials-container">
+    <div class="materials-header">
+        <div class="header-left">
+            <h2>🌍 全局资源设定集 (模板库)</h2>
+            <p class="subtitle">在这里创建的世界观与角色原型，可被派生或引用到任意小说中。</p>
+        </div>
+        <div class="header-right">
+            <div class="view-toggles">
+                <button class="toggle-btn @(ViewMode == "grid" ? "active" : "")" @onclick="@(() => SetViewMode("grid"))">📱 卡片</button>
+                <button class="toggle-btn @(ViewMode == "list" ? "active" : "")" @onclick="@(() => SetViewMode("list"))">📄 列表</button>
+            </div>
+            <button class="btn-primary" @onclick="CreateNewGlobalTemplate">
+                ➕ 新建@(GetCategoryName(CurrentCategory))模板
+            </button>
+        </div>
+    </div>
+
+    <div class="category-tabs">
+        @foreach (MaterialType type in Enum.GetValues(typeof(MaterialType)))
+        {
+            <div class="tab-item @(CurrentCategory == type ? "active" : "")" @onclick="() => SetCategory(type)">
+                <span class="tab-icon">@GetCategoryIcon(type)</span> @GetCategoryName(type)
+            </div>
+        }
+    </div>
+
+    <div class="materials-content">
+        @if (!FilteredMaterials.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-icon">@GetCategoryIcon(CurrentCategory)</div>
+                <p>全局库空空如也。创建一个通用模板，让它成为你宇宙的基石吧！</p>
+                <button class="btn-outline" @onclick="CreateNewGlobalTemplate">创建全局模板</button>
+            </div>
+        }
+        else
+        {
+            @if (ViewMode == "grid")
+            {
+                <div class="cards-grid">
+                    @foreach (var item in FilteredMaterials)
+                    {
+                        <div class="material-card" @onclick="() => OpenDrawer(item)">
+                            <div class="card-header">
+                                <div class="avatar-box">@(string.IsNullOrEmpty(item.AvatarUrl) ? GetCategoryIcon(item.Type) : "")</div>
+                                <div class="card-title-area">
+                                    <h3 class="card-title">@item.Name</h3>
+                                    <span class="badge-global">🌍 全局原型</span>
+                                </div>
+                            </div>
+                            <div class="card-desc">@(string.IsNullOrEmpty(item.Description) ? "（暂无简介，点击编辑详细属性）" : item.Description)</div>
+
+                            @if (item.CustomFields.Any())
+                            {
+                                <div class="card-props-preview">
+                                    @foreach (var kvp in item.CustomFields.Take(2))
+                                    {
+                                        <span class="prop-tag">@kvp.Key: @kvp.Value</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="list-view">
+                    <table class="material-table">
+                        <thead>
+                            <tr>
+                                <th width="60">图标</th>
+                                <th width="220">模板名称</th>
+                                <th>简介说明</th>
+                                <th width="150">最后更新</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in FilteredMaterials)
+                            {
+                                <tr class="list-row" @onclick="() => OpenDrawer(item)">
+                                    <td class="icon-cell">@GetCategoryIcon(item.Type)</td>
+                                    <td class="name-cell">@item.Name</td>
+                                    <td class="desc-cell">@(string.IsNullOrEmpty(item.Description) ? "-" : item.Description)</td>
+                                    <td class="time-cell">@item.UpdatedAt.ToString("MM-dd HH:mm")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@if (IsDrawerOpen)
+{
+    <div class="drawer-overlay" @onclick="CloseDrawer"></div>
+}
+
+<div class="settings-drawer @(IsDrawerOpen ? "open" : "")">
+    @if (EditingItem != null)
+    {
+        <div class="drawer-header">
+            <div class="drawer-title-box">
+                <span class="drawer-icon">@GetCategoryIcon(EditingItem.Type)</span>
+                <h3>编辑全局模板</h3>
+            </div>
+            <button class="close-btn" @onclick="CloseDrawer">✖</button>
+        </div>
+
+        <div class="drawer-body">
+            <div class="drawer-section">
+                <label>模板名称</label>
+                <input type="text" class="drawer-input title-input" @bind="EditingItem.Name" />
+            </div>
+
+            <div class="drawer-section">
+                <label>简介说明</label>
+                <textarea class="drawer-input desc-input" @bind="EditingItem.Description" placeholder="写下这个模板的基础基调..."></textarea>
+            </div>
+
+            <hr class="drawer-divider" />
+
+            <div class="drawer-section">
+                <div class="section-title-row">
+                    <label>自定义扩展属性</label>
+                    <span class="field-hint">随意添加，如：境界、灵根、危险度...</span>
+                </div>
+
+                <div class="custom-fields-list">
+                    @foreach (var key in EditingItem.CustomFields.Keys.ToList())
+                    {
+                        <div class="field-row">
+                            <div class="field-key">@key</div>
+                            <input type="text" class="field-value-input"
+                                   value="@EditingItem.CustomFields[key]"
+                                   @onchange="(e) => UpdateCustomFieldValue(key, e.Value?.ToString() ?? string.Empty)" />
+                            <button class="delete-field-btn" title="删除属性" @onclick="() => RemoveCustomField(key)">🗑️</button>
+                        </div>
+                    }
+                </div>
+
+                <div class="add-field-box">
+                    <input type="text" class="add-input" placeholder="属性名 (如: 战力)" @bind="NewFieldKey" />
+                    <input type="text" class="add-input" placeholder="值 (如: S级)" @bind="NewFieldValue" />
+                    <button class="add-field-btn" @onclick="AddCustomField">➕ 添加</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="drawer-footer">
+            <button class="btn-primary full-width" @onclick="CloseDrawer">💾 保存并关闭</button>
+        </div>
+    }
+</div>

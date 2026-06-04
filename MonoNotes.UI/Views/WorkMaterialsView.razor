@@ -1,0 +1,182 @@
+﻿@using MonoNotes.Core.Models
+@using MonoNotes.Storage
+@inject WriteSpaceRepository Repository
+
+@code {
+    [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
+
+    private List<MaterialItem> AllMaterials = new();
+
+    // 当前选中的分类，默认显示角色
+    private MaterialType CurrentCategory = MaterialType.Character;
+
+    // 当前视图模式 (grid: 卡片视图, list: 表格视图)
+    private string ViewMode = "grid";
+
+    // 过滤出当前分类的素材
+    private List<MaterialItem> FilteredMaterials => AllMaterials.Where(m => m.Type == CurrentCategory).OrderByDescending(m => m.UpdatedAt).ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadMaterials();
+    }
+
+    private async Task LoadMaterials()
+    {
+        if (!string.IsNullOrEmpty(CurrentWorkId))
+        {
+            AllMaterials = await Repository.GetLocalMaterialsAsync(CurrentWorkId);
+        }
+    }
+
+    // 新建一张空白设定卡片
+    private async Task CreateNewMaterial()
+    {
+        var newItem = new MaterialItem
+        {
+            Type = CurrentCategory,
+            Name = $"新{GetCategoryName(CurrentCategory)}"
+        };
+
+        AllMaterials.Add(newItem);
+        await Repository.SaveLocalMaterialsAsync(CurrentWorkId, AllMaterials);
+        StateHasChanged();
+    }
+
+    private void SetCategory(MaterialType type) { CurrentCategory = type; }
+    private void SetViewMode(string mode) { ViewMode = mode; }
+
+    private string GetCategoryName(MaterialType type) => type switch
+    {
+        MaterialType.Character => "角色",
+        MaterialType.Faction => "势力",
+        MaterialType.Geography => "地理",
+        MaterialType.Item => "物品",
+        MaterialType.Worldview => "世界观",
+        _ => "未知"
+    };
+
+    private string GetCategoryIcon(MaterialType type) => type switch
+    {
+        MaterialType.Character => "🧑",
+        MaterialType.Faction => "🏛️",
+        MaterialType.Geography => "🗺️",
+        MaterialType.Item => "⚔️",
+        MaterialType.Worldview => "🌍",
+        _ => "📌"
+    };
+}
+
+<div class="materials-container">
+
+    <div class="materials-header">
+        <div class="header-left">
+            <h2>📚 小说设定素材库</h2>
+        </div>
+        <div class="header-right">
+            <div class="view-toggles">
+                <button class="toggle-btn @(ViewMode == "grid" ? "active" : "")" @onclick="@(() => SetViewMode("grid"))" title="卡片视图">📱 卡片</button>
+                <button class="toggle-btn @(ViewMode == "list" ? "active" : "")" @onclick="@(() => SetViewMode("list"))" title="列表视图">📄 列表</button>
+            </div>
+
+            <button class="btn-primary" @onclick="CreateNewMaterial">
+                ➕ 新建@(GetCategoryName(CurrentCategory))
+            </button>
+        </div>
+    </div>
+
+    <div class="category-tabs">
+        @foreach (MaterialType type in Enum.GetValues(typeof(MaterialType)))
+        {
+            <div class="tab-item @(CurrentCategory == type ? "active" : "")" @onclick="() => SetCategory(type)">
+                <span class="tab-icon">@GetCategoryIcon(type)</span> @GetCategoryName(type)
+            </div>
+        }
+    </div>
+
+    <div class="materials-content">
+        @if (!FilteredMaterials.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-icon">@GetCategoryIcon(CurrentCategory)</div>
+                <p>这里空空如也，快来创建你的第一个@(GetCategoryName(CurrentCategory))设定吧！</p>
+                <button class="btn-outline" @onclick="CreateNewMaterial">立即创建</button>
+            </div>
+        }
+        else
+        {
+            @if (ViewMode == "grid")
+            {
+                <div class="cards-grid">
+                    @foreach (var item in FilteredMaterials)
+                    {
+                        <div class="material-card">
+                            <div class="card-header">
+                                <div class="avatar-box">
+                                    @(string.IsNullOrEmpty(item.AvatarUrl) ? GetCategoryIcon(item.Type) : "")
+                                </div>
+                                <div class="card-title-area">
+                                    <h3 class="card-title">@item.Name</h3>
+                                    @if (item.IsReadonlyReference)
+                                    {
+                                        <span class="badge-readonly">🔗 引用</span>
+                                    }
+                                    else if (!string.IsNullOrEmpty(item.DerivedFromId))
+                                    {
+                                        <span class="badge-derived">🧬 派生</span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="card-desc">
+                                @(string.IsNullOrEmpty(item.Description) ? "（暂无简介，点击编辑）" : item.Description)
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else if (ViewMode == "list")
+            {
+                <div class="list-view">
+                    <table class="material-table">
+                        <thead>
+                            <tr>
+                                <th width="60">图标</th>
+                                <th width="200">名称</th>
+                                <th>简介</th>
+                                <th width="120">来源状态</th>
+                                <th width="150">最后更新</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in FilteredMaterials)
+                            {
+                                <tr class="list-row">
+                                    <td class="icon-cell">@GetCategoryIcon(item.Type)</td>
+                                    <td class="name-cell">@item.Name</td>
+                                    <td class="desc-cell">@(string.IsNullOrEmpty(item.Description) ? "-" : item.Description)</td>
+                                    <td>
+                                        @if (item.IsReadonlyReference)
+                                        {
+                                            <span class="badge-readonly">🔗 引用</span>
+                                        }
+                                        else if (!string.IsNullOrEmpty(item.DerivedFromId))
+                                        {
+
+                                            <span class="badge-derived">🧬 派生</span>
+                                        }
+                                        else
+                                        {
+
+                                            <span style="color:#999; font-size:12px;">单本原创</span>
+                                        }
+                                    </td>
+                                    <td class="time-cell">@item.UpdatedAt.ToString("MM-dd HH:mm")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>

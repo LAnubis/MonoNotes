@@ -32,6 +32,13 @@ namespace MonoNotes.Core.Models
         public string Synopsis { get; set; } = "暂无简介...";
         public string Tags { get; set; } = ""; // 逗号分隔的标签
         public string CoverUrl { get; set; } = ""; // 封面图路径
+
+        // 🌟 新增：五大核心设定区
+        public string Outline { get; set; } = "";            // 📜 核心大纲
+        public string CharacterSettings { get; set; } = "";  // 🧑 角色设定
+        public string WorldviewSettings { get; set; } = "";  // 🌍 世界观设定
+        public string GeographySettings { get; set; } = "";  // 🗺️ 地理场景
+        public string ItemSettings { get; set; } = "";       // ⚔️ 物品法宝
     }
 
     // 2. 对应物理路径: Writespaces/Works/work_xxx/work-index.json

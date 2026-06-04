@@ -1,9 +1,15 @@
 ﻿@code {
     private string? ActiveWorkId { get; set; } = null;
     private string CurrentSubView { get; set; } = "editor";
-
+    // 🌟 新增：记录全局大厅的子视图（默认是 dashboard）
+    private string GlobalSubView { get; set; } = "dashboard";
     private MonoNotes.UI.Views.WorkSidebar _workSidebar;
-
+    // 🌟 新增：处理全局菜单切换
+    private void HandleGlobalMenuChanged(string menuName)
+    {
+        GlobalSubView = menuName;
+        StateHasChanged();
+    }
     private void EnterWork(string workId)
     {
         ActiveWorkId = workId;
@@ -54,7 +60,7 @@
     <div class="sidebar-region">
         @if (string.IsNullOrEmpty(ActiveWorkId))
         {
-            <GlobalSidebar OnWorkSelected="EnterWork" />
+            <GlobalSidebar OnWorkSelected="EnterWork" OnGlobalMenuSelected="HandleGlobalMenuChanged" />
         }
         else
         {
@@ -70,7 +76,20 @@
     <div class="main-content-region">
         @if (string.IsNullOrEmpty(ActiveWorkId))
         {
-            <GlobalDashboard OnWorkSelected="EnterWork" />
+            @if (GlobalSubView == "dashboard")
+            {
+                <GlobalDashboard OnWorkSelected="EnterWork" />
+            }
+            else if (GlobalSubView == "materials")
+            {
+                <GlobalMaterialsView />
+            }
+            else if (GlobalSubView == "trash")
+            {
+                <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#999;">
+                    <h2>🗑️ 回收站开发中...</h2>
+                </div>
+            }
         }
         else
         {
@@ -92,6 +111,10 @@
             else if (CurrentSubView == "details")
             {
                 <WorkDetailsView CurrentWorkId="@ActiveWorkId" />
+            }
+            else if (CurrentSubView == "materials")
+            {
+                <WorkMaterialsView CurrentWorkId="@ActiveWorkId" />
             }
         }
     </div>

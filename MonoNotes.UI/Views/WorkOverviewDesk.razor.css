@@ -1,9 +1,11 @@
-﻿.overview-container {
-    padding: 40px 60px;
-    max-width: 1000px;
-    margin: 0 auto;
+﻿/* 🌟 破除写死的宽度，改为自适应弹性填充 */
+.overview-container {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 40px 5%;
     height: 100%;
     overflow-y: auto;
+    background: #fcfcfc;
 }
 
 .loading-state {
@@ -12,7 +14,7 @@
     margin-top: 100px;
 }
 
-/* Hero Section 名片区 */
+/* 名片区 (Hero Section) */
 .hero-section {
     display: flex;
     gap: 30px;
@@ -22,6 +24,7 @@
     border-radius: 16px;
     border: 1px solid #eee;
     box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    flex-wrap: wrap;
 }
 
 .book-cover {
@@ -50,6 +53,7 @@
 
 .hero-info {
     flex: 1;
+    min-width: 300px;
     display: flex;
     flex-direction: column;
 }
@@ -122,7 +126,6 @@
     margin-bottom: 20px;
 }
 
-/* 继续写作按钮 */
 .continue-btn {
     display: inline-flex;
     align-items: center;
@@ -153,20 +156,24 @@
     opacity: 0.8;
 }
 
-/* 中部网格 */
+/* 🌟 中部网格区 (自适应排列) */
 .dashboard-grid {
     display: flex;
-    gap: 30px;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: stretch;
 }
 
-.data-panel, .recent-panel {
+.data-panel, .recent-panel, .shortcuts-panel {
     background: #fff;
     padding: 24px;
     border-radius: 16px;
     border: 1px solid #eee;
     box-shadow: 0 4px 12px rgba(0,0,0,0.02);
     flex: 1;
+    min-width: 280px;
+    display: flex;
+    flex-direction: column;
 }
 
 h3 {
@@ -176,9 +183,10 @@ h3 {
     color: #333;
 }
 
+/* 进度数据 */
 .stats-row {
     display: flex;
-    gap: 20px;
+    gap: 12px;
     margin-bottom: 30px;
 }
 
@@ -219,7 +227,7 @@ h3 {
     text-align: center;
 }
 
-/* 最新章节列表 */
+/* 最新章节 */
 .recent-list {
     display: flex;
     flex-direction: column;
@@ -260,4 +268,44 @@ h3 {
     color: #aaa;
     text-align: center;
     padding: 30px 0;
+}
+
+/* 🌟 新增：快捷设定入口 */
+.shortcuts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+}
+
+.shortcut-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: #fafafa;
+    border: 1px solid #eaeaea;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+    .shortcut-btn:hover {
+        background: #f0f7ff;
+        border-color: #bbdefb;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(25,118,210,0.1);
+    }
+
+.sc-icon {
+    font-size: 22px;
+}
+
+.sc-text {
+    font-size: 13px;
+    font-weight: bold;
+    color: #444;
+}
+
+.shortcut-btn:hover .sc-text {
+    color: #1976d2;
 }

@@ -190,5 +190,130 @@ namespace MonoNotes.Storage
 
             await JsonSafeWriter.WriteAtomicallyAsync(metaPath, meta);
         }
+
+        // ====================================================================
+        // 🌟 万能设定集引擎 (Material System Engine)
+        // ====================================================================
+
+        private string GetLocalMaterialsPath(string workId)
+        {
+            var path = Path.Combine(_writeSpaceRoot, "Works", workId, "Materials");
+            if (!Directory.Exists(path)) Directory.CreateDirectory(path);
+            return path;
+        }
+
+        private string GetGlobalMaterialsPath()
+        {
+            var path = Path.Combine(_writeSpaceRoot, "GlobalMaterials");
+            if (!Directory.Exists(path)) Directory.CreateDirectory(path);
+            return path;
+        }
+
+        /// <summary> 获取单本小说内的所有设定素材 </summary>
+        public async Task<List<MaterialItem>> GetLocalMaterialsAsync(string workId)
+        {
+            var path = Path.Combine(GetLocalMaterialsPath(workId), "materials.json");
+            if (!File.Exists(path)) return new List<MaterialItem>();
+            return await JsonSafeWriter.ReadSafeAsync<List<MaterialItem>>(path) ?? new List<MaterialItem>();
+        }
+
+        /// <summary> 获取全局资源库的所有设定模板 </summary>
+        public async Task<List<MaterialItem>> GetGlobalMaterialsAsync()
+        {
+            var path = Path.Combine(GetGlobalMaterialsPath(), "global_materials.json");
+            if (!File.Exists(path)) return new List<MaterialItem>();
+            return await JsonSafeWriter.ReadSafeAsync<List<MaterialItem>>(path) ?? new List<MaterialItem>();
+        }
+
+        /// <summary> 批量保存单本小说设定 </summary>
+        public async Task SaveLocalMaterialsAsync(string workId, List<MaterialItem> materials)
+        {
+            var path = Path.Combine(GetLocalMaterialsPath(workId), "materials.json");
+            foreach (var m in materials) m.UpdatedAt = DateTime.Now;
+            await JsonSafeWriter.WriteAtomicallyAsync(path, materials);
+        }
+
+        /// <summary> 批量保存全局设定模板 </summary>
+        public async Task SaveGlobalMaterialsAsync(List<MaterialItem> materials)
+        {
+            var path = Path.Combine(GetGlobalMaterialsPath(), "global_materials.json");
+            foreach (var m in materials) m.UpdatedAt = DateTime.Now;
+            await JsonSafeWriter.WriteAtomicallyAsync(path, materials);
+        }
+
+        // -----------------------------------------------------------
+        // 🚀 核心流转 1：派生 (Global ➡️ Local Deep Copy)
+        // -----------------------------------------------------------
+        public async Task DeriveMaterialToLocalAsync(string workId, MaterialItem globalTemplate)
+        {
+            var locals = await GetLocalMaterialsAsync(workId);
+
+            // 深拷贝一份新的实例
+            var newLocalInstance = new MaterialItem
+            {
+                Id = Guid.NewGuid().ToString("N"), // 生成全新的局部 ID
+                Name = globalTemplate.Name,
+                Description = globalTemplate.Description,
+                AvatarUrl = globalTemplate.AvatarUrl,
+                Type = globalTemplate.Type,
+                Aliases = new List<string>(globalTemplate.Aliases),
+                CustomFields = new Dictionary<string, string>(globalTemplate.CustomFields),
+                DerivedFromId = globalTemplate.Id // 🌟 认祖归宗，打上派生标记
+            };
+
+            locals.Add(newLocalInstance);
+            await SaveLocalMaterialsAsync(workId, locals);
+        }
+
+        // -----------------------------------------------------------
+        // 🚀 核心流转 2：引用 (Global ➡️ Local Readonly Reference)
+        // -----------------------------------------------------------
+        public async Task ReferenceMaterialToLocalAsync(string workId, MaterialItem globalTemplate)
+        {
+            var locals = await GetLocalMaterialsAsync(workId);
+
+            // 生成一个空壳引用
+            var refInstance = new MaterialItem
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Type = globalTemplate.Type,
+                ReferenceId = globalTemplate.Id // 🌟 核心：打上只读引用标记
+            };
+
+            locals.Add(refInstance);
+            await SaveLocalMaterialsAsync(workId, locals);
+        }
+
+        // -----------------------------------------------------------
+        // 🚀 核心流转 3：沉淀 (Local ➡️ Global Abstract & Up-copy)
+        // -----------------------------------------------------------
+        public async Task PromoteToGlobalTemplateAsync(string workId, MaterialItem localItem)
+        {
+            var globals = await GetGlobalMaterialsAsync();
+            var newGlobalId = Guid.NewGuid().ToString("N");
+
+            // 1. 向上提取生成全局模板 (脱敏处理，不带走单本独有的 Relations)
+            var globalTemplate = new MaterialItem
+            {
+                Id = newGlobalId,
+                Name = localItem.Name + " (模板)",
+                Description = localItem.Description,
+                AvatarUrl = localItem.AvatarUrl,
+                Type = localItem.Type,
+                CustomFields = new Dictionary<string, string>(localItem.CustomFields)
+                // 注意：没有复制 Aliases 和 Relations，保持全局模板的纯净
+            };
+            globals.Add(globalTemplate);
+            await SaveGlobalMaterialsAsync(globals);
+
+            // 2. 将本地原来的卡片，绑定到这个新生成的全局模板上
+            var locals = await GetLocalMaterialsAsync(workId);
+            var itemToUpdate = locals.FirstOrDefault(x => x.Id == localItem.Id);
+            if (itemToUpdate != null)
+            {
+                itemToUpdate.DerivedFromId = newGlobalId; // 🌟 重新认祖归宗
+                await SaveLocalMaterialsAsync(workId, locals);
+            }
+        }
     }
 }

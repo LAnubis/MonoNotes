@@ -1,0 +1,565 @@
+﻿.global-materials-container {
+    padding: 40px 60px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #fcfcfc;
+    box-sizing: border-box;
+}
+
+.materials-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+}
+
+.header-left h2 {
+    margin: 0 0 8px 0;
+    font-size: 28px;
+    color: #222;
+}
+
+.subtitle {
+    margin: 0;
+    font-size: 14px;
+    color: #777;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 4px;
+}
+
+.view-toggles {
+    display: flex;
+    background: #eee;
+    padding: 4px;
+    border-radius: 8px;
+}
+
+.toggle-btn {
+    background: transparent;
+    border: none;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #666;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+    .toggle-btn.active {
+        background: #fff;
+        color: #222;
+        font-weight: bold;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+
+.btn-primary {
+    background: #1976d2;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(25,118,210,0.2);
+}
+
+    .btn-primary:hover {
+        background: #1565c0;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(25,118,210,0.3);
+    }
+
+.btn-outline {
+    background: transparent;
+    color: #1976d2;
+    border: 1px solid #1976d2;
+    padding: 8px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 16px;
+}
+
+.category-tabs {
+    display: flex;
+    gap: 16px;
+    border-bottom: 2px solid #eaeaea;
+    margin-bottom: 30px;
+}
+
+.tab-item {
+    padding: 12px 4px;
+    cursor: pointer;
+    font-size: 15px;
+    color: #666;
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+    .tab-item:hover {
+        color: #1976d2;
+    }
+
+    .tab-item.active {
+        color: #1976d2;
+        font-weight: bold;
+        border-bottom-color: #1976d2;
+    }
+
+.tab-icon {
+    margin-right: 6px;
+}
+
+.materials-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 40px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 100px 0;
+    color: #888;
+    background: #fff;
+    border-radius: 16px;
+    border: 1px dashed #ddd;
+}
+
+.empty-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+/* 卡片视图 */
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+}
+
+.material-card {
+    background: #fff;
+    border: 1px solid #eaeaea;
+    border-radius: 12px;
+    padding: 24px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+    display: flex;
+    flex-direction: column;
+}
+
+    .material-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+        border-color: #bbdefb;
+    }
+
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.avatar-box {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #f0f4f8;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    border: 1px solid #e2e8f0;
+    flex-shrink: 0;
+}
+
+.card-title-area {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.card-title {
+    margin: 0;
+    font-size: 16px;
+    color: #222;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+.badge-global {
+    background: #f3e5f5;
+    color: #7b1fa2;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
+.card-desc {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.6;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* 列表视图 */
+.list-view {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #eaeaea;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+}
+
+.material-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+    .material-table th {
+        background: #f9f9f9;
+        padding: 14px 20px;
+        font-size: 13px;
+        color: #666;
+        font-weight: bold;
+        border-bottom: 1px solid #eaeaea;
+    }
+
+    .material-table td {
+        padding: 14px 20px;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 14px;
+    }
+
+.list-row {
+    transition: background 0.2s;
+    cursor: pointer;
+}
+
+    .list-row:hover {
+        background: #f0f7ff;
+    }
+
+.icon-cell {
+    font-size: 20px;
+    text-align: center;
+}
+
+.name-cell {
+    font-weight: bold;
+    color: #222;
+}
+
+.desc-cell {
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 400px;
+}
+
+.time-cell {
+    color: #999;
+    font-size: 13px;
+}
+/* =========================================
+   🌟 新增卡片内部预览样式
+========================================= */
+.card-props-preview {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.prop-tag {
+    font-size: 11px;
+    background: #f0f4f8;
+    color: #476282;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #d9e2ec;
+}
+
+/* =========================================
+   🌟 右侧抽屉 Drawer 及其遮罩层
+========================================= */
+.drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.settings-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 440px;
+    background: #fcfcfc;
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
+    z-index: 1001;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); /*极其顺滑的缓冲动画*/
+    display: flex;
+    flex-direction: column;
+}
+
+    .settings-drawer.open {
+        transform: translateX(0);
+    }
+
+/* 抽屉内部结构 */
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #eee;
+    background: #fff;
+}
+
+.drawer-title-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.drawer-icon {
+    font-size: 24px;
+}
+
+.drawer-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #222;
+}
+
+.close-btn {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    color: #999;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+    .close-btn:hover {
+        color: #d32f2f;
+    }
+
+.drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+}
+
+.drawer-footer {
+    padding: 20px 24px;
+    border-top: 1px solid #eee;
+    background: #fff;
+}
+
+.drawer-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+    .drawer-section label {
+        font-size: 13px;
+        font-weight: bold;
+        color: #444;
+    }
+
+.drawer-divider {
+    border: 0;
+    height: 1px;
+    background: #eaeaea;
+    margin: 24px 0;
+}
+
+.drawer-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+    .drawer-input:focus {
+        border-color: #1976d2;
+        box-shadow: 0 0 0 2px rgba(25,118,210,0.1);
+    }
+
+.title-input {
+    font-size: 18px;
+    font-weight: bold;
+    color: #222;
+}
+
+.desc-input {
+    min-height: 100px;
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.full-width {
+    width: 100%;
+    text-align: center;
+}
+
+/* 🌟 自定义属性列表样式 */
+.section-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.field-hint {
+    font-size: 12px;
+    color: #999;
+    font-weight: normal;
+}
+
+.custom-fields-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.field-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid #eaeaea;
+    border-radius: 6px;
+    padding: 6px 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.01);
+}
+
+.field-key {
+    flex: 1;
+    font-size: 13px;
+    font-weight: bold;
+    color: #555;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.field-value-input {
+    flex: 2;
+    border: 1px solid transparent;
+    background: #f9f9f9;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    outline: none;
+    transition: all 0.2s;
+}
+
+    .field-value-input:focus {
+        border-color: #1976d2;
+        background: #fff;
+    }
+
+.delete-field-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+    .delete-field-btn:hover {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+
+.add-field-box {
+    display: flex;
+    gap: 8px;
+    background: #f5f7fa;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px dashed #dcdfe6;
+}
+
+.add-input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid #dcdfe6;
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    outline: none;
+}
+
+    .add-input:focus {
+        border-color: #1976d2;
+    }
+
+.add-field-btn {
+    background: #fff;
+    border: 1px solid #1976d2;
+    color: #1976d2;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+    .add-field-btn:hover {
+        background: #1976d2;
+        color: #fff;
+    }

@@ -1,5 +1,4 @@
 ﻿@using MonoNotes.Core.Models
-@using MonoNotes.Core.Utils
 @using MonoNotes.Storage
 @inject WriteSpaceRepository Repository
 
@@ -20,13 +19,8 @@
         if (Meta != null)
         {
             SaveStatus = "正在保存...";
-
-            // 🌟 核心修复：直接调用仓储层的保存方法，不再让 UI 碰文件路径
             await Repository.SaveWorkMetaAsync(Meta);
-
             SaveStatus = "✅ 已保存";
-
-            // 2秒后清除提示
             await Task.Delay(2000);
             SaveStatus = "";
             StateHasChanged();
@@ -37,80 +31,122 @@
 <div class="details-container">
     @if (Meta == null)
     {
-        <div style="color: #999;">正在加载小说详情...</div>
+        <div style="color: #999;">正在加载设定档案...</div>
     }
     else
     {
         <div class="details-header">
-            <h2 style="margin: 0;">📖 小说档案管理</h2>
+            <h2 style="margin: 0; display:flex; align-items:center; gap:8px;">
+                <span>⚙️</span> 小说档案与核心设定
+            </h2>
             <div style="display:flex; align-items:center; gap: 12px;">
-                <span style="color: #4caf50; font-size: 13px;">@SaveStatus</span>
-                <button class="save-btn" @onclick="SaveDetails">💾 保存修改</button>
+                <span style="color: #4caf50; font-size: 13px; font-weight:bold;">@SaveStatus</span>
+                <button class="save-btn" @onclick="SaveDetails">💾 保存全部修改</button>
             </div>
         </div>
 
-        <div class="details-body">
-            <div class="cover-panel">
-                <div class="cover-image-box">
-                    @if (string.IsNullOrEmpty(Meta.CoverUrl))
-                    {
-                        <div class="no-cover">
-                            <span style="font-size: 32px;">📷</span><br>
-                            <span>暂无封面</span>
-                        </div>
-                    }
-                    else
-                    {
-                        <img src="@Meta.CoverUrl" alt="封面" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />
-                    }
-                </div>
+        <div class="details-layout">
+            <div class="side-column">
+                <div class="settings-card">
+                    <h3 class="card-title">📖 基础元数据</h3>
+                    <div class="cover-image-box">
+                        @if (string.IsNullOrEmpty(Meta.CoverUrl))
+                        {
+                            <div class="no-cover"><span>📷</span><br>暂无封面</div>
+                        }
+                        else
+                        {
+                            <img src="@Meta.CoverUrl" alt="封面" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />
+                        }
+                    </div>
 
-                <div class="form-group">
-                    <label>作品状态</label>
-                    <select class="form-control" @bind="Meta.Status">
-                        <option value="drafting">📝 构思草稿</option>
-                        <option value="serializing">🟢 连载中</option>
-                        <option value="finished">🔴 已完结</option>
-                        <option value="paused">⏸️ 暂停更新</option>
-                    </select>
+                    <div class="form-group">
+                        <label>作品名称</label>
+                        <input type="text" class="form-control" style="font-weight:bold; font-size:16px;" @bind="Meta.Title" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>作品状态</label>
+                        <select class="form-control" @bind="Meta.Status">
+                            <option value="drafting">📝 构思草稿</option>
+                            <option value="serializing">🟢 连载中</option>
+                            <option value="finished">🔴 已完结</option>
+                            <option value="paused">⏸️ 暂停更新</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>核心标签 (逗号分隔)</label>
+                        <input type="text" class="form-control" @bind="Meta.Tags" placeholder="例如：穿越, 赛博朋克, 爽文" />
+                    </div>
                 </div>
             </div>
 
-            <div class="info-panel">
-                <div class="form-group">
-                    <label>作品名称</label>
-                    <input type="text" class="form-control title-input" @bind="Meta.Title" />
+            <div class="main-column">
+
+                <div class="settings-card">
+                    <h3 class="card-title">📜 故事简介与大纲</h3>
+                    <div class="form-group">
+                        <label>内容简介 (对外展示的卖点)</label>
+                        <textarea class="form-control" style="height: 100px;" @bind="Meta.Synopsis" placeholder="一句话或一段话概括你的故事核心..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>核心大纲 (写给自己的起承转合)</label>
+                        <textarea class="form-control" style="height: 180px;" @bind="Meta.Outline" placeholder="卷1：废柴退婚... 卷2：惊艳宗门... 卷3：拯救大陆..."></textarea>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label>标签 (用逗号分隔，如：科幻, 赛博朋克)</label>
-                    <input type="text" class="form-control" @bind="Meta.Tags" placeholder="例如：穿越, 修仙, 爽文" />
+                <div class="settings-row">
+                    <div class="settings-card flex-1">
+                        <h3 class="card-title">🧑 核心角色设定</h3>
+                        <div class="form-group">
+                            <textarea class="form-control" style="height: 200px;" @bind="Meta.CharacterSettings" placeholder="男主：林动，性格坚毅，武器重剑...&#10;反派：张三，极其腹黑..."></textarea>
+                        </div>
+                    </div>
+                    <div class="settings-card flex-1">
+                        <h3 class="card-title">🌍 世界观与等级</h3>
+                        <div class="form-group">
+                            <textarea class="form-control" style="height: 200px;" @bind="Meta.WorldviewSettings" placeholder="战力体系：炼气 -> 筑基 -> 金丹...&#10;灵气复苏的赛博世界..."></textarea>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="form-group" style="flex: 1; display: flex; flex-direction: column;">
-                    <label>内容简介 (大纲/卖点)</label>
-                    <textarea class="form-control" style="flex:1; resize:none; line-height: 1.6;" @bind="Meta.Synopsis" placeholder="在这里写下你的核心创意与大纲..."></textarea>
+                <div class="settings-row">
+                    <div class="settings-card flex-1">
+                        <h3 class="card-title">🗺️ 核心地理与势力</h3>
+                        <div class="form-group">
+                            <textarea class="form-control" style="height: 200px;" @bind="Meta.GeographySettings" placeholder="四大宗门：剑宗、魔宗...&#10;主要国家：大夏帝国..."></textarea>
+                        </div>
+                    </div>
+                    <div class="settings-card flex-1">
+                        <h3 class="card-title">⚔️ 关键物品与法宝</h3>
+                        <div class="form-group">
+                            <textarea class="form-control" style="height: 200px;" @bind="Meta.ItemSettings" placeholder="神器：开天斧，获取地点在魔兽山脉...&#10;消耗品：回血丹..."></textarea>
+                        </div>
+                    </div>
                 </div>
+
             </div>
         </div>
     }
 </div>
 
 <style>
+    /* 极致流式布局 */
     .details-container {
-        padding: 40px;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 40px 5%;
         height: 100%;
-        display: flex;
-        flex-direction: column;
         overflow-y: auto;
-        background-color: #fcfcfc;
+        background-color: #f7f7f9;
     }
 
     .details-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid #eee;
+        border-bottom: 2px solid #e0e0e0;
         padding-bottom: 20px;
         margin-bottom: 30px;
     }
@@ -119,63 +155,98 @@
         background: #1976d2;
         color: #fff;
         border: none;
-        padding: 8px 20px;
-        border-radius: 6px;
+        padding: 10px 24px;
+        border-radius: 8px;
         cursor: pointer;
         font-weight: bold;
-        transition: background 0.2s;
+        font-size: 15px;
+        transition: all 0.2s;
+        box-shadow: 0 4px 12px rgba(25,118,210,0.2);
     }
 
         .save-btn:hover {
             background: #1565c0;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(25,118,210,0.3);
         }
 
-    .details-body {
+    .details-layout {
         display: flex;
-        gap: 40px;
-        flex: 1;
-        min-height: 0;
-        max-width: 1000px;
-        margin: 0 auto;
-        width: 100%;
+        gap: 30px;
+        align-items: flex-start;
+        flex-wrap: wrap;
     }
 
-    .cover-panel {
-        width: 240px;
+    .side-column {
+        width: 300px;
         flex-shrink: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
     }
 
-    .info-panel {
+    .main-column {
         flex: 1;
+        min-width: 400px;
         display: flex;
         flex-direction: column;
-        gap: 20px;
+        gap: 24px;
+    }
+
+    .settings-row {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+
+    .flex-1 {
+        flex: 1;
+        min-width: 250px;
+    }
+
+    .settings-card {
+        background: #fff;
+        padding: 24px;
+        border-radius: 12px;
+        border: 1px solid #eaeaea;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+        margin-bottom: 24px;
+    }
+
+        .settings-card.flex-1 {
+            margin-bottom: 0;
+        }
+
+    .card-title {
+        font-size: 16px;
+        color: #222;
+        margin-top: 0;
+        margin-bottom: 20px;
+        border-bottom: 1px dashed #eee;
+        padding-bottom: 12px;
     }
 
     .cover-image-box {
         width: 100%;
         aspect-ratio: 3 / 4;
-        background: #eee;
+        background: #f0f0f0;
         border-radius: 8px;
         border: 1px dashed #ccc;
         display: flex;
         justify-content: center;
         align-items: center;
         color: #999;
+        margin-bottom: 20px;
     }
 
     .no-cover {
         text-align: center;
         font-size: 13px;
+        line-height: 1.8;
     }
 
     .form-group {
         display: flex;
         flex-direction: column;
         gap: 8px;
+        margin-bottom: 16px;
     }
 
         .form-group label {
@@ -186,13 +257,15 @@
 
     .form-control {
         border: 1px solid #ddd;
-        padding: 10px 14px;
-        border-radius: 6px;
+        padding: 12px 14px;
+        border-radius: 8px;
         font-family: inherit;
         font-size: 14px;
         background: #fff;
         outline: none;
         transition: border 0.2s;
+        resize: vertical;
+        line-height: 1.6;
     }
 
         .form-control:focus {
@@ -200,9 +273,9 @@
             box-shadow: 0 0 0 2px rgba(25,118,210,0.1);
         }
 
-    .title-input {
-        font-size: 20px;
-        font-weight: bold;
-        color: #222;
+    @@media (max-width: 900px) {
+        .side-column {
+            width: 100%;
+        }
     }
 </style>

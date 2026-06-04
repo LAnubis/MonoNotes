@@ -243,9 +243,9 @@
             }
         </div>
     </div>
-
     <div class="sidebar-nav">
         <button class="nav-tab @(ActiveSubView == "editor" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("editor"))">📝 正文</button>
+        <button class="nav-tab @(ActiveSubView == "materials" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("materials"))">📚 设定</button>
         <button class="nav-tab @(ActiveSubView == "foreshadowing" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("foreshadowing"))">💡 伏笔</button>
         <button class="nav-tab @(ActiveSubView == "details" ? "active" : "")" @onclick="@(() => OnSubViewSelected.InvokeAsync("details"))">ℹ️ 详情</button>
     </div>

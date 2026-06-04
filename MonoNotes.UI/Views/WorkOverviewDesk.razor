@@ -122,7 +122,7 @@
 
         <!-- 🌟 中部：数据与快捷导航 -->
         <div class="dashboard-grid">
-            <!-- 左侧：专属数据面板 -->
+
             <div class="data-panel">
                 <h3>📊 本书进度</h3>
                 <div class="stats-row">
@@ -140,14 +140,12 @@
                     </div>
                 </div>
 
-                <!-- 占位：未来可以在这里做伏笔抽出 -->
                 <div class="todo-panel">
                     <h4>💡 待回收的伏笔</h4>
                     <div class="todo-empty">正在构思中，尚未埋下伏笔...</div>
                 </div>
             </div>
 
-            <!-- 右侧：最新章节列表 -->
             <div class="recent-panel">
                 <h3>🕒 最新章节</h3>
                 @if (RecentChapters.Any())
@@ -166,6 +164,32 @@
                 {
                     <div class="recent-empty">目录空空如也，快去写下第一章吧！</div>
                 }
+            </div>
+
+            <div class="shortcuts-panel">
+                <h3>🌌 设定快捷入口</h3>
+                <div class="shortcuts-grid">
+                    <div class="shortcut-btn">
+                        <span class="sc-icon">📜</span>
+                        <span class="sc-text">故事大纲</span>
+                    </div>
+                    <div class="shortcut-btn">
+                        <span class="sc-icon">🧑</span>
+                        <span class="sc-text">角色档案</span>
+                    </div>
+                    <div class="shortcut-btn">
+                        <span class="sc-icon">🌍</span>
+                        <span class="sc-text">世界观设定</span>
+                    </div>
+                    <div class="shortcut-btn">
+                        <span class="sc-icon">🗺️</span>
+                        <span class="sc-text">地理场景</span>
+                    </div>
+                    <div class="shortcut-btn">
+                        <span class="sc-icon">⚔️</span>
+                        <span class="sc-text">物品法宝</span>
+                    </div>
+                </div>
             </div>
         </div>
     }
