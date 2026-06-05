@@ -1,0 +1,132 @@
+﻿@using MonoNotes.Storage
+@using Microsoft.AspNetCore.Components.Web
+@inject WriteSpaceRepository Repository
+
+@code {
+    [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<string> OnNavigateToChapter { get; set; }
+
+    private string SearchKeyword = "";
+    private List<MonoNotes.Storage.SearchResultItem> Results = new();
+    private bool HasSearched = false;
+
+    // 🌟 新增：建库状态标记
+    private bool IsBuildingIndex = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 打开搜索框时，检查当前小说有没有建过索引。如果没有，静默建库！
+        IsBuildingIndex = true;
+        await SearchEngine.EnsureIndexExistsAsync(Repository, CurrentWorkId);
+        IsBuildingIndex = false;
+    }
+
+    private void ExecuteSearch()
+    {
+        if (string.IsNullOrWhiteSpace(SearchKeyword))
+        {
+            Results.Clear();
+            HasSearched = false;
+            return;
+        }
+
+        Results = SearchEngine.Search(Repository.RootPath, CurrentWorkId, SearchKeyword.Trim());
+        HasSearched = true;
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            ExecuteSearch();
+        }
+        else if (e.Key == "Escape")
+        {
+            OnClose.InvokeAsync();
+        }
+    }
+
+    private async Task GoToChapter(string chapterId)
+    {
+        await OnNavigateToChapter.InvokeAsync(chapterId);
+        await OnClose.InvokeAsync();
+    }
+}
+
+<div class="search-overlay" @onclick="OnClose"></div>
+<div class="search-modal">
+    @if (IsBuildingIndex)
+    {
+        <div style="padding: 60px 20px; text-align: center; color: #1976d2;">
+            <div style="font-size: 48px; margin-bottom: 20px; display:inline-block; animation: spin 2s linear infinite;">🌀</div>
+            <h3 style="margin:0 0 10px 0; color:#222;">正在为您初始化全书检索引擎...</h3>
+            <p style="font-size: 13px; color: #888; margin:0;">(仅首次打开需要，建立后搜索速度将达到毫秒级)</p>
+        </div>
+    }
+    else
+    {
+        <div class="search-header">
+            <span class="search-icon">🔍</span>
+            <input type="text"
+                   class="search-input"
+                   placeholder="输入人名、法宝、功法或任何剧情... (按 Enter 搜索)"
+                   @bind="SearchKeyword"
+                   @bind:event="oninput"
+                   @onkeydown="HandleKeyDown"
+                   autofocus />
+            @if (!string.IsNullOrEmpty(SearchKeyword))
+            {
+                <button class="clear-btn" @onclick="() => { SearchKeyword = string.Empty; Results.Clear(); HasSearched = false; }">✖</button>
+            }
+        </div>
+
+        <div class="search-body hide-scrollbar">
+            @if (HasSearched && !Results.Any())
+            {
+                <div class="empty-result">
+                    <div class="empty-icon">📭</div>
+                    <p>在全书百万字中，没有找到与“<span style="color:#d32f2f;">@SearchKeyword</span>”相关的记录。</p>
+                </div>
+            }
+            else if (Results.Any())
+            {
+                <div class="result-stats">⚡ Lucene 引擎为您找到 @Results.Count 条记录</div>
+
+                <div class="result-list">
+                    @foreach (var item in Results)
+                    {
+                        <div class="result-card" @onclick="() => GoToChapter(item.ChapterId)">
+                            <div class="res-chapter">📄 @item.ChapterTitle</div>
+                            <div class="res-snippet">@((MarkupString)item.Snippet)</div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="search-hint">
+                    <p>💡 <b>搜索技巧：</b></p>
+                    <ul>
+                        <li>搜索 <b>人名</b>：寻找角色首次出场或所有高光时刻。</li>
+                        <li>搜索 <b>法宝</b>：确认主角是不是把某件神器遗忘在储物袋里了（防吃书）。</li>
+                        <li>支持多词搜索，引擎会自动匹配最相关的章节段落。</li>
+                    </ul>
+                </div>
+            }
+        </div>
+
+        <div class="search-footer">
+            <span><kbd>Enter</kbd> 搜索</span>
+            <span><kbd>Esc</kbd> 关闭</span>
+        </div>
+    }
+</div>
+
+<style>
+    @@keyframes spin {
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+</style>

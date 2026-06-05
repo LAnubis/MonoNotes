@@ -155,6 +155,9 @@ namespace MonoNotes.Storage
             // 保存索引结构
             await repo.SaveWorkIndexAsync(workIndex);
 
+            // 导入完毕后立刻建好全文索引引擎！
+            await SearchEngine.BuildFullIndexAsync(repo, newWorkMeta.Id);
+
             return newWorkMeta.Id;
         }
     }

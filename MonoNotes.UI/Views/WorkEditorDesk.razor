@@ -11,6 +11,9 @@
     private bool _shouldInitVditor = false;
     [Parameter] public EventCallback OnTitleChanged { get; set; }
 
+    // 🌟 新增：用于通知父组件（工作台布局）切换当前章节
+    [Parameter] public EventCallback<string> OnSwitchChapter { get; set; }
+
     private WorkIndex? IndexData;
     private Volume? ActiveVolume;
     private Chapter? ActiveChapter;
@@ -28,7 +31,7 @@
     private CancellationTokenSource? _debounceCts;
     private DotNetObjectReference<WorkEditorDesk>? _objRef;
 
-    // 🌟 声明抽屉组件的引用
+    // 声明抽屉组件的引用
     private QuickReferenceDrawer? _drawer;
 
     public class TocItem { public int Level { get; set; } public string Text { get; set; } = string.Empty; }
@@ -39,7 +42,24 @@
     private string _newForeshadowText = "";
 
     private List<ForeshadowItem> _currentChapterForeshadows = new();
-    // 🌟 每次打开弹窗，拉取当前章节已有的伏笔
+
+    // 🌟 全局搜索控制
+    private bool ShowSearchModal = false;
+
+    private void OpenSearchModal() => ShowSearchModal = true;
+    private void CloseSearchModal() => ShowSearchModal = false;
+
+    // 🌟 接收搜索组件的跳转请求
+    private async Task NavigateToChapter(string chapterId)
+    {
+        if (OnSwitchChapter.HasDelegate)
+        {
+            await OnSwitchChapter.InvokeAsync(chapterId);
+        }
+        CloseSearchModal();
+    }
+
+    // 每次打开弹窗，拉取当前章节已有的伏笔
     private async Task OpenForeshadowModal()
     {
         _newForeshadowText = "";
@@ -63,7 +83,7 @@
             .ToList();
     }
 
-    // 🌟 确认保存伏笔，并刷新列表
+    // 确认保存伏笔，并刷新列表
     private async Task SaveForeshadow()
     {
         if (string.IsNullOrWhiteSpace(_newForeshadowText) || ActiveChapter == null) return;
@@ -84,7 +104,6 @@
         await LoadCurrentChapterForeshadows(); // 刷新上方列表
 
         SaveStatus = "💡 伏笔已记录";
-        // 注意：这里不再自动关闭窗口，方便作者连续挖坑或查看
 
         _ = Task.Run(async () =>
         {
@@ -94,7 +113,7 @@
         });
     }
 
-    // 🌟 就在弹窗里直接删除写废的伏笔
+    // 就在弹窗里直接删除写废的伏笔
     private async Task DeleteForeshadow(ForeshadowItem item)
     {
         var items = await Repository.GetForeshadowsAsync(CurrentWorkId);
@@ -106,6 +125,7 @@
             await LoadCurrentChapterForeshadows(); // 刷新列表
         }
     }
+
     protected override async Task OnParametersSetAsync()
     {
         if (string.IsNullOrEmpty(CurrentWorkId) || string.IsNullOrEmpty(CurrentChapterId))
@@ -203,7 +223,7 @@
         await JS.InvokeVoidAsync("writingVditor.scrollToHeading", "vditor-writing-area", headingText);
     }
 
-    // 🌟 打开抽屉
+    // 打开抽屉
     private void OpenDrawer()
     {
         _drawer?.Open();
@@ -246,8 +266,12 @@
                 <span class="save-status"><span class="icon">☁️</span> @SaveStatus</span>
                 <span class="word-count-badge">@WordCount 字</span>
 
+                <button class="tool-btn search-btn" title="毫秒级全文检索" @onclick="OpenSearchModal" style="background:#e3f2fd; color:#1976d2; font-weight:bold;">
+                    🔍 全文检索
+                </button>
+
                 <button class="tool-btn foreshadow-btn" title="快速挖个坑" @onclick="OpenForeshadowModal">💡 设为伏笔</button>
-                
+
                 <button class="tool-btn material-btn" title="速查设定与大纲" @onclick="OpenDrawer">📚 素材速查</button>
 
                 <button class="tool-btn toggle-outline-btn @(ShowOutlinePanel ? "active" : "")" @onclick="() => ShowOutlinePanel = !ShowOutlinePanel">
@@ -298,6 +322,7 @@
         </div>
     }
 </div>
+
 @if (_isAddingForeshadow)
 {
     <div class="foreshadow-overlay" @onclick="CloseForeshadowModal"></div>
@@ -333,8 +358,14 @@
     </div>
 }
 
-
-<QuickReferenceDrawer @ref="_drawer" 
-                      CurrentWorkId="@CurrentWorkId" 
-                      CurrentVolumeId="@(ActiveVolume?.Id ?? "")" 
+<QuickReferenceDrawer @ref="_drawer"
+                      CurrentWorkId="@CurrentWorkId"
+                      CurrentVolumeId="@(ActiveVolume?.Id ?? "")"
                       CurrentChapterId="@(ActiveChapter?.Id ?? "")" />
+
+@if (ShowSearchModal)
+{
+    <WorkSearchModal CurrentWorkId="@CurrentWorkId"
+                     OnClose="CloseSearchModal"
+                     OnNavigateToChapter="NavigateToChapter" />
+}

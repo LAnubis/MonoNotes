@@ -234,3 +234,11 @@ window.writingVditor = {
         }
     }
 };
+
+window.scrollSidebarToActive = () => {
+    const activeElement = document.getElementById('sidebar-active-chapter');
+    if (activeElement) {
+        // block: 'nearest' 表示如果元素已经在视口内则不滚动，如果不在则滚动到最近位置
+        activeElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+};

@@ -2,6 +2,7 @@
 @using MonoNotes.Storage
 @using System.Text.RegularExpressions
 @inject WriteSpaceRepository Repository
+@inject IJSRuntime JS
 
 @code {
     [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
@@ -10,11 +11,14 @@
     [Parameter] public EventCallback<string> OnSubViewSelected { get; set; }
 
     [Parameter] public EventCallback<string> OnChapterSelected { get; set; }
-    // 🌟 新增：卷被选中时的事件 (向外传递 VolumeId)
     [Parameter] public EventCallback<string> OnVolumeSelected { get; set; }
 
+    // 🌟 接收母画面传来的当前高亮ID
+    [Parameter] public string CurrentVolumeId { get; set; } = string.Empty;
+    [Parameter] public string CurrentChapterId { get; set; } = string.Empty;
+
+    // 内部实际渲染使用的状态
     private string ActiveChapterId { get; set; } = string.Empty;
-    // 🌟 新增：用于记录选中的卷
     private string ActiveVolumeId { get; set; } = string.Empty;
 
     private WorkIndex? CurrentWorkIndex;
@@ -27,14 +31,39 @@
         StateHasChanged();
     }
 
+    // 🌟 核心修复：当外部参数改变时，同步内部状态，并自动展开目录！
     protected override async Task OnParametersSetAsync()
     {
-        if (!string.IsNullOrEmpty(CurrentWorkId))
+        if (!string.IsNullOrEmpty(CurrentWorkId) && CurrentWorkIndex == null)
         {
             await LoadIndexAsync();
         }
-    }
 
+        // 监听来自搜索框或母画面的章节跳转
+        if (!string.IsNullOrEmpty(CurrentChapterId) && ActiveChapterId != CurrentChapterId)
+        {
+            ActiveChapterId = CurrentChapterId;
+
+            // 自动找到该章节所在的卷，并强行展开它，确保用户能看到高亮的章节
+            if (CurrentWorkIndex != null)
+            {
+                var vol = CurrentWorkIndex.Volumes.FirstOrDefault(v => v.Chapters.Any(c => c.Id == CurrentChapterId));
+                if (vol != null)
+                {
+                    vol.IsExpanded = true;
+                    ActiveVolumeId = vol.Id;
+                }
+            }
+        }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 🌟 当章节 ID 发生变化且非首次渲染时，自动滚动
+        if (!string.IsNullOrEmpty(CurrentChapterId))
+        {
+            await JS.InvokeVoidAsync("scrollSidebarToActive");
+        }
+    }
     private async Task LoadIndexAsync()
     {
         var allWorks = await Repository.GetAllWorksAsync();
@@ -112,7 +141,6 @@
         var newVol = new Volume { Title = "新建卷" };
         CurrentWorkIndex.Volumes.Add(newVol);
         await SaveAndRecalculateIndexAsync();
-        // 🌟 新建后自动选中该卷
         await SelectVolume(newVol.Id);
     }
 
@@ -128,15 +156,12 @@
 
     private void ToggleVolume(Volume vol) { vol.IsExpanded = !vol.IsExpanded; }
 
-    // 🌟 新增：统一处理 Tab 切换，解决“加载中”问题
-    // 🌟 修复：切换到正文和大纲时，清空全部选中态，展示空面板提示
     private async Task HandleTabClick(string targetView)
     {
         if (ActiveSubView != targetView && (targetView == "editor" || targetView == "outline"))
         {
             ActiveChapterId = string.Empty;
             ActiveVolumeId = string.Empty;
-            // 发送空的 ChapterId 即可通知外层清空当前状态
             await OnChapterSelected.InvokeAsync(string.Empty);
         }
         await OnSubViewSelected.InvokeAsync(targetView);
@@ -144,7 +169,6 @@
 
     private async Task SelectVolume(string volumeId)
     {
-        // 🌟 修复 1：如果在“正文模式”下点击卷，不跳转，而是直接当作“展开/折叠”处理！
         if (ActiveSubView == "editor")
         {
             var vol = NovelVolumes.FirstOrDefault(v => v.Id == volumeId);
@@ -152,7 +176,6 @@
             return;
         }
 
-        // 如果已经在该卷的大纲模式下，再次点击直接 return
         if (ActiveVolumeId == volumeId && ActiveSubView == "outline") return;
 
         ActiveVolumeId = volumeId;
@@ -168,9 +191,8 @@
     private async Task SelectChapter(string chapterId)
     {
         ActiveChapterId = chapterId;
-        ActiveVolumeId = string.Empty; // 选中章时清空卷选中态
+        ActiveVolumeId = string.Empty;
 
-        // 智能切换：如果不在正文也不在大纲，切回正文
         if (ActiveSubView != "editor" && ActiveSubView != "outline")
         {
             await OnSubViewSelected.InvokeAsync("editor");
@@ -179,7 +201,7 @@
     }
 
     // ==========================================
-    // 🌟 右键菜单与重命名逻辑 (已移除拖拽)
+    // 🌟 右键菜单与重命名逻辑
     // ==========================================
     private bool _showContextMenu = false;
     private double _menuX = 0;
@@ -327,10 +349,11 @@
                         <ul class="chapter-list">
                             @foreach (var chapter in volume.Chapters)
                             {
+
                                 <li class="chapter-node @(ActiveChapterId == chapter.Id && (ActiveSubView == "editor" || ActiveSubView == "outline") ? "active" : "")"
                                     @oncontextmenu="(e) => ShowContextMenu(e, chapter)"
-                                    @oncontextmenu:preventDefault="true">
-
+                                    @oncontextmenu:preventDefault="true"
+                                    id="@(ActiveChapterId == chapter.Id ? "sidebar-active-chapter" : "")">
                                     @if (_editingItem == chapter)
                                     {
                                         <div style="display:flex; align-items:center; flex:1; overflow:hidden;">

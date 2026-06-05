@@ -89,13 +89,25 @@
         }
         else
         {
-            <WorkSidebar @ref="_workSidebar"
+            @* <WorkSidebar @ref="_workSidebar"
                          CurrentWorkId="@ActiveWorkId"
                          ActiveSubView="@CurrentSubView"
                          OnReturnClicked="ReturnToGlobal"
                          OnSubViewSelected="HandleSubViewChanged"
                          OnChapterSelected="HandleChapterSelected"
-                         OnVolumeSelected="HandleVolumeSelected" />
+                         OnVolumeSelected="HandleVolumeSelected" /> *@
+
+           
+                <WorkSidebar @ref="_workSidebar"
+                             CurrentWorkId="@ActiveWorkId"
+                             CurrentVolumeId="@ActiveVolumeId" 
+                             CurrentChapterId="@ActiveChapterId" 
+                             ActiveSubView="@CurrentSubView"
+                             OnReturnClicked="ReturnToGlobal"
+                             OnSubViewSelected="HandleSubViewChanged"
+                             OnChapterSelected="HandleChapterSelected"
+                             OnVolumeSelected="HandleVolumeSelected" />
+            
         }
     </div>
 
@@ -129,7 +141,9 @@
             {
                 <WorkEditorDesk CurrentWorkId="@ActiveWorkId"
                                 CurrentChapterId="@ActiveChapterId"
-                                OnTitleChanged="HandleIndexUpdated" />
+                                OnTitleChanged="HandleIndexUpdated"
+                                OnSwitchChapter="HandleChapterSelected" />
+            
             }
             else if (CurrentSubView == "outline")
             {

@@ -11,6 +11,7 @@ namespace MonoNotes.Storage
     public class WriteSpaceRepository
     {
         private readonly string _writeSpaceRoot;
+        public string RootPath => _writeSpaceRoot; // 🌟 加上这行，暴露物理根路径
 
         public WriteSpaceRepository()
         {
@@ -102,6 +103,9 @@ namespace MonoNotes.Storage
                 {
                     chapter.WordCount = string.IsNullOrWhiteSpace(content) ? 0 : content.Length;
                     await SaveWorkIndexAsync(index);
+
+                    // 🌟 加上这行：丢到后台线程去更新 Lucene 索引，绝对不卡死 UI
+                    _ = Task.Run(() => SearchEngine.UpdateChapterIndex(_writeSpaceRoot, workId, chapterId, chapter.Title, content));
                 }
             }
         }
