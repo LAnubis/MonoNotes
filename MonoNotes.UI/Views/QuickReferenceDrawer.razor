@@ -1,0 +1,214 @@
+﻿@using MonoNotes.Core.Models
+@using MonoNotes.Storage
+@inject WriteSpaceRepository Repository
+
+@code {
+    [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
+    [Parameter] public string CurrentVolumeId { get; set; } = string.Empty;
+    [Parameter] public string CurrentChapterId { get; set; } = string.Empty;
+
+    private bool IsOpen { get; set; } = false;
+    private string ActiveTab { get; set; } = "chapter";
+    private MaterialItem? SelectedMaterial = null;
+
+    private WorkIndex? IndexData;
+    private List<MaterialItem> Materials = new();
+
+    private string ChapterTitle = "未命名章节";
+    private string ChapterOutline = "";
+    private string VolumeTitle = "未命名卷";
+    private string VolumeOutline = "";
+
+    // 🌟 供外部编辑器调用
+    public async Task Open()
+    {
+        await LoadDataAsync();
+        IsOpen = true;
+        StateHasChanged();
+    }
+
+    public void Close()
+    {
+        IsOpen = false;
+        StateHasChanged();
+    }
+
+    // 🌟 每次打开时，拉取最新数据保证绝对同步
+    private async Task LoadDataAsync()
+    {
+        if (string.IsNullOrEmpty(CurrentWorkId)) return;
+
+        IndexData = await Repository.GetWorkIndexAsync(CurrentWorkId);
+        if (IndexData != null)
+        {
+            var vol = IndexData.Volumes.FirstOrDefault(v => v.Id == CurrentVolumeId);
+            if (vol != null)
+            {
+                VolumeTitle = vol.Title;
+                VolumeOutline = vol.Outline;
+                var chap = vol.Chapters.FirstOrDefault(c => c.Id == CurrentChapterId);
+                if (chap != null)
+                {
+                    ChapterTitle = chap.Title;
+                    ChapterOutline = chap.Outline;
+                }
+            }
+        }
+        Materials = await Repository.GetLocalMaterialsAsync(CurrentWorkId);
+    }
+
+    private void SetTab(string tab)
+    {
+        ActiveTab = tab;
+        SelectedMaterial = null; // 切换大类时，清空选中的条目
+    }
+
+    private void SelectMaterial(MaterialItem item)
+    {
+        SelectedMaterial = item;
+    }
+
+    private IEnumerable<MaterialItem> GetFilteredMaterials()
+    {
+        MaterialType targetType = ActiveTab switch
+        {
+            "character" => MaterialType.Character,
+            "faction" => MaterialType.Faction,
+            "geo" => MaterialType.Geography,
+            "item" => MaterialType.Item,
+            _ => MaterialType.Worldview
+        };
+        return Materials.Where(m => m.Type == targetType).OrderByDescending(m => m.UpdatedAt);
+    }
+
+    private string GetMaterialName(string id) => Materials.FirstOrDefault(m => m.Id == id)?.Name ?? "未知关联";
+}
+
+@if (IsOpen)
+{
+    <div class="drawer-overlay" @onclick="Close"></div>
+
+    <div class="reference-drawer">
+
+        <div class="drawer-header">
+            <h3>💡 战术速查面板</h3>
+            <button class="close-btn" @onclick="Close">✖</button>
+        </div>
+
+        <div class="drawer-body">
+            <div class="drawer-sidebar">
+                <div class="nav-group">大纲速查</div>
+                <button class="nav-item @(ActiveTab == "chapter" ? "active" : "")" @onclick="@(() => SetTab("chapter"))">🎯 本章细纲</button>
+                <button class="nav-item @(ActiveTab == "volume" ? "active" : "")" @onclick="@(() => SetTab("volume"))">📚 本卷大纲</button>
+
+                <div class="nav-group" style="margin-top:20px;">设定速查</div>
+                <button class="nav-item @(ActiveTab == "character" ? "active" : "")" @onclick="@(() => SetTab("character"))">🧑 核心角色</button>
+                <button class="nav-item @(ActiveTab == "faction" ? "active" : "")" @onclick="@(() => SetTab("faction"))">🏛️ 势力交集</button>
+                <button class="nav-item @(ActiveTab == "geo" ? "active" : "")" @onclick="@(() => SetTab("geo"))">🗺️ 地理场景</button>
+                <button class="nav-item @(ActiveTab == "item" ? "active" : "")" @onclick="@(() => SetTab("item"))">⚔️ 专属法宝</button>
+                <button class="nav-item @(ActiveTab == "worldview" ? "active" : "")" @onclick="@(() => SetTab("worldview"))">🌍 世界观</button>
+            </div>
+
+            <div class="drawer-content">
+                @if (ActiveTab == "chapter" || ActiveTab == "volume")
+                {
+                    <div class="outline-view">
+                        <h4 class="view-title">@(ActiveTab == "chapter" ? ChapterTitle : VolumeTitle)</h4>
+                        <div class="outline-text-card">
+                            @{
+                                var text = ActiveTab == "chapter" ? ChapterOutline : VolumeOutline;
+                            }
+                            @if (string.IsNullOrWhiteSpace(text))
+                            {
+                                <span class="empty-hint">暂无大纲记录，请前往大纲模式编写。</span>
+                            }
+                            else
+                            {
+
+                                @text
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    var items = GetFilteredMaterials().ToList();
+                    <div class="material-view">
+                        <div class="material-list hide-scrollbar">
+                            @if (!items.Any())
+                            {
+                                <div class="empty-hint" style="padding:20px;">暂无设定</div>
+                            }
+                            @foreach (var item in items)
+                            {
+                                <div class="mat-list-item @(SelectedMaterial?.Id == item.Id ? "active" : "")" @onclick="() => SelectMaterial(item)">
+                                    @item.Name
+                                </div>
+                            }
+                        </div>
+
+                        <div class="material-detail hide-scrollbar">
+                            @if (SelectedMaterial != null)
+                            {
+                                <div class="detail-header">
+                                    <h2 class="detail-name">@SelectedMaterial.Name</h2>
+                                </div>
+
+                                @if (SelectedMaterial.CustomFields.Any())
+                                {
+                                    <div class="detail-props">
+                                        @foreach (var kv in SelectedMaterial.CustomFields)
+                                        {
+                                            <span class="prop-badge">@kv.Key: @kv.Value</span>
+                                        }
+                                    </div>
+                                }
+
+                                <div class="detail-desc">
+                                    @(string.IsNullOrWhiteSpace(SelectedMaterial.Description) ? "暂无简介。" : SelectedMaterial.Description)
+                                </div>
+
+                                @if (SelectedMaterial.Type == MaterialType.Worldview && SelectedMaterial.LevelStages.Any())
+                                {
+                                    <div class="detail-section">
+                                        <h4>📈 境界序列</h4>
+                                        <div class="level-timeline">
+                                            @for (int i = 0; i < SelectedMaterial.LevelStages.Count; i++)
+                                            {
+                                                var stage = SelectedMaterial.LevelStages[i];
+                                                <div class="level-node">
+                                                    <span class="lvl-idx">@(i + 1)</span>
+                                                    <span class="lvl-name">@stage.Name</span>
+                                                    @if (!string.IsNullOrEmpty(stage.Description))
+                                                    {
+                                                        <span class="lvl-desc"> - @stage.Description</span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                                else if (SelectedMaterial.Relations.Any())
+                                {
+                                    <div class="detail-section">
+                                        <h4>🔗 相关羁绊</h4>
+                                        <div class="relation-tags">
+                                            @foreach (var rel in SelectedMaterial.Relations)
+                                            {
+                                                <span class="rel-tag">@GetMaterialName(rel.TargetId) <span class="rel-desc">(@rel.Description)</span></span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="empty-detail-state">👈 请在左侧列表中选择条目查看详细设定</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}

@@ -80,6 +80,18 @@
     color: #f57f17;
 }
 
+.material-btn {
+    background: #f0f4ff;
+    color: #3f51b5;
+    border: 1px solid #c5cae9;
+}
+
+    .material-btn:hover {
+        background: #e8eaf6;
+        color: #303f9f;
+        border-color: #9fa8da;
+    }
+
 .toggle-outline-btn {
     border: 1px solid #d9e2ec;
     background: #f0f4f8;
@@ -94,7 +106,7 @@
     }
 
 /* =========================================
-   3. 🌟 核心自适应：多层解耦锁死 min-width
+   3. 核心自适应：多层解耦锁死 min-width
 ========================================= */
 .editor-body-layout {
     display: flex;
@@ -102,7 +114,7 @@
     flex: 1;
     width: 100%;
     min-height: 0;
-    min-width: 0; /* 🌟 核心修复1：允许在此层级内部压缩 */
+    min-width: 0;
     overflow: hidden;
 }
 
@@ -114,18 +126,17 @@
     justify-content: center;
     gap: 30px;
     box-sizing: border-box;
-    min-width: 0; /* 🌟 核心修复2：解除子项固有宽度限制 */
+    min-width: 0;
 }
 
-/* 🌟 编辑器核心主区域 (弹性伸缩，Vditor 随它一起缩) */
 .editor-main-area {
     flex: 1;
-    max-width: 850px; /* 略微收紧，最大物理宽度更优雅 */
+    max-width: 850px;
     display: flex;
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    min-width: 0; /* 🌟 核心修复3：强迫 Vditor 必须跟随着父级缩减，不准撑开！ */
+    min-width: 0;
     padding-top: 20px;
     box-sizing: border-box;
 }
@@ -167,7 +178,7 @@
     flex: 1;
     height: 100%;
     min-height: 0;
-    min-width: 0; /* 🌟 核心修复4：锁死 Vditor 容器 */
+    min-width: 0;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -184,22 +195,20 @@
 }
 
 /* =========================================
-   4. 🌟 右侧提词器面板 (防挤压，宽度雷打不动)
+   4. 🌟 右侧独立导航区 (独占高度)
 ========================================= */
 .outline-sidebar {
     display: flex;
     flex-direction: column;
-    gap: 24px;
     background-color: transparent;
     border-left: 1px solid #f0f0f0;
-    padding: 20px 0 40px 20px;
-    overflow-y: auto;
+    padding: 20px 0 0 20px;
     transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
 }
 
     .outline-sidebar.open {
         width: 280px;
-        flex-shrink: 0; /* 🌟 绝对不允许被中间压缩，保障显示完整 */
+        flex-shrink: 0;
         opacity: 1;
     }
 
@@ -222,10 +231,10 @@
         display: none !important;
     }
 
-/* 区块通用样式 */
 .sidebar-block {
     display: flex;
     flex-direction: column;
+    height: 100%;
 }
 
 .block-header {
@@ -245,46 +254,10 @@
     font-size: 15px;
 }
 
-/* 🌟 提词器卡片：高度锁死，内部无感滚动，隐藏滚动条 */
-.readonly-outline-card {
-    background: #fdfdfd;
-    border: 1px solid #eaeaea;
-    padding: 12px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    color: #444;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    overflow-y: auto;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.01);
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-
-    .readonly-outline-card::-webkit-scrollbar {
-        display: none !important;
-    }
-
-.chapter-outline-card {
-    max-height: 200px;
-    min-height: 100px;
-    border-left: 4px solid #1976d2;
-}
-
-.volume-outline-card {
-    max-height: 140px;
-    min-height: 80px;
-    font-style: italic;
-    color: #777;
-    border-left: 4px solid #9ca3af;
-}
-
-/* 🌟 独立目录导航：表头固定，内容独立无感滚动 */
 .toc-block {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 180px;
 }
 
 .toc-list {
@@ -338,7 +311,195 @@
 }
 
 /* =========================================
-   🌟 小屏幕响应式极端防御 (宽度阶梯压缩)
+   5. 🌟 伏笔管理悬浮窗
+========================================= */
+.foreshadow-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.3);
+    z-index: 10000;
+    backdrop-filter: blur(2px);
+    animation: fadeIn 0.2s;
+}
+
+.foreshadow-modal {
+    position: fixed;
+    top: 35%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 480px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    z-index: 10001;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh;
+}
+
+.fs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    border-bottom: 1px dashed #eaeaea;
+    padding-bottom: 12px;
+}
+
+.fs-title {
+    margin: 0 0 4px 0;
+    font-size: 18px;
+    color: #222;
+}
+
+.fs-desc {
+    margin: 0;
+    font-size: 13px;
+    color: #888;
+    font-weight: bold;
+}
+
+.fs-btn-close {
+    background: transparent;
+    border: none;
+    font-size: 16px;
+    color: #aaa;
+    cursor: pointer;
+    padding: 4px;
+    transition: color 0.2s;
+}
+
+    .fs-btn-close:hover {
+        color: #ff4d4f;
+    }
+
+.fs-label {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+.fs-list {
+    overflow-y: auto;
+    max-height: 200px;
+    padding-right: 4px;
+}
+
+.fs-list-item {
+    background: #fdfdfd;
+    border: 1px solid #eaeaea;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    transition: border-color 0.2s;
+}
+
+    .fs-list-item:hover {
+        border-color: #ff9800;
+    }
+
+.fs-item-text {
+    font-size: 13px;
+    color: #444;
+    flex: 1;
+    margin-right: 12px;
+    white-space: pre-wrap;
+    line-height: 1.5;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+.fs-btn-delete {
+    background: transparent;
+    border: none;
+    color: #ff4d4f;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+    .fs-btn-delete:hover {
+        opacity: 1;
+        text-decoration: underline;
+    }
+
+.fs-textarea {
+    width: 100%;
+    height: 100px;
+    box-sizing: border-box;
+    border: 1px solid #dcdfe6;
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 14px;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    background: #fafafa;
+}
+
+    .fs-textarea:focus {
+        border-color: #f57f17;
+        background: #fff;
+        box-shadow: 0 0 0 2px rgba(245,127,23,0.1);
+    }
+
+.fs-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+
+.fs-btn-save {
+    background: #f57f17;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+    .fs-btn-save:hover {
+        background: #f9a825;
+    }
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -60%);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* =========================================
+   6. 🌟 响应式防御
 ========================================= */
 @media (max-width: 1300px) {
     .editor-content-box {
@@ -366,8 +527,7 @@
 }
 
 @media (max-width: 950px) {
-    /* 屏幕实在太小时，优先把大纲目录隐藏，确保提词器卡片和正文能完美显示 */
-    .toc-block {
+    .outline-sidebar {
         display: none;
     }
 }

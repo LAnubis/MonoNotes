@@ -1,0 +1,339 @@
+﻿/* =========================================
+   1. 抽屉基础容器与遮罩动画
+========================================= */
+.drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.25);
+    z-index: 9998;
+    backdrop-filter: blur(2px);
+    animation: fadeIn 0.2s ease-out;
+}
+
+.reference-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 850px;
+    max-width: 90vw;
+    height: 100vh;
+    background: #ffffff;
+    z-index: 9999;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    animation: slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+    .hide-scrollbar::-webkit-scrollbar {
+        display: none !important;
+    }
+
+/* =========================================
+   2. 抽屉头部
+========================================= */
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-bottom: 1px solid #f0f0f0;
+    background: #fafafa;
+}
+
+    .drawer-header h3 {
+        margin: 0;
+        font-size: 16px;
+        color: #333;
+    }
+
+.close-btn {
+    background: transparent;
+    border: none;
+    font-size: 16px;
+    color: #999;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+    .close-btn:hover {
+        color: #ff4d4f;
+    }
+
+/* =========================================
+   3. 抽屉主体布局 (左边栏 + 右内容)
+========================================= */
+.drawer-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* 左侧大类导航 */
+.drawer-sidebar {
+    width: 160px;
+    flex-shrink: 0;
+    background: #fdfdfd;
+    border-right: 1px solid #f0f0f0;
+    padding: 20px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.nav-group {
+    font-size: 11px;
+    color: #aaa;
+    font-weight: bold;
+    margin-bottom: 8px;
+    padding-left: 10px;
+}
+
+.nav-item {
+    background: transparent;
+    border: none;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #555;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+    .nav-item:hover {
+        background: #f5f5f5;
+        color: #333;
+    }
+
+    .nav-item.active {
+        background: #e3f2fd;
+        color: #1565c0;
+        font-weight: bold;
+    }
+
+/* 右侧内容容器 */
+.drawer-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+}
+
+/* =========================================
+   4. 内容区模式 1：大纲视图
+========================================= */
+.outline-view {
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.view-title {
+    margin: 0 0 20px 0;
+    font-size: 20px;
+    color: #222;
+}
+
+.outline-text-card {
+    flex: 1;
+    overflow-y: auto;
+    background: #fafafa;
+    border: 1px solid #eaeaea;
+    border-radius: 8px;
+    padding: 20px;
+    font-size: 14px;
+    color: #444;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    font-family: inherit;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.empty-hint {
+    color: #aaa;
+    font-style: italic;
+}
+
+/* =========================================
+   5. 内容区模式 2：设定视图 (双栏：二级列表 + 详情)
+========================================= */
+.material-view {
+    display: flex;
+    height: 100%;
+    width: 100%;
+}
+
+/* 二级列表 */
+.material-list {
+    width: 200px;
+    flex-shrink: 0;
+    border-right: 1px solid #f0f0f0;
+    padding: 16px 10px;
+    overflow-y: auto;
+    background: #fafbfc;
+}
+
+.mat-list-item {
+    padding: 10px 14px;
+    font-size: 14px;
+    color: #444;
+    cursor: pointer;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    transition: background 0.2s;
+    font-weight: bold;
+}
+
+    .mat-list-item:hover {
+        background: #f0f0f0;
+    }
+
+    .mat-list-item.active {
+        background: #1976d2;
+        color: #fff;
+    }
+
+/* 详情展示 */
+.material-detail {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+    background: #fff;
+}
+
+.empty-detail-state {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    color: #bbb;
+    font-size: 14px;
+}
+
+.detail-name {
+    margin: 0 0 16px 0;
+    font-size: 24px;
+    color: #222;
+}
+
+.detail-props {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.prop-badge {
+    background: #f0f4f8;
+    border: 1px solid #d9e2ec;
+    color: #334e68;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.detail-desc {
+    font-size: 14px;
+    color: #555;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    margin-bottom: 30px;
+}
+
+/* 关联模块 */
+.detail-section h4 {
+    font-size: 14px;
+    color: #888;
+    border-bottom: 1px dashed #eee;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+}
+
+.relation-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.rel-tag {
+    background: #fdfdfd;
+    border: 1px solid #eaeaea;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #444;
+}
+
+.rel-desc {
+    color: #888;
+    font-size: 11px;
+}
+
+.level-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.level-node {
+    font-size: 13px;
+    color: #333;
+}
+
+.lvl-idx {
+    display: inline-block;
+    background: #1976d2;
+    color: white;
+    width: 18px;
+    height: 18px;
+    text-align: center;
+    line-height: 18px;
+    border-radius: 50%;
+    font-size: 10px;
+    margin-right: 6px;
+}
+
+.lvl-name {
+    font-weight: bold;
+}
+
+.lvl-desc {
+    color: #888;
+    font-size: 12px;
+}

@@ -9,15 +9,12 @@
     [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
     [Parameter] public string CurrentChapterId { get; set; } = string.Empty;
     private bool _shouldInitVditor = false;
-    // 🌟 向外抛出标题已更改的事件
     [Parameter] public EventCallback OnTitleChanged { get; set; }
 
-    // 🌟 数据模型引用
     private WorkIndex? IndexData;
     private Volume? ActiveVolume;
     private Chapter? ActiveChapter;
 
-    // 🌟 标题分体存储
     private string ChapterPrefix { get; set; } = "";
     private string ChapterBody { get; set; } = "加载中...";
 
@@ -25,22 +22,92 @@
     private string Content { get; set; } = string.Empty;
     private string SaveStatus { get; set; } = "已同步";
 
-    // 🌟 UI 控制状态
     private bool ShowOutlinePanel { get; set; } = true;
-
     private int WordCount => string.IsNullOrWhiteSpace(Content) ? 0 : Content.Length;
 
     private CancellationTokenSource? _debounceCts;
     private DotNetObjectReference<WorkEditorDesk>? _objRef;
 
+    // 🌟 声明抽屉组件的引用
+    private QuickReferenceDrawer? _drawer;
+
     public class TocItem { public int Level { get; set; } public string Text { get; set; } = string.Empty; }
     private List<TocItem> DocumentToc { get; set; } = new();
 
     protected override void OnInitialized() { _objRef = DotNetObjectReference.Create(this); }
+    private bool _isAddingForeshadow = false;
+    private string _newForeshadowText = "";
 
+    private List<ForeshadowItem> _currentChapterForeshadows = new();
+    // 🌟 每次打开弹窗，拉取当前章节已有的伏笔
+    private async Task OpenForeshadowModal()
+    {
+        _newForeshadowText = "";
+        _isAddingForeshadow = true;
+        await LoadCurrentChapterForeshadows();
+    }
+
+    private void CloseForeshadowModal()
+    {
+        _isAddingForeshadow = false;
+    }
+
+    private async Task LoadCurrentChapterForeshadows()
+    {
+        if (string.IsNullOrEmpty(CurrentWorkId) || ActiveChapter == null) return;
+        var allItems = await Repository.GetForeshadowsAsync(CurrentWorkId);
+        // 只过滤出在本章挖的坑
+        _currentChapterForeshadows = allItems
+            .Where(f => f.CreatedInChapterId == ActiveChapter.Id)
+            .OrderByDescending(f => f.CreatedAt)
+            .ToList();
+    }
+
+    // 🌟 确认保存伏笔，并刷新列表
+    private async Task SaveForeshadow()
+    {
+        if (string.IsNullOrWhiteSpace(_newForeshadowText) || ActiveChapter == null) return;
+
+        var items = await Repository.GetForeshadowsAsync(CurrentWorkId);
+
+        var newForeshadow = new ForeshadowItem
+        {
+            Description = _newForeshadowText.Trim(),
+            CreatedInChapterId = ActiveChapter.Id,
+            CreatedInChapterName = ChapterPrefix + ChapterBody
+        };
+
+        items.Add(newForeshadow);
+        await Repository.SaveForeshadowsAsync(CurrentWorkId, items);
+
+        _newForeshadowText = ""; // 清空输入框
+        await LoadCurrentChapterForeshadows(); // 刷新上方列表
+
+        SaveStatus = "💡 伏笔已记录";
+        // 注意：这里不再自动关闭窗口，方便作者连续挖坑或查看
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(2000);
+            SaveStatus = "";
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    // 🌟 就在弹窗里直接删除写废的伏笔
+    private async Task DeleteForeshadow(ForeshadowItem item)
+    {
+        var items = await Repository.GetForeshadowsAsync(CurrentWorkId);
+        var target = items.FirstOrDefault(x => x.Id == item.Id);
+        if (target != null)
+        {
+            items.Remove(target);
+            await Repository.SaveForeshadowsAsync(CurrentWorkId, items);
+            await LoadCurrentChapterForeshadows(); // 刷新列表
+        }
+    }
     protected override async Task OnParametersSetAsync()
     {
-        // 🌟 修复：如果传入空 ID，彻底清空实体，展示空状态
         if (string.IsNullOrEmpty(CurrentWorkId) || string.IsNullOrEmpty(CurrentChapterId))
         {
             ActiveChapter = null;
@@ -65,8 +132,6 @@
         _lastSavedWordCount = Content.Length;
         GenerateToc();
         SaveStatus = "已同步";
-
-        // 🌟 修复：标记需要渲染，但不要在这里调用 JS
         _shouldInitVditor = true;
     }
 
@@ -88,19 +153,6 @@
         await TriggerAutoSave(true);
     }
 
-    // 🌟 新增：专门用于大纲文本框失去焦点时的保存逻辑
-    private async Task SaveOutlines()
-    {
-        if (IndexData != null)
-        {
-            SaveStatus = "保存大纲...";
-            StateHasChanged();
-            await Repository.SaveWorkIndexAsync(IndexData);
-            SaveStatus = $"已保存 {DateTime.Now:HH:mm:ss}";
-            StateHasChanged();
-        }
-    }
-
     private async Task TriggerAutoSave(bool isTitleChange = false)
     {
         SaveStatus = "正在输入...";
@@ -119,19 +171,13 @@
                 _lastSavedWordCount = currentWords;
             }
 
-            // 1. 保存正文
             await Repository.SaveChapterContentAsync(CurrentWorkId, CurrentChapterId, Content);
 
-            // 2. 保存完整标题到索引
             if (isTitleChange && IndexData != null && ActiveChapter != null)
             {
                 ActiveChapter.Title = ChapterPrefix + ChapterBody;
                 await Repository.SaveWorkIndexAsync(IndexData);
-
-                if (OnTitleChanged.HasDelegate)
-                {
-                    await OnTitleChanged.InvokeAsync();
-                }
+                if (OnTitleChanged.HasDelegate) { await OnTitleChanged.InvokeAsync(); }
             }
 
             GenerateToc();
@@ -157,13 +203,18 @@
         await JS.InvokeVoidAsync("writingVditor.scrollToHeading", "vditor-writing-area", headingText);
     }
 
+    // 🌟 打开抽屉
+    private void OpenDrawer()
+    {
+        _drawer?.Open();
+    }
+
     public void Dispose()
     {
         _objRef?.Dispose();
         _ = JS.InvokeVoidAsync("writingVditor.destroy", "vditor-writing-area");
     }
 
-    // 🌟 修复：等待 HTML 标签真正在浏览器渲染完毕后，再唤醒 Vditor
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_shouldInitVditor && ActiveChapter != null)
@@ -194,16 +245,19 @@
             <div class="desk-tools">
                 <span class="save-status"><span class="icon">☁️</span> @SaveStatus</span>
                 <span class="word-count-badge">@WordCount 字</span>
-                <button class="tool-btn foreshadow-btn" title="标记伏笔">💡 设为伏笔</button>
+
+                <button class="tool-btn foreshadow-btn" title="快速挖个坑" @onclick="OpenForeshadowModal">💡 设为伏笔</button>
+                
+                <button class="tool-btn material-btn" title="速查设定与大纲" @onclick="OpenDrawer">📚 素材速查</button>
+
                 <button class="tool-btn toggle-outline-btn @(ShowOutlinePanel ? "active" : "")" @onclick="() => ShowOutlinePanel = !ShowOutlinePanel">
-                    @(ShowOutlinePanel ? "👉 收起提词器" : "👈 展开提词器")
+                    @(ShowOutlinePanel ? "👉 收起导航" : "👈 展开导航")
                 </button>
             </div>
         </div>
 
         <div class="editor-body-layout">
             <div class="editor-content-box">
-
                 <div class="editor-main-area">
                     <div class="chapter-title-container">
                         @if (!string.IsNullOrEmpty(ChapterPrefix))
@@ -219,21 +273,6 @@
                 </div>
 
                 <div class="outline-sidebar hide-scrollbar @(ShowOutlinePanel ? "open" : "closed")">
-
-                    <div class="sidebar-block outline-block">
-                        <h4 class="block-header"><span class="ol-icon">🎯</span> 本章细纲与爽点</h4>
-                        <div class="readonly-outline-card chapter-outline-card">
-                            @(string.IsNullOrWhiteSpace(ActiveChapter.Outline) ? "（暂无细纲，可前往大纲模式编写）" : ActiveChapter.Outline)
-                        </div>
-                    </div>
-
-                    <div class="sidebar-block outline-block">
-                        <h4 class="block-header"><span class="ol-icon">📚</span> 卷大纲：@ActiveVolume.Title</h4>
-                        <div class="readonly-outline-card volume-outline-card">
-                            @(string.IsNullOrWhiteSpace(ActiveVolume.Outline) ? "（暂无卷大纲）" : ActiveVolume.Outline)
-                        </div>
-                    </div>
-
                     <div class="sidebar-block toc-block">
                         <h4 class="block-header"><span class="ol-icon">📑</span> 正文导航</h4>
                         @if (!DocumentToc.Any())
@@ -259,3 +298,43 @@
         </div>
     }
 </div>
+@if (_isAddingForeshadow)
+{
+    <div class="foreshadow-overlay" @onclick="CloseForeshadowModal"></div>
+    <div class="foreshadow-modal">
+        <div class="fs-header">
+            <div>
+                <h3 class="fs-title">💡 本章伏笔管理</h3>
+                <p class="fs-desc">【@(ChapterPrefix + ChapterBody)】</p>
+            </div>
+            <button class="fs-btn-close" @onclick="CloseForeshadowModal">✖</button>
+        </div>
+
+        @if (_currentChapterForeshadows.Any())
+        {
+            <div class="fs-list hide-scrollbar">
+                <div class="fs-label">本章已埋下的坑：</div>
+                @foreach (var item in _currentChapterForeshadows)
+                {
+                    <div class="fs-list-item">
+                        <span class="fs-item-text">@item.Description</span>
+                        <button class="fs-btn-delete" title="删除这个坑" @onclick="() => DeleteForeshadow(item)">删除</button>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="fs-label" style="margin-top: @(_currentChapterForeshadows.Any() ? "16px" : "0");">埋个新坑：</div>
+        <textarea class="fs-textarea" @bind="_newForeshadowText" placeholder="描述你埋下的悬念（例如：山洞里的神秘戒指其实是...）" autofocus></textarea>
+
+        <div class="fs-actions">
+            <button class="fs-btn-save" @onclick="SaveForeshadow">💾 记录伏笔</button>
+        </div>
+    </div>
+}
+
+
+<QuickReferenceDrawer @ref="_drawer" 
+                      CurrentWorkId="@CurrentWorkId" 
+                      CurrentVolumeId="@(ActiveVolume?.Id ?? "")" 
+                      CurrentChapterId="@(ActiveChapter?.Id ?? "")" />

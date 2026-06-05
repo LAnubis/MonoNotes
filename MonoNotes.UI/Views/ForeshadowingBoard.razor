@@ -1,111 +1,99 @@
-﻿@code {
-    [Parameter]
-    public string CurrentWorkId { get; set; } = string.Empty;
+﻿@using MonoNotes.Core.Models
+@using MonoNotes.Storage
+@inject WriteSpaceRepository Repository
 
-    // 内部定义的实体（实际开发中请移到 Core/Models 里）
-    public class AnchorCard
+@code {
+    [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
+
+    private List<ForeshadowItem> AllForeshadows = new();
+
+    // 分为两组：待填坑 和 已回收
+    private List<ForeshadowItem> OpenForeshadows => AllForeshadows.Where(f => !f.IsResolved).OrderByDescending(f => f.CreatedAt).ToList();
+    private List<ForeshadowItem> ResolvedForeshadows => AllForeshadows.Where(f => f.IsResolved).OrderByDescending(f => f.ResolvedAt).ToList();
+
+    protected override async Task OnParametersSetAsync()
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString("N");
-        public string Title { get; set; } = string.Empty;
-        public string Note { get; set; } = string.Empty;
-        public string SourceChapter { get; set; } = string.Empty;
-        public string Status { get; set; } = "planted"; // planted, pending, resolved, abandoned
-        public string Confidence { get; set; } = "valid"; // valid, moved, uncertain
+        if (!string.IsNullOrEmpty(CurrentWorkId))
+        {
+            AllForeshadows = await Repository.GetForeshadowsAsync(CurrentWorkId);
+        }
     }
 
-    // 模拟伏笔数据
-    private List<AnchorCard> Anchors = new()
+    // 🌟 一键填坑回收！
+    private async Task ResolveForeshadow(ForeshadowItem item)
     {
-        new AnchorCard { Title = "黑色古朴戒指", Note = "里面藏着药老，关键时刻会苏醒吸收斗气", SourceChapter = "第1章 雨夜惊变", Status = "planted" },
-        new AnchorCard { Title = "三年之约", Note = "云岚宗退婚，约定三年后上山挑战", SourceChapter = "第3章 远行", Status = "pending" },
-        new AnchorCard { Title = "神秘的残破地图", Note = "指向净莲妖火，需要集齐四份", SourceChapter = "第12章 黑岩城", Status = "planted", Confidence = "uncertain" },
-        new AnchorCard { Title = "后山的神秘山洞", Note = "原计划作为奇遇地点，后因节奏太拖沓作废", SourceChapter = "大纲设定", Status = "abandoned" },
-        new AnchorCard { Title = "筑基灵液的药方", Note = "炼药师公会考核时用到了", SourceChapter = "第20章 震撼全场", Status = "resolved" }
-    };
+        item.IsResolved = true;
+        item.ResolvedAt = DateTime.Now;
+        // 这里只是做一个概念记录，实际上如果未来引入了“在某章填坑”，可以将当前的 ChapterId 记录进来
+        item.ResolvedInChapterName = "未知章节填坑";
 
-    // 辅助方法：按状态筛选卡片
-    private IEnumerable<AnchorCard> GetCardsByStatus(string status) => Anchors.Where(a => a.Status == status);
+        await Repository.SaveForeshadowsAsync(CurrentWorkId, AllForeshadows);
+    }
+
+    // 🌟 不想填了，直接删除
+    private async Task DeleteForeshadow(ForeshadowItem item)
+    {
+        AllForeshadows.Remove(item);
+        await Repository.SaveForeshadowsAsync(CurrentWorkId, AllForeshadows);
+    }
 }
 
 <div class="board-container">
     <div class="board-header">
-        <div class="header-left">
-            <h2>💡 伏笔与暗线看板</h2>
-            <span class="subtitle">拖拽卡片以更改状态，点击卡片反向定位正文</span>
-        </div>
-        <button class="primary-btn">➕ 手动添加伏笔</button>
+        <h2>💡 伏笔与填坑看板</h2>
+        <p>所有挖过的坑都在这里追踪，保证小说逻辑严密，战力不崩塌。</p>
     </div>
 
-    <div class="kanban-track">
+    <div class="board-columns">
 
-        <div class="kanban-column">
-            <div class="column-header">
-                <h3>🌱 已埋下 <span class="count">@GetCardsByStatus("planted").Count()</span></h3>
+        <div class="column open-column">
+            <div class="col-title">
+                <span class="icon">🕳️</span> 挖坑中 / 待回收 <span class="badge">@OpenForeshadows.Count</span>
             </div>
-            <div class="card-list">
-                @foreach (var card in GetCardsByStatus("planted"))
+
+            <div class="card-list hide-scrollbar">
+                @if (!OpenForeshadows.Any())
                 {
-                    <div class="anchor-card border-blue">
-                        <div class="card-title">@card.Title</div>
-                        <div class="card-note">@card.Note</div>
-                        <div class="card-footer">
-                            <span class="source-tag">📍 @card.SourceChapter</span>
-                            @if (card.Confidence == "uncertain")
-                            {
-                                <span class="warn-tag" title="正文被修改，定位可能偏移">⚠️ 定位偏移</span>
-                            }
+                    <div class="empty-col">太棒了，目前没有任何遗留的坑！</div>
+                }
+                @foreach (var item in OpenForeshadows)
+                {
+                    <div class="foreshadow-card open-card">
+                        <div class="card-meta">
+                            <span class="chapter-tag">挖坑于: @item.CreatedInChapterName</span>
+                            <span class="time-tag">@item.CreatedAt.ToString("MM-dd")</span>
+                        </div>
+                        <div class="card-desc">@item.Description</div>
+                        <div class="card-actions">
+                            <button class="btn-danger" @onclick="() => DeleteForeshadow(item)">🗑️ 废弃此坑</button>
+                            <button class="btn-resolve" @onclick="() => ResolveForeshadow(item)">✅ 标记为已填坑</button>
                         </div>
                     </div>
                 }
             </div>
         </div>
 
-        <div class="kanban-column">
-            <div class="column-header">
-                <h3>⏳ 待回收 <span class="count">@GetCardsByStatus("pending").Count()</span></h3>
+        <div class="column resolved-column">
+            <div class="col-title">
+                <span class="icon">✅</span> 已填坑 / 成功回收 <span class="badge badge-green">@ResolvedForeshadows.Count</span>
             </div>
-            <div class="card-list">
-                @foreach (var card in GetCardsByStatus("pending"))
-                {
-                    <div class="anchor-card border-orange">
-                        <div class="card-title">@card.Title</div>
-                        <div class="card-note">@card.Note</div>
-                        <div class="card-footer">
-                            <span class="source-tag">📍 @card.SourceChapter</span>
-                        </div>
-                    </div>
-                }
-            </div>
-        </div>
 
-        <div class="kanban-column">
-            <div class="column-header">
-                <h3>✅ 已回收 <span class="count">@GetCardsByStatus("resolved").Count()</span></h3>
-            </div>
-            <div class="card-list">
-                @foreach (var card in GetCardsByStatus("resolved"))
+            <div class="card-list hide-scrollbar">
+                @if (!ResolvedForeshadows.Any())
                 {
-                    <div class="anchor-card border-green">
-                        <div class="card-title">@card.Title</div>
-                        <div class="card-note" style="text-decoration: line-through; color:#aaa;">@card.Note</div>
-                        <div class="card-footer">
-                            <span class="source-tag">📍 @card.SourceChapter</span>
-                        </div>
-                    </div>
+                    <div class="empty-col">还没填过任何坑... 读者要寄刀片啦！</div>
                 }
-            </div>
-        </div>
-
-        <div class="kanban-column">
-            <div class="column-header">
-                <h3>🗑️ 已废弃 <span class="count">@GetCardsByStatus("abandoned").Count()</span></h3>
-            </div>
-            <div class="card-list">
-                @foreach (var card in GetCardsByStatus("abandoned"))
+                @foreach (var item in ResolvedForeshadows)
                 {
-                    <div class="anchor-card border-gray">
-                        <div class="card-title" style="color: #999;">@card.Title</div>
-                        <div class="card-note">@card.Note</div>
+                    <div class="foreshadow-card resolved-card">
+                        <div class="card-meta">
+                            <span class="chapter-tag" style="text-decoration: line-through; opacity: 0.6;">挖坑于: @item.CreatedInChapterName</span>
+                            <span class="resolve-tag">✔️ 回收于: @item.ResolvedAt?.ToString("MM-dd")</span>
+                        </div>
+                        <div class="card-desc" style="color:#666;">@item.Description</div>
+                        <div class="card-actions" style="justify-content: flex-end;">
+                            <button class="btn-danger" style="opacity: 0.5;" @onclick="() => DeleteForeshadow(item)">彻底删除</button>
+                        </div>
                     </div>
                 }
             </div>
@@ -113,3 +101,4 @@
 
     </div>
 </div>
+

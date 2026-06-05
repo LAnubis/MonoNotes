@@ -315,5 +315,31 @@ namespace MonoNotes.Storage
                 await SaveLocalMaterialsAsync(workId, locals);
             }
         }
+
+        // ====================================================================
+        // 🌟 伏笔与填坑回收站引擎 (Foreshadowing Engine)
+        // ====================================================================
+
+        private string GetForeshadowPath(string workId)
+        {
+            var path = Path.Combine(_writeSpaceRoot, "Works", workId, "Foreshadowing");
+            if (!Directory.Exists(path)) Directory.CreateDirectory(path);
+            return Path.Combine(path, "foreshadows.json");
+        }
+
+        /// <summary> 获取单本小说的所有伏笔 </summary>
+        public async Task<List<ForeshadowItem>> GetForeshadowsAsync(string workId)
+        {
+            var path = GetForeshadowPath(workId);
+            if (!File.Exists(path)) return new List<ForeshadowItem>();
+            return await JsonSafeWriter.ReadSafeAsync<List<ForeshadowItem>>(path) ?? new List<ForeshadowItem>();
+        }
+
+        /// <summary> 保存伏笔列表 </summary>
+        public async Task SaveForeshadowsAsync(string workId, List<ForeshadowItem> items)
+        {
+            var path = GetForeshadowPath(workId);
+            await JsonSafeWriter.WriteAtomicallyAsync(path, items);
+        }
     }
 }
