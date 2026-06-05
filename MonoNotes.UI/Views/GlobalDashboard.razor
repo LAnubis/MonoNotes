@@ -7,11 +7,8 @@
 
     private List<WorkMeta> Works = new();
 
-    // 🌟 核心逻辑：自动过滤出近 7 天修改过的作品，并按时间倒序排列
-    private List<WorkMeta> RecentWorks => Works
-        .Where(w => w.LastEditedAt >= DateTime.Now.AddDays(-7))
-        .OrderByDescending(w => w.LastEditedAt)
-        .ToList();
+    // 🌟 视图切换控制
+    private bool IsGridView = true;
 
     private int TodayWordCount = 0;
     private int TotalWordCount = 0;
@@ -26,6 +23,7 @@
 
     private async Task LoadWorksAsync()
     {
+        // 获取所有作品，底层已经是按 LastEditedAt 倒序排列的
         Works = await Repository.GetAllWorksAsync();
     }
 
@@ -40,7 +38,13 @@
     private async Task CreateNewWork()
     {
         var newWork = await Repository.CreateNewWorkAsync("未命名新作", "novel");
+        Works.Insert(0, newWork); // 动态插入，不刷新页面
         await OnWorkSelected.InvokeAsync(newWork.Id);
+    }
+
+    private void ToggleView(bool gridView)
+    {
+        IsGridView = gridView;
     }
 
     private string GetHeatColor(int words)
@@ -113,49 +117,85 @@
         </div>
     </div>
 
-    <div class="recent-works-section">
+    <div class="works-section">
         <div class="section-header">
-            <h2>🕒 最近修改 <span class="header-tip">(近 7 天)</span></h2>
+            <h2>📚 我的作品库 <span class="header-tip">(共 @Works.Count 部)</span></h2>
+
+            <div class="view-toggle-group">
+                <button class="view-btn @(IsGridView ? "active" : "")" title="网格视图" @onclick="() => ToggleView(true)">🔲</button>
+                <button class="view-btn @(!IsGridView ? "active" : "")" title="列表视图" @onclick="() => ToggleView(false)">📄</button>
+            </div>
         </div>
 
-        @if (!RecentWorks.Any())
+        @if (!Works.Any())
         {
             <div class="empty-state">
                 <span class="empty-icon">📭</span>
-                <p>近 7 天没有修改过作品，去新建或打开一部作品写点什么吧！</p>
+                <p>暂无作品，点击右上角新建一部作品，开启你的创作之旅吧！</p>
             </div>
         }
         else
         {
-            <div class="recent-works-list">
-                @foreach (var work in RecentWorks)
-                {
-                    <div class="list-item-card" @onclick="() => OnWorkSelected.InvokeAsync(work.Id)">
-                        <div class="item-cover">
-                            @if (string.IsNullOrEmpty(work.CoverUrl))
-                            {
-                                <span class="no-cover-icon">📖</span>
-                            }
-                            else
-                            {
-                                <img src="@work.CoverUrl" alt="cover" />
-                            }
-                        </div>
-
-                        <div class="item-info">
-                            <div class="item-title" title="@work.Title">@work.Title</div>
-                            <div class="item-meta">
-                                <span class="item-time">更新于 @work.LastEditedAt.ToString("MM-dd HH:mm")</span>
+            @if (IsGridView)
+            {
+                <div class="books-grid">
+                    @foreach (var work in Works)
+                    {
+                        <div class="book-card" @onclick="() => OnWorkSelected.InvokeAsync(work.Id)">
+                            <div class="cover-box">
+                                @if (string.IsNullOrEmpty(work.CoverUrl))
+                                {
+                                    <div class="no-cover"><span>@(work.Title.FirstOrDefault())</span></div>
+                                }
+                                else
+                                {
+                                    <img src="@work.CoverUrl" alt="封面" />
+                                }
+                                <div class="hover-overlay"><span class="enter-text">进入写作</span></div>
+                            </div>
+                            <div class="book-info">
+                                <h4 class="book-title" title="@work.Title">@work.Title</h4>
+                                <div class="book-meta">
+                                    <span class="status-dot @work.Status"></span>
+                                    <span class="time-text">更新于 @work.LastEditedAt.ToString("MM-dd")</span>
+                                </div>
                             </div>
                         </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="recent-works-list">
+                    @foreach (var work in Works)
+                    {
+                        <div class="list-item-card" @onclick="() => OnWorkSelected.InvokeAsync(work.Id)">
+                            <div class="item-cover">
+                                @if (string.IsNullOrEmpty(work.CoverUrl))
+                                {
+                                    <span class="no-cover-icon">📖</span>
+                                }
+                                else
+                                {
+                                    <img src="@work.CoverUrl" alt="cover" />
+                                }
+                            </div>
 
-                        <div class="item-actions">
-                            <div class="work-status @work.Status">@GetStatusText(work.Status)</div>
-                            <div class="enter-btn">进入写作 →</div>
+                            <div class="item-info">
+                                <div class="item-title" title="@work.Title">@work.Title</div>
+                                <div class="item-meta">
+                                    <span class="item-time">最近修改: @work.LastEditedAt.ToString("yyyy-MM-dd HH:mm")</span>
+                                </div>
+                            </div>
+
+                            <div class="item-actions">
+                                <div class="work-status @work.Status">@GetStatusText(work.Status)</div>
+                                <div class="enter-btn">进入工作台 →</div>
+                            </div>
                         </div>
-                    </div>
-                }
-            </div>
+                    }
+                </div>
+            }
         }
     </div>
 </div>

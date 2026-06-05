@@ -7,7 +7,7 @@
     padding: 40px 5%;
     height: 100%;
     overflow-y: auto;
-    background: #fcfcfc;
+    background: #f7f8fa;
 }
 
 /* 顶部标题区 */
@@ -25,6 +25,7 @@
     color: #222;
     margin-bottom: 6px;
     margin-top: 0;
+    font-weight: 800;
 }
 
 .subtitle {
@@ -40,7 +41,7 @@
     background: #1976d2;
     color: #fff;
     border: none;
-    padding: 10px 20px;
+    padding: 10px 24px;
     border-radius: 8px;
     font-size: 15px;
     font-weight: bold;
@@ -57,27 +58,25 @@
     }
 
 /* =========================================
-   2. 🌟 一行卡片式数据展示区
+   2. 🌟 顶部数据与热力图 (SaaS 高级质感)
 ========================================= */
 .dashboard-stats-row {
     display: flex;
     gap: 24px;
     margin-bottom: 40px;
-    align-items: stretch; /* 保证三个卡片高度完全一致 */
+    align-items: stretch;
 }
-
-/* 修改前的 .stat-card 和 .heatmap-card 替换为下面这段： */
 
 .stat-card {
     background: #fff;
     padding: 24px;
-    border-radius: 12px;
-    border: 1px solid #eee;
+    border-radius: 16px;
+    border: 1px solid #edf2f9;
     box-shadow: 0 4px 12px rgba(0,0,0,0.02);
     display: flex;
     flex-direction: column;
-    flex: 1; /* 保持弹性拉伸 */
-    min-width: 260px; /* 🌟 增加最小宽度，让卡片看起来更宽、更大气 */
+    flex: 1;
+    min-width: 240px;
 }
 
     .stat-card.primary {
@@ -97,7 +96,7 @@
 }
 
 .stat-value {
-    font-size: 40px;
+    font-size: 42px;
     font-weight: 900;
     color: #222;
     margin-bottom: 8px;
@@ -113,12 +112,13 @@
     font-size: 12px;
     color: #aaa;
     margin-top: auto;
+    font-weight: 500;
 }
 
-/* 🌟 热力图专属卡片 (占用宽度比例下调) */
+/* 🌟 正统 GitHub 样式热力图 */
 .heatmap-card {
-    flex: 1.4; /* 🌟 从 2.5 降到 1.4，大幅度缩短它的视觉长度 */
-    min-width: 360px;
+    flex: 1.6;
+    min-width: 380px;
 }
 
 .heatmap-header {
@@ -132,15 +132,28 @@
         margin-bottom: 0;
     }
 
-.heatmap-grid {
+.heat-legend {
     display: flex;
-    flex-wrap: wrap;
-    flex-direction: column;
-    height: 110px;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #888;
+}
+
+.heatmap-grid {
+    display: grid;
+    /* 强制垂直排 7 行 (对应一周 7 天)，自动横向扩展列 */
+    grid-template-rows: repeat(7, 12px);
+    grid-auto-flow: column;
     gap: 4px;
     overflow-x: auto;
-    align-content: flex-start;
+    padding-bottom: 4px;
+    scrollbar-width: none;
 }
+
+    .heatmap-grid::-webkit-scrollbar {
+        display: none;
+    }
 
 .heat-box {
     width: 12px;
@@ -156,16 +169,7 @@
         border-color: rgba(0,0,0,0.3);
     }
 
-.heat-legend {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 12px;
-    color: #777;
-}
-
-/* 当屏幕特别窄的时候，允许热力图掉到第二行 */
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
     .dashboard-stats-row {
         flex-wrap: wrap;
     }
@@ -176,63 +180,201 @@
 }
 
 /* =========================================
-   3. 🌟 列表式：最近修改区
+   3. 🌟 视图切换控制
 ========================================= */
-.recent-works-section {
+.works-section {
     margin-top: 20px;
 }
 
 .section-header {
-    margin-bottom: 20px;
-    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #eaeaea;
     padding-bottom: 12px;
 }
 
     .section-header h2 {
-        font-size: 18px;
+        font-size: 20px;
         color: #333;
         margin: 0;
         display: flex;
         align-items: baseline;
         gap: 8px;
+        font-weight: 800;
     }
 
 .header-tip {
-    font-size: 13px;
+    font-size: 14px;
     color: #999;
     font-weight: normal;
 }
 
-.empty-state {
-    text-align: center;
-    padding: 60px 0;
-    background: #fff;
-    border: 1px dashed #e0e0e0;
-    border-radius: 12px;
+.view-toggle-group {
+    display: flex;
+    background: #eaeaea;
+    padding: 4px;
+    border-radius: 8px;
+    gap: 2px;
+}
+
+.view-btn {
+    background: transparent;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
     color: #888;
     font-size: 14px;
+    transition: all 0.2s;
 }
 
-.empty-icon {
-    font-size: 48px;
-    display: block;
-    margin-bottom: 16px;
-    opacity: 0.5;
+    .view-btn:hover {
+        color: #555;
+    }
+
+    .view-btn.active {
+        background: #fff;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        color: #1976d2;
+    }
+
+/* =========================================
+   4. 瀑布流 (网格视图)
+========================================= */
+.books-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 24px;
+    padding-bottom: 40px;
 }
 
+.book-card {
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+    .book-card:hover {
+        transform: translateY(-6px);
+    }
+
+        .book-card:hover .hover-overlay {
+            opacity: 1;
+        }
+
+.cover-box {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    border: 1px solid #f0f0f0;
+    margin-bottom: 12px;
+}
+
+    .cover-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+.no-cover {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+    font-size: 40px;
+    color: #b0bec5;
+    font-weight: bold;
+}
+
+.hover-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    backdrop-filter: blur(2px);
+}
+
+.enter-text {
+    background: #fff;
+    color: #222;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.book-info {
+    padding: 0 4px;
+}
+
+.book-title {
+    margin: 0 0 6px 0;
+    font-size: 15px;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: bold;
+}
+
+.book-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ccc;
+}
+
+    .status-dot.serializing {
+        background: #36b37e;
+    }
+
+    .status-dot.finished {
+        background: #ff5630;
+    }
+
+.time-text {
+    color: #999;
+}
+
+/* =========================================
+   5. 数据行 (列表视图 - 保留了你的优雅设计)
+========================================= */
 .recent-works-list {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    padding-bottom: 40px;
 }
 
-/* 🌟 优雅的长条形列表卡片 */
 .list-item-card {
     display: flex;
     align-items: center;
     padding: 16px 24px;
     background: #fff;
-    border: 1px solid #eee;
+    border: 1px solid #eaeaea;
     border-radius: 12px;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -240,16 +382,16 @@
 }
 
     .list-item-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.06);
-        border-color: #dcdcdc;
+        transform: translateX(4px);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.05);
+        border-color: #1976d2;
     }
 
 .item-cover {
-    width: 40px;
-    height: 56px;
+    width: 44px;
+    height: 60px;
     background: #f5f5f5;
-    border-radius: 4px;
+    border-radius: 6px;
     margin-right: 20px;
     display: flex;
     justify-content: center;
@@ -302,7 +444,6 @@
     flex-shrink: 0;
 }
 
-/* 隐藏在右侧的进入按钮，鼠标悬停时优雅滑出 */
 .enter-btn {
     font-size: 13px;
     color: #1976d2;
@@ -343,3 +484,21 @@
         background: #e3f2fd;
         color: #1565c0;
     }
+
+/* 空状态 */
+.empty-state {
+    text-align: center;
+    padding: 60px 0;
+    background: #fff;
+    border: 1px dashed #e0e0e0;
+    border-radius: 16px;
+    color: #888;
+    font-size: 14px;
+}
+
+.empty-icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}

@@ -103,20 +103,21 @@
 <div class="global-materials-container">
     <div class="materials-header">
         <div class="header-left">
-            <h2>🌍 全局资源设定集 (模板库)</h2>
-            <p class="subtitle">在这里创建的世界观与角色原型，可被派生或引用到任意小说中。</p>
+            <h2>🌍 全局设定模板库</h2>
+            <p class="subtitle">在这里创建的世界观与角色原型，可被派生或引用到未来的任意小说中。</p>
         </div>
         <div class="header-right">
             <div class="view-toggles">
-                <button class="toggle-btn @(ViewMode == "grid" ? "active" : "")" @onclick="@(() => SetViewMode("grid"))">📱 卡片</button>
-                <button class="toggle-btn @(ViewMode == "list" ? "active" : "")" @onclick="@(() => SetViewMode("list"))">📄 列表</button>
+                <button class="toggle-btn @(ViewMode == "grid" ? "active" : "")" title="网格视图" @onclick="@(() => SetViewMode("grid"))">🔲</button>
+                <button class="toggle-btn @(ViewMode == "list" ? "active" : "")" title="列表视图" @onclick="@(() => SetViewMode("list"))">📄</button>
             </div>
             <button class="btn-primary" @onclick="CreateNewGlobalTemplate">
-                ➕ 新建@(GetCategoryName(CurrentCategory))模板
+                <span class="btn-icon">➕</span> 新建@(GetCategoryName(CurrentCategory))模板
             </button>
         </div>
     </div>
 
+    <!-- 🌟 现代化的胶囊型分类导航 -->
     <div class="category-tabs">
         @foreach (MaterialType type in Enum.GetValues(typeof(MaterialType)))
         {
@@ -131,8 +132,9 @@
         {
             <div class="empty-state">
                 <div class="empty-icon">@GetCategoryIcon(CurrentCategory)</div>
-                <p>全局库空空如也。创建一个通用模板，让它成为你宇宙的基石吧！</p>
-                <button class="btn-outline" @onclick="CreateNewGlobalTemplate">创建全局模板</button>
+                <h3>原型库空空如也</h3>
+                <p>创建一个通用的@(GetCategoryName(CurrentCategory))模板，让它成为你新宇宙的基石吧！</p>
+                <button class="btn-outline" @onclick="CreateNewGlobalTemplate">➕ 立即创建模板</button>
             </div>
         }
         else
@@ -150,14 +152,18 @@
                                     <span class="badge-global">🌍 全局原型</span>
                                 </div>
                             </div>
-                            <div class="card-desc">@(string.IsNullOrEmpty(item.Description) ? "（暂无简介，点击编辑详细属性）" : item.Description)</div>
+                            <div class="card-desc">@(string.IsNullOrEmpty(item.Description) ? "（暂无设定简介，点击补充...）" : item.Description)</div>
 
                             @if (item.CustomFields.Any())
                             {
                                 <div class="card-props-preview">
-                                    @foreach (var kvp in item.CustomFields.Take(2))
+                                    @foreach (var kvp in item.CustomFields.Take(3))
                                     {
-                                        <span class="prop-tag">@kvp.Key: @kvp.Value</span>
+                                        <span class="prop-tag"><span class="prop-key">@kvp.Key:</span> @kvp.Value</span>
+                                    }
+                                    @if (item.CustomFields.Count > 3)
+                                    {
+                                        <span class="prop-tag more-tag">+@(item.CustomFields.Count - 3)</span>
                                     }
                                 </div>
                             }
@@ -174,17 +180,17 @@
                                 <th width="60">图标</th>
                                 <th width="220">模板名称</th>
                                 <th>简介说明</th>
-                                <th width="150">最后更新</th>
+                                <th width="160">最后更新</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var item in FilteredMaterials)
                             {
                                 <tr class="list-row" @onclick="() => OpenDrawer(item)">
-                                    <td class="icon-cell">@GetCategoryIcon(item.Type)</td>
-                                    <td class="name-cell">@item.Name</td>
+                                    <td class="icon-cell"><div class="list-avatar">@GetCategoryIcon(item.Type)</div></td>
+                                    <td class="name-cell"><span class="list-name">@item.Name</span></td>
                                     <td class="desc-cell">@(string.IsNullOrEmpty(item.Description) ? "-" : item.Description)</td>
-                                    <td class="time-cell">@item.UpdatedAt.ToString("MM-dd HH:mm")</td>
+                                    <td class="time-cell">@item.UpdatedAt.ToString("yyyy-MM-dd HH:mm")</td>
                                 </tr>
                             }
                         </tbody>
@@ -195,6 +201,7 @@
     </div>
 </div>
 
+<!-- 🌟 绝美的右侧编辑抽屉 -->
 @if (IsDrawerOpen)
 {
     <div class="drawer-overlay" @onclick="CloseDrawer"></div>
@@ -206,38 +213,47 @@
         <div class="drawer-header">
             <div class="drawer-title-box">
                 <span class="drawer-icon">@GetCategoryIcon(EditingItem.Type)</span>
-                <h3>编辑全局模板</h3>
+                <div>
+                    <h3 class="drawer-maintitle">配置全局模板</h3>
+                    <span class="drawer-subtitle">实时自动保存</span>
+                </div>
             </div>
-            <button class="close-btn" @onclick="CloseDrawer">✖</button>
+            <button class="close-btn" title="关闭" @onclick="CloseDrawer">✖</button>
         </div>
 
-        <div class="drawer-body">
+        <div class="drawer-body hide-scrollbar">
             <div class="drawer-section">
-                <label>模板名称</label>
-                <input type="text" class="drawer-input title-input" @bind="EditingItem.Name" />
+                <label class="section-label">模板名称</label>
+                <input type="text" class="drawer-input title-input" @bind="EditingItem.Name" placeholder="例如：修仙境界体系、精灵族原型" />
             </div>
 
             <div class="drawer-section">
-                <label>简介说明</label>
-                <textarea class="drawer-input desc-input" @bind="EditingItem.Description" placeholder="写下这个模板的基础基调..."></textarea>
+                <label class="section-label">简介说明</label>
+                <textarea class="drawer-input desc-input" @bind="EditingItem.Description" placeholder="描述这个模板的基础基调和用途..."></textarea>
             </div>
 
-            <hr class="drawer-divider" />
+            <div class="drawer-divider"></div>
 
             <div class="drawer-section">
                 <div class="section-title-row">
-                    <label>自定义扩展属性</label>
-                    <span class="field-hint">随意添加，如：境界、灵根、危险度...</span>
+                    <label class="section-label">自定义扩展属性</label>
+                    <span class="field-hint">随意配置你的宇宙规则</span>
                 </div>
 
                 <div class="custom-fields-list">
+                    @if (!EditingItem.CustomFields.Any())
+                    {
+                        <div class="no-fields-hint">尚未添加任何属性</div>
+                    }
+
                     @foreach (var key in EditingItem.CustomFields.Keys.ToList())
                     {
                         <div class="field-row">
-                            <div class="field-key">@key</div>
+                            <div class="field-key" title="@key">@key</div>
                             <input type="text" class="field-value-input"
                                    value="@EditingItem.CustomFields[key]"
-                                   @onchange="(e) => UpdateCustomFieldValue(key, e.Value?.ToString() ?? string.Empty)" />
+                                   @onchange="(e) => UpdateCustomFieldValue(key, e.Value?.ToString() ?? string.Empty)"
+                                   placeholder="输入属性值" />
                             <button class="delete-field-btn" title="删除属性" @onclick="() => RemoveCustomField(key)">🗑️</button>
                         </div>
                     }
@@ -245,14 +261,10 @@
 
                 <div class="add-field-box">
                     <input type="text" class="add-input" placeholder="属性名 (如: 战力)" @bind="NewFieldKey" />
-                    <input type="text" class="add-input" placeholder="值 (如: S级)" @bind="NewFieldValue" />
+                    <input type="text" class="add-input" placeholder="默认值 (如: S级)" @bind="NewFieldValue" />
                     <button class="add-field-btn" @onclick="AddCustomField">➕ 添加</button>
                 </div>
             </div>
-        </div>
-
-        <div class="drawer-footer">
-            <button class="btn-primary full-width" @onclick="CloseDrawer">💾 保存并关闭</button>
         </div>
     }
 </div>
