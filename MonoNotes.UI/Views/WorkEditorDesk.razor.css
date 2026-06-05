@@ -531,3 +531,14 @@
         display: none;
     }
 }
+/* 🌟 覆盖 Vditor 的默认样式，注入网文行业标准排版 */
+.vditor-reset {
+    font-size: 16px !important; /* 黄金阅读字号 */
+    line-height: 1.8 !important; /* 舒适的行高，防止文字粘连 */
+    color: #2c3e50 !important; /* 柔和的深灰蓝色，比纯黑更护眼 */
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif !important;
+}
+
+    .vditor-reset p {
+        margin-bottom: 1em !important; /* 段落之间留出呼吸空间 */
+    }

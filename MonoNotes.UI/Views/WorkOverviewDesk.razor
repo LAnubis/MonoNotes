@@ -24,7 +24,35 @@
 
     // 🌟 新增：真实的待填坑数据
     private List<ForeshadowItem> PendingForeshadows = new();
+    private bool ShowExportModal = false;
+    private string ExportFormat = "txt"; // 默认 TXT
+    private bool IsExporting = false;
+    private string ExportResultPath = "";
+    private void OpenExportModal()
+    {
+        ShowExportModal = true;
+        ExportResultPath = "";
+        IsExporting = false;
+    }
 
+    private void CloseExportModal()
+    {
+        ShowExportModal = false;
+    }
+
+    private async Task ExecuteExport()
+    {
+        IsExporting = true;
+        StateHasChanged();
+
+        // 刻意加点延迟，让用户感受到“系统正在全书拼装编译”的工业质感
+        await Task.Delay(600);
+
+        ExportResultPath = await ExportEngine.ExportAsync(Repository, CurrentWorkId, ExportFormat);
+
+        IsExporting = false;
+        StateHasChanged();
+    }
     protected override async Task OnParametersSetAsync()
     {
         if (string.IsNullOrEmpty(CurrentWorkId)) return;
@@ -126,7 +154,7 @@
                         <span class="btn-icon">✍️</span> 继续写作
                         <span class="btn-sub">@(LastChapter != null ? "前往最新章" : "开启第一章")</span>
                     </button>
-                    <button class="export-btn" title="开发中...">📤 编译导出</button>
+                    <button class="export-btn" @onclick="OpenExportModal">📤 编译导出</button>
                 </div>
             </div>
         </div>
@@ -222,3 +250,55 @@
         </div>
     }
 </div>
+@if (ShowExportModal)
+{
+    <div class="export-overlay" @onclick="CloseExportModal"></div>
+    <div class="export-modal">
+        <div class="modal-header">
+            <h3>📤 编译导出引擎</h3>
+            <button class="close-btn" @onclick="CloseExportModal">✖</button>
+        </div>
+
+        <div class="modal-body">
+            @if (string.IsNullOrEmpty(ExportResultPath))
+            {
+                <p class="export-desc">选择一种适合的分发格式，系统将自动缝合所有卷章。</p>
+
+                <div class="format-options">
+                    <label class="format-radio @(ExportFormat == "txt" ? "selected" : "")">
+                        <input type="radio" name="format" value="txt" checked="@(ExportFormat == "txt")" @onchange="@(() => ExportFormat = "txt")" />
+                        <div class="format-info">
+                            <span class="format-title">标准 TXT 文本 (.txt)</span>
+                            <span class="format-hint">✅ 自动清除格式标记<br>✅ 自动进行段首双空格缩进</span>
+                        </div>
+                    </label>
+
+                    <label class="format-radio @(ExportFormat == "md" ? "selected" : "")">
+                        <input type="radio" name="format" value="md" checked="@(ExportFormat == "md")" @onchange="@(() => ExportFormat = "md")" />
+                        <div class="format-info">
+                            <span class="format-title">纯净 Markdown (.md)</span>
+                            <span class="format-hint">✅ 保留各级标题与加粗<br>✅ 适合本地备份或二次排版</span>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn-cancel" @onclick="CloseExportModal">取消</button>
+                    <button class="btn-export" disabled="@IsExporting" @onclick="ExecuteExport">
+                        @(IsExporting ? "🚀 正在缝合全书..." : "开始编译导出")
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="export-success">
+                    <div class="success-icon">✅</div>
+                    <h4 class="success-title">编译导出成功！</h4>
+                    <p class="success-hint">文件已安全投递至您的系统【下载 Downloads】目录：</p>
+                    <div class="path-box">@ExportResultPath</div>
+                    <button class="btn-primary" style="margin-top: 20px;" @onclick="CloseExportModal">完成</button>
+                </div>
+            }
+        </div>
+    </div>
+}

@@ -502,3 +502,167 @@
     margin-bottom: 16px;
     opacity: 0.5;
 }
+/* 🌟 大厅新增的白底按钮 */
+.btn-outline-large {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff;
+    color: #1976d2;
+    border: 1px solid #bbdefb;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+
+    .btn-outline-large:hover {
+        background: #f0f7ff;
+        border-color: #1976d2;
+        transform: translateY(-2px);
+    }
+
+/* 🌟 导入预览弹窗专属样式 */
+.import-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    max-height: 85vh;
+    background: #fff;
+    border-radius: 16px;
+    z-index: 10001;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    background: #fafbfc;
+    border-bottom: 1px solid #eaeaea;
+}
+
+    .modal-header h3 {
+        margin: 0;
+        font-size: 18px;
+        color: #222;
+    }
+
+.modal-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.parsing-state {
+    text-align: center;
+    padding: 60px 0;
+    color: #666;
+    font-weight: bold;
+}
+
+.spinner {
+    font-size: 48px;
+    margin-bottom: 16px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.preview-stats {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.stat-badge {
+    background: #e3f2fd;
+    color: #1565c0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: bold;
+    border: 1px solid #bbdefb;
+}
+
+.preview-tree {
+    flex: 1;
+    overflow-y: auto;
+    background: #fafbfc;
+    border: 1px solid #eaeaea;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+    max-height: 400px;
+}
+
+.tree-volume {
+    margin-bottom: 16px;
+}
+
+.vol-title {
+    font-weight: bold;
+    font-size: 15px;
+    color: #222;
+    margin-bottom: 8px;
+    border-bottom: 1px dashed #dcdcdc;
+    padding-bottom: 6px;
+}
+
+.tree-chapters {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 20px;
+}
+
+.chap-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: #555;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+    .chap-item:hover {
+        background: #f0f4f8;
+        color: #1976d2;
+    }
+
+.chap-words {
+    color: #999;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid #eaeaea;
+}
+.header-actions {
+    white-space: nowrap;
+    flex-wrap: nowrap;
+}

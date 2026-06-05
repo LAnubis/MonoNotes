@@ -14,7 +14,67 @@
     private int TotalWordCount = 0;
     private Dictionary<string, int> DailyStats = new();
     private List<DateTime> HeatmapDays = Enumerable.Range(0, 90).Select(i => DateTime.Now.Date.AddDays(-89 + i)).ToList();
+    private bool ShowImportModal = false;
+    private bool IsParsing = false;
+    private bool IsSaving = false;
+    private ImportPreviewWork? PreviewWork = null;
 
+    private void CloseImportModal()
+    {
+        ShowImportModal = false;
+        PreviewWork = null;
+    }
+
+    // 处理文件上传与智能解析
+    private async Task HandleFileUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        ShowImportModal = true;
+        IsParsing = true;
+        PreviewWork = null;
+        StateHasChanged();
+
+        try
+        {
+            // 允许最大读取 50MB 的单文件小说
+            using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 50);
+
+            // 刻意加一点延迟，体现引擎在高速运转的视觉感
+            await Task.Delay(500);
+
+            PreviewWork = await ImportEngine.ParseStreamAsync(stream, file.Name);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"解析失败: {ex.Message}");
+        }
+        finally
+        {
+            IsParsing = false;
+            StateHasChanged();
+        }
+    }
+
+    // 确认无误，执行落盘
+    private async Task ConfirmImport()
+    {
+        if (PreviewWork == null) return;
+
+        IsSaving = true;
+        StateHasChanged();
+
+        // 执行物理写入
+        string newWorkId = await ImportEngine.ExecuteImportAsync(Repository, PreviewWork);
+
+        IsSaving = false;
+        ShowImportModal = false;
+
+        // 重新加载大厅列表，并直接跳转进新书！
+        await LoadWorksAsync();
+        await OnWorkSelected.InvokeAsync(newWorkId);
+    }
     protected override async Task OnInitializedAsync()
     {
         await LoadWorksAsync();
@@ -72,6 +132,10 @@
             <p class="subtitle">键盘敲击的每一次，都是世界运转的齿轮。</p>
         </div>
         <div class="header-actions">
+            <InputFile id="file-import" OnChange="HandleFileUpload" accept=".txt,.md" style="display:none;" />
+            <label for="file-import" class="btn-outline-large" title="支持 TXT / MD 格式">
+                <span class="icon">📥</span> 本地导入
+            </label>
             <button class="btn-primary-large" @onclick="CreateNewWork">
                 <span class="icon">➕</span> 新建作品
             </button>
@@ -199,3 +263,56 @@
         }
     </div>
 </div>
+@if (ShowImportModal)
+{
+    <div class="modal-overlay" @onclick="CloseImportModal"></div>
+    <div class="import-modal">
+        <div class="modal-header">
+            <h3>📥 智能分章解析引擎</h3>
+            <button class="close-btn" @onclick="CloseImportModal">✖</button>
+        </div>
+
+        <div class="modal-body">
+            @if (IsParsing)
+            {
+                <div class="parsing-state">
+                    <div class="spinner">🌀</div>
+                    <p>正在用正则嗅探文件结构，切分卷章中...</p>
+                </div>
+            }
+            else if (PreviewWork != null)
+            {
+                <div class="preview-stats">
+                    <span class="stat-badge">📊 检测到: @PreviewWork.Volumes.Count 卷</span>
+                    <span class="stat-badge">📑 共: @PreviewWork.Volumes.Sum(v => v.Chapters.Count) 章</span>
+                    <span class="stat-badge">✍️ 约: @PreviewWork.TotalWords.ToString("N0") 字</span>
+                </div>
+
+                <div class="preview-tree hide-scrollbar">
+                    @foreach (var vol in PreviewWork.Volumes)
+                    {
+                        <div class="tree-volume">
+                            <div class="vol-title">📁 @vol.Title</div>
+                            <div class="tree-chapters">
+                                @foreach (var chap in vol.Chapters)
+                                {
+                                    <div class="chap-item">
+                                        <span class="chap-name">📄 @chap.Title</span>
+                                        <span class="chap-words">@chap.WordCount 字</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn-cancel" @onclick="CloseImportModal" disabled="@IsSaving">取消</button>
+                    <button class="btn-primary-large" @onclick="ConfirmImport" disabled="@IsSaving">
+                        @(IsSaving ? "🚀 正在生成宇宙..." : "✅ 确认无误，生成作品")
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
