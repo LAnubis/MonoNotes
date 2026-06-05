@@ -1,15 +1,15 @@
 ﻿@code {
     private string? ActiveWorkId { get; set; } = null;
+
+    // 🌟 默认值改为 editor，这样一进入小说，左侧的"正文"就会默认高亮
     private string CurrentSubView { get; set; } = "editor";
-    // 记录全局大厅的子视图（默认是 dashboard）
+
     private string GlobalSubView { get; set; } = "dashboard";
     private MonoNotes.UI.Views.WorkSidebar _workSidebar;
 
-    // 🌟 新增：追踪当前选中的卷ID和章ID
     private string ActiveVolumeId { get; set; } = string.Empty;
     private string ActiveChapterId { get; set; } = string.Empty;
 
-    // 处理全局菜单切换
     private void HandleGlobalMenuChanged(string menuName)
     {
         GlobalSubView = menuName;
@@ -19,7 +19,9 @@
     private void EnterWork(string workId)
     {
         ActiveWorkId = workId;
-        CurrentSubView = "overview";
+        ActiveVolumeId = string.Empty;
+        ActiveChapterId = string.Empty;
+        CurrentSubView = "editor"; // 🌟 初始化为 editor，配合下面的路由拦截，完美呈现大屏
         StateHasChanged();
     }
 
@@ -29,18 +31,18 @@
         StateHasChanged();
     }
 
+    // 🌟 接收面板上的快捷入口点击事件，并切换视图
     private void HandleSubViewChanged(string viewName)
     {
         CurrentSubView = viewName;
+        StateHasChanged();
     }
 
-    // 🌟 升级：接收章选中事件
     private void HandleChapterSelected(string chapterId)
     {
         ActiveChapterId = chapterId;
-        ActiveVolumeId = string.Empty; // 清空卷选中态
+        ActiveVolumeId = string.Empty;
 
-        // 如果当前不在正文也不在大纲，切回正文
         if (CurrentSubView != "editor" && CurrentSubView != "outline")
         {
             CurrentSubView = "editor";
@@ -48,13 +50,11 @@
         StateHasChanged();
     }
 
-    // 🌟 新增：接收卷选中事件
     private void HandleVolumeSelected(string volumeId)
     {
         ActiveVolumeId = volumeId;
-        ActiveChapterId = string.Empty; // 清空章选中态
+        ActiveChapterId = string.Empty;
 
-        // 智能切换：如果你在写正文时点击了“卷”，系统智能切换到“大纲模式”
         if (CurrentSubView == "editor")
         {
             CurrentSubView = "outline";
@@ -70,7 +70,6 @@
         }
     }
 
-    // 接收从控制台传来的章节ID，并进入正文模式
     private void HandleEnterEditorFromOverview(string chapterId)
     {
         if (!string.IsNullOrEmpty(chapterId))
@@ -120,18 +119,19 @@
         }
         else
         {
-            @if (CurrentSubView == "overview")
+            @if (CurrentSubView == "overview" || (CurrentSubView == "editor" && string.IsNullOrEmpty(ActiveChapterId)))
             {
                 <WorkOverviewDesk CurrentWorkId="@ActiveWorkId"
-                                  OnEnterEditor="HandleEnterEditorFromOverview" />
+                                  OnEnterEditor="HandleEnterEditorFromOverview"
+                                  OnNavigate="HandleSubViewChanged" />
             }
-            else if (CurrentSubView == "editor")
+            else if (CurrentSubView == "editor" && !string.IsNullOrEmpty(ActiveChapterId))
             {
                 <WorkEditorDesk CurrentWorkId="@ActiveWorkId"
                                 CurrentChapterId="@ActiveChapterId"
                                 OnTitleChanged="HandleIndexUpdated" />
             }
-          else if (CurrentSubView == "outline")
+            else if (CurrentSubView == "outline")
             {
                 <WorkOutlineDesk CurrentWorkId="@ActiveWorkId"
                                  CurrentVolumeId="@ActiveVolumeId"

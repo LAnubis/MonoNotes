@@ -5,8 +5,11 @@
 @code {
     [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
 
-    // 🌟 当用户点击“继续写作”或某一章时触发，把要编辑的 ChapterId 传出去
+    // 🌟 当用户点击“继续写作”或某一章时触发
     [Parameter] public EventCallback<string> OnEnterEditor { get; set; }
+
+    // 🌟 新增：用于底部快捷入口的路由跳转
+    [Parameter] public EventCallback<string> OnNavigate { get; set; }
 
     private WorkMeta? Meta;
     private WorkIndex? Index;
@@ -14,23 +17,30 @@
     private int TotalChapters = 0;
     private int TotalWordCount = 0;
     private int CreateDays = 1;
+    private int TodayWordCount = 0; // 🌟 新增：今日战报
 
-    // 默认继续写作的章节（最后一章）
     private Chapter? LastChapter;
-    // 最近的章节列表
     private List<Chapter> RecentChapters = new();
+
+    // 🌟 新增：真实的待填坑数据
+    private List<ForeshadowItem> PendingForeshadows = new();
 
     protected override async Task OnParametersSetAsync()
     {
         if (string.IsNullOrEmpty(CurrentWorkId)) return;
 
-        // 1. 加载元数据 (取书名、简介、封面)
+        // 1. 加载元数据
         var allWorks = await Repository.GetAllWorksAsync();
         Meta = allWorks.FirstOrDefault(w => w.Id == CurrentWorkId);
 
-        // 2. 加载目录结构 (计算字数、章数，提取最近章节)
-        Index = await Repository.GetWorkIndexAsync(CurrentWorkId);
+        if (Meta != null)
+        {
+            CreateDays = (int)(DateTime.Now - Meta.CreatedAt).TotalDays;
+            if (CreateDays < 1) CreateDays = 1;
+        }
 
+        // 2. 加载目录结构
+        Index = await Repository.GetWorkIndexAsync(CurrentWorkId);
         if (Index != null)
         {
             var allChapters = Index.Volumes.SelectMany(v => v.Chapters).ToList();
@@ -40,40 +50,39 @@
             if (allChapters.Any())
             {
                 LastChapter = allChapters.Last();
-                // 取最后 3 章作为快速导航
                 RecentChapters = allChapters.TakeLast(3).Reverse().ToList();
             }
         }
 
-        if (Meta != null)
+        // 3. 🌟 加载今日字数
+        var stats = await Repository.GetDailyStatsAsync();
+        string today = DateTime.Now.ToString("yyyy-MM-dd");
+        if (stats.TryGetValue(today, out int count))
         {
-            CreateDays = (int)(DateTime.Now - Meta.CreatedAt).TotalDays;
-            if (CreateDays < 1) CreateDays = 1;
+            TodayWordCount = count;
         }
+
+        // 4. 🌟 加载待填坑的伏笔 (取最近的 3 个警告作者)
+        var allFs = await Repository.GetForeshadowsAsync(CurrentWorkId);
+        PendingForeshadows = allFs.Where(f => !f.IsResolved).OrderByDescending(f => f.CreatedAt).Take(3).ToList();
     }
 
     private async Task ContinueWriting()
     {
         if (LastChapter != null)
-        {
             await OnEnterEditor.InvokeAsync(LastChapter.Id);
-        }
         else
-        {
-            // 如果连一章都没有，传空字符串，让外部去处理（或者默认跳进编辑器让他新建）
             await OnEnterEditor.InvokeAsync(string.Empty);
-        }
     }
 }
 
 <div class="overview-container">
     @if (Meta == null)
     {
-        <div class="loading-state">正在加载小说档案...</div>
+        <div class="loading-state">正在生成战术看板...</div>
     }
     else
     {
-        <!-- 🌟 顶部：名片区 Hero Section -->
         <div class="hero-section">
             <div class="book-cover">
                 @if (string.IsNullOrEmpty(Meta.CoverUrl))
@@ -89,7 +98,7 @@
             <div class="hero-info">
                 <div class="title-row">
                     <h1 class="book-title">@Meta.Title</h1>
-                    <span class="status-badge @Meta.Status">
+                    <span class="status-badge @(Meta.Status)">
                         @(Meta.Status switch { "serializing" => "连载中", "finished" => "已完结", "paused" => "暂停更新", _ => "构思草稿" })
                     </span>
                 </div>
@@ -104,7 +113,7 @@
                     }
                     else
                     {
-                        <span class="book-tag" style="opacity: 0.5;">暂无标签，可去详情页添加</span>
+                        <span class="book-tag" style="opacity: 0.5;"># 暂无标签</span>
                     }
                 </div>
 
@@ -112,20 +121,25 @@
                     @(string.IsNullOrWhiteSpace(Meta.Synopsis) ? "（在这个世界，写下你的第一个设定吧...）" : Meta.Synopsis)
                 </div>
 
-                <!-- 🚀 核心召唤按钮 -->
-                <button class="continue-btn" @onclick="ContinueWriting">
-                    <span class="btn-icon">✍️</span> 继续写作
-                    <span class="btn-sub">（前往最新章节）</span>
-                </button>
+                <div class="hero-actions">
+                    <button class="continue-btn" @onclick="ContinueWriting">
+                        <span class="btn-icon">✍️</span> 继续写作
+                        <span class="btn-sub">@(LastChapter != null ? "前往最新章" : "开启第一章")</span>
+                    </button>
+                    <button class="export-btn" title="开发中...">📤 编译导出</button>
+                </div>
             </div>
         </div>
 
-        <!-- 🌟 中部：数据与快捷导航 -->
         <div class="dashboard-grid">
 
-            <div class="data-panel">
-                <h3>📊 本书进度</h3>
+            <div class="grid-card data-panel">
+                <h3 class="card-title">📊 本书进度</h3>
                 <div class="stats-row">
+                    <div class="stat-item highlight-stat">
+                        <div class="stat-num">@TodayWordCount.ToString("N0")</div>
+                        <div class="stat-lbl">今日战报 (字)</div>
+                    </div>
                     <div class="stat-item">
                         <div class="stat-num">@TotalWordCount.ToString("N0")</div>
                         <div class="stat-lbl">累计字数</div>
@@ -141,13 +155,28 @@
                 </div>
 
                 <div class="todo-panel">
-                    <h4>💡 待回收的伏笔</h4>
-                    <div class="todo-empty">正在构思中，尚未埋下伏笔...</div>
+                    <h4 class="todo-title">💡 待回收的坑 <span class="todo-badge">@PendingForeshadows.Count</span></h4>
+                    @if (PendingForeshadows.Any())
+                    {
+                        <div class="todo-list">
+                            @foreach (var fs in PendingForeshadows)
+                            {
+                                <div class="todo-item" @onclick="@(() => OnNavigate.InvokeAsync("foreshadowing"))">
+                                    <span class="todo-dot"></span>
+                                    <span class="todo-text">@fs.Description</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="todo-empty">太棒了，目前没有任何遗留的坑！</div>
+                    }
                 </div>
             </div>
 
-            <div class="recent-panel">
-                <h3>🕒 最新章节</h3>
+            <div class="grid-card recent-panel">
+                <h3 class="card-title">🕒 最近编辑</h3>
                 @if (RecentChapters.Any())
                 {
                     <div class="recent-list">
@@ -162,32 +191,31 @@
                 }
                 else
                 {
-                    <div class="recent-empty">目录空空如也，快去写下第一章吧！</div>
+                    <div class="recent-empty">
+                        <div style="font-size:32px; opacity:0.3; margin-bottom:10px;">📭</div>
+                        目录空空如也<br>快去写下第一章吧！
+                    </div>
                 }
             </div>
 
-            <div class="shortcuts-panel">
-                <h3>🌌 设定快捷入口</h3>
+            <div class="grid-card shortcuts-panel">
+                <h3 class="card-title">🌌 核心工作区</h3>
                 <div class="shortcuts-grid">
-                    <div class="shortcut-btn">
+                    <div class="shortcut-btn" @onclick="@(() => OnNavigate.InvokeAsync("outline"))">
                         <span class="sc-icon">📜</span>
                         <span class="sc-text">故事大纲</span>
                     </div>
-                    <div class="shortcut-btn">
-                        <span class="sc-icon">🧑</span>
-                        <span class="sc-text">角色档案</span>
+                    <div class="shortcut-btn" @onclick="@(() => OnNavigate.InvokeAsync("materials"))">
+                        <span class="sc-icon">📚</span>
+                        <span class="sc-text">万能设定</span>
                     </div>
-                    <div class="shortcut-btn">
-                        <span class="sc-icon">🌍</span>
-                        <span class="sc-text">世界观设定</span>
+                    <div class="shortcut-btn" @onclick="@(() => OnNavigate.InvokeAsync("foreshadowing"))">
+                        <span class="sc-icon">💡</span>
+                        <span class="sc-text">伏笔追踪</span>
                     </div>
-                    <div class="shortcut-btn">
-                        <span class="sc-icon">🗺️</span>
-                        <span class="sc-text">地理场景</span>
-                    </div>
-                    <div class="shortcut-btn">
-                        <span class="sc-icon">⚔️</span>
-                        <span class="sc-text">物品法宝</span>
+                    <div class="shortcut-btn" @onclick="@(() => OnNavigate.InvokeAsync("details"))">
+                        <span class="sc-icon">⚙️</span>
+                        <span class="sc-text">作品档案</span>
                     </div>
                 </div>
             </div>
