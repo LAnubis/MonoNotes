@@ -23,6 +23,11 @@
     private bool IsImportModalOpen = false;
     private List<MaterialItem> GlobalTemplates = new();
 
+    // 🌟 NLP 智能提取设定逻辑
+    private bool ShowExtractModal = false;
+    private bool IsExtracting = false;
+    private List<ExtractedEntity> ExtractedResults = new();
+
     private List<MaterialItem> FilteredMaterials => AllMaterials.Where(m => m.Type == CurrentCategory).OrderByDescending(m => m.UpdatedAt).ToList();
     private List<MaterialItem> FilteredGlobalTemplates => GlobalTemplates.Where(m => m.Type == CurrentCategory).OrderByDescending(m => m.UpdatedAt).ToList();
 
@@ -157,6 +162,60 @@
     private void SetViewMode(string mode) { ViewMode = mode; }
     private string GetCategoryName(MaterialType type) => type switch { MaterialType.Character => "角色", MaterialType.Faction => "势力", MaterialType.Geography => "地理", MaterialType.Item => "物品", MaterialType.Worldview => "世界观", _ => "未知" };
     private string GetCategoryIcon(MaterialType type) => type switch { MaterialType.Character => "🧑", MaterialType.Faction => "🏛️", MaterialType.Geography => "🗺️", MaterialType.Item => "⚔️", MaterialType.Worldview => "🌍", _ => "📌" };
+
+    // ==========================================
+    // 🌟 触发 NLP 智能提取
+    // ==========================================
+    private async Task StartNerExtraction()
+    {
+        ShowExtractModal = true;
+        IsExtracting = true;
+        ExtractedResults.Clear();
+        StateHasChanged();
+
+        await Task.Delay(500);
+
+        string fullText = await NerEngine.ReadFullWorkTextAsync(Repository, CurrentWorkId);
+
+        await Task.Run(() =>
+        {
+            // 默认出现频次设为5次，过滤掉路人甲
+            ExtractedResults = NerEngine.ExtractEntities(fullText, 5);
+        });
+
+        IsExtracting = false;
+        StateHasChanged();
+    }
+
+    private void CloseExtractModal()
+    {
+        ShowExtractModal = false;
+    }
+
+    private async Task ConfirmImportEntities()
+    {
+        var selected = ExtractedResults.Where(x => x.IsSelected).ToList();
+        if (!selected.Any()) return;
+
+        foreach (var entity in selected)
+        {
+            // 防重判断
+            if (!AllMaterials.Any(m => m.Name == entity.Name && m.Type == entity.Type))
+            {
+                AllMaterials.Add(new MaterialItem
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Name = entity.Name,
+                    Type = entity.Type,
+                    Description = $"（系统智能提取，全书共出现 {entity.Frequency} 次，请补充详细设定）"
+                });
+            }
+        }
+
+        await Repository.SaveLocalMaterialsAsync(CurrentWorkId, AllMaterials);
+        ShowExtractModal = false;
+        StateHasChanged();
+    }
 }
 
 <div class="materials-container">
@@ -167,6 +226,7 @@
                 <button class="toggle-btn @(ViewMode == "grid" ? "active" : "")" @onclick="@(() => SetViewMode("grid"))">📱</button>
                 <button class="toggle-btn @(ViewMode == "list" ? "active" : "")" @onclick="@(() => SetViewMode("list"))">📄</button>
             </div>
+            <button class="btn-magic" @onclick="StartNerExtraction">✨ 智能提取设定</button>
             <button class="btn-outline-primary" @onclick="OpenImportModal">📥 引入全局模板</button>
             <button class="btn-primary" @onclick="CreateNewMaterial">➕ 原创@(GetCategoryName(CurrentCategory))</button>
         </div>
@@ -181,7 +241,11 @@
     <div class="materials-content">
         @if (!AllMaterials.Any(m => m.Type == CurrentCategory))
         {
-            <div class="empty-state"><p>本书暂无@(GetCategoryName(CurrentCategory))设定。</p><button class="btn-primary" @onclick="CreateNewMaterial" style="margin-right: 12px;">立即原创</button><button class="btn-outline-primary" @onclick="OpenImportModal">从全局引入</button></div>
+            <div class="empty-state">
+                <p>本书暂无@(GetCategoryName(CurrentCategory))设定。</p>
+                <button class="btn-primary" @onclick="CreateNewMaterial" style="margin-right: 12px;">立即原创</button>
+                <button class="btn-outline-primary" @onclick="OpenImportModal">从全局引入</button>
+            </div>
         }
         else
         {
@@ -201,7 +265,6 @@
                                     }
                                     else if (!string.IsNullOrEmpty(item.DerivedFromId))
                                     {
-
                                         <span class="badge-derived">🧬 派生</span>
                                     }
                                 </div>
@@ -232,28 +295,29 @@
                                 <tr class="list-row" @onclick="() => OpenDrawer(item)">
                                     <td class="icon-cell">@GetCategoryIcon(item.Type)</td>
                                     <td class="name-cell">@item.Name</td>
-                                    <td>@if (item.IsReadonlyReference) {
-                                        <span class="badge-readonly">🔗 引用</span>
-                                    } else if (!string.IsNullOrEmpty(item.DerivedFromId))
-                                    {
-
-                                        <span class="badge-derived">🧬 派生</span>
-                                    }
-                                    else
-                                    {
-
-                                        <span style="color:#aaa;font-size:12px;">单本原创</span>
-                                    }
-                                </td>
-                                <td class="time-cell">@item.UpdatedAt.ToString("MM-dd HH:mm")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+                                    <td>
+                                        @if (item.IsReadonlyReference)
+                                        {
+                                            <span class="badge-readonly">🔗 引用</span>
+                                        }
+                                        else if (!string.IsNullOrEmpty(item.DerivedFromId))
+                                        {
+                                            <span class="badge-derived">🧬 派生</span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color:#aaa;font-size:12px;">单本原创</span>
+                                        }
+                                    </td>
+                                    <td class="time-cell">@item.UpdatedAt.ToString("MM-dd HH:mm")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
         }
-    }
-</div>
+    </div>
 </div>
 
 @if (IsDrawerOpen)
@@ -311,138 +375,146 @@
 
             <hr class="drawer-divider" />
 
-            <!-- 🌟 世界观完全屏蔽所有羁绊区 -->
             @if (EditingItem.Type != MaterialType.Worldview)
             {
-                <datalist id="dl-char-relations">@foreach(var t in GetRelationTags(EditingItem.Type, MaterialType.Character)){
-                    <option value="@t" />
-                }
-            </datalist>
-            <datalist id="dl-faction-relations">@foreach(var t in GetRelationTags(EditingItem.Type, MaterialType.Faction)){
-                <option value="@t" />
-            }
-        </datalist>
-        <datalist id="dl-geo-relations">@foreach(var t in GetRelationTags(EditingItem.Type, MaterialType.Geography)){
-            <option value="@t" />
-        }
-    </datalist>
-
-    <!-- 1. 👥 角色羁绊 (仅角色展示) -->
-    @if (EditingItem.Type == MaterialType.Character)
-    {
-        <div class="relation-block">
-            <div class="block-title">👥 角色羁绊与人际关系</div>
-            <div class="relations-list">
-                @foreach (var rel in GetFilteredRelations(MaterialType.Character))
-                {
-                    var target = AllMaterials.FirstOrDefault(m => m.Id == rel.TargetId); if (target != null)
+                <datalist id="dl-char-relations">
+                    @foreach (var t in GetRelationTags(EditingItem.Type, MaterialType.Character))
                     {
-                        <div class="relation-tag" @onclick="() => OpenDrawer(target)"><span class="rel-name">@target.Name</span><span class="rel-desc-badge">@rel.Description</span>@if (!isLocked) {
-                            <button class="rel-remove" @onclick:stopPropagation="true" @onclick="() => RemoveBidirectionalRelation(rel.TargetId)">×</button>
+                        <option value="@t" />
+                    }
+                </datalist>
+                <datalist id="dl-faction-relations">
+                    @foreach (var t in GetRelationTags(EditingItem.Type, MaterialType.Faction))
+                    {
+                        <option value="@t" />
+                    }
+                </datalist>
+                <datalist id="dl-geo-relations">
+                    @foreach (var t in GetRelationTags(EditingItem.Type, MaterialType.Geography))
+                    {
+                        <option value="@t" />
+                    }
+                </datalist>
+
+                @if (EditingItem.Type == MaterialType.Character)
+                {
+                    <div class="relation-block">
+                        <div class="block-title">👥 角色羁绊与人际关系</div>
+                        <div class="relations-list">
+                            @foreach (var rel in GetFilteredRelations(MaterialType.Character))
+                            {
+                                var target = AllMaterials.FirstOrDefault(m => m.Id == rel.TargetId); if (target != null)
+                                {
+                                    <div class="relation-tag" @onclick="() => OpenDrawer(target)">
+                                        <span class="rel-name">@target.Name</span><span class="rel-desc-badge">@rel.Description</span>@if (!isLocked) {
+                                        <button class="rel-remove" @onclick:stopPropagation="true" @onclick="() => RemoveBidirectionalRelation(rel.TargetId)">×</button>
+                                    }
+                                </div>
+                            }
                         }
                     </div>
-                }
-            }
-        </div>
-        @if (!isLocked)
-        {
-            <div class="relation-form-row">
-                <select class="relation-select" @bind="NewCharId">
-                    <option value="">-- 选择角色 --</option>
-                    @foreach (var m in AllMaterials.Where(x => x.Type == MaterialType.Character && x.Id != EditingItem.Id && !EditingItem.Relations.Any(r => r.TargetId == x.Id)))
+                    @if (!isLocked)
                     {
-                        <option value="@m.Id">👤 @m.Name</option>
+                        <div class="relation-form-row">
+                            <select class="relation-select" @bind="NewCharId">
+                                <option value="">-- 选择角色 --</option>
+                                @foreach (var m in AllMaterials.Where(x => x.Type == MaterialType.Character && x.Id != EditingItem.Id && !EditingItem.Relations.Any(r => r.TargetId == x.Id)))
+                                {
+                                    <option value="@m.Id">👤 @m.Name</option>
+                                }
+                            </select>
+                            <input type="text" list="dl-char-relations" class="relation-label-input" placeholder="选择或输入标签" @bind="NewCharLabel" />
+                            <button class="relation-add-btn" @onclick="() => AddBidirectionalRelation(MaterialType.Character)">绑定</button>
+                        </div>
                     }
-                </select>
-                <input type="text" list="dl-char-relations" class="relation-label-input" placeholder="选择或输入标签" @bind="NewCharLabel" />
-                <button class="relation-add-btn" @onclick="() => AddBidirectionalRelation(MaterialType.Character)">绑定</button>
+                </div>
+            }
+
+            @if (EditingItem.Type == MaterialType.Character || EditingItem.Type == MaterialType.Faction || EditingItem.Type == MaterialType.Geography)
+            {
+                <div class="relation-block">
+                    <div class="block-title">🏛️ 势力交集与归属</div>
+                    <div class="relations-list">
+                        @foreach (var rel in GetFilteredRelations(MaterialType.Faction))
+                        {
+                            var target = AllMaterials.FirstOrDefault(m => m.Id == rel.TargetId); if (target != null)
+                            {
+                                <div class="relation-tag" @onclick="() => OpenDrawer(target)">
+                                    <span class="rel-name">@target.Name</span><span class="rel-desc-badge color-faction">@rel.Description</span>@if (!isLocked) {
+                                    <button class="rel-remove" @onclick:stopPropagation="true" @onclick="() => RemoveBidirectionalRelation(rel.TargetId)">×</button>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+                @if (!isLocked)
+                {
+                    <div class="relation-form-row">
+                        <select class="relation-select" @bind="NewFactionId">
+                            <option value="">-- 选择势力 --</option>
+                            @foreach (var m in AllMaterials.Where(x => x.Type == MaterialType.Faction && x.Id != EditingItem.Id && !EditingItem.Relations.Any(r => r.TargetId == x.Id)))
+                            {
+                                <option value="@m.Id">🏛️ @m.Name</option>
+                            }
+                        </select>
+                        <input type="text" list="dl-faction-relations" class="relation-label-input" placeholder="选择或输入标签" @bind="NewFactionLabel" />
+                        <button class="relation-add-btn" @onclick="() => AddBidirectionalRelation(MaterialType.Faction)">绑定</button>
+                    </div>
+                }
             </div>
         }
-    </div>
+
+        @if (EditingItem.Type == MaterialType.Character || EditingItem.Type == MaterialType.Faction)
+        {
+            <div class="relation-block">
+                <div class="block-title">🗺️ 关联地理与场景</div>
+                <div class="relations-list">
+                    @foreach (var rel in GetFilteredRelations(MaterialType.Geography))
+                    {
+                        var target = AllMaterials.FirstOrDefault(m => m.Id == rel.TargetId); if (target != null)
+                        {
+                            <div class="relation-tag" @onclick="() => OpenDrawer(target)">
+                                <span class="rel-name">@target.Name</span><span class="rel-desc-badge color-geo">@rel.Description</span>@if (!isLocked) {
+                                <button class="rel-remove" @onclick:stopPropagation="true" @onclick="() => RemoveBidirectionalRelation(rel.TargetId)">×</button>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+            @if (!isLocked)
+            {
+                <div class="relation-form-row">
+                    <select class="relation-select" @bind="NewGeoId">
+                        <option value="">-- 选择地理 --</option>
+                        @foreach (var m in AllMaterials.Where(x => x.Type == MaterialType.Geography && x.Id != EditingItem.Id && !EditingItem.Relations.Any(r => r.TargetId == x.Id)))
+                        {
+                            <option value="@m.Id">🗺️ @m.Name</option>
+                        }
+                    </select>
+                    <input type="text" list="dl-geo-relations" class="relation-label-input" placeholder="选择或输入标签" @bind="NewGeoLabel" />
+                    <button class="relation-add-btn" @onclick="() => AddBidirectionalRelation(MaterialType.Geography)">绑定</button>
+                </div>
+            }
+        </div>
+    }
+
+
 }
-
-<!-- 2. 🏛️ 势力归属 (角色、势力、地理展示) -->
-@if (EditingItem.Type == MaterialType.Character || EditingItem.Type == MaterialType.Faction || EditingItem.Type == MaterialType.Geography)
-{
-    <div class="relation-block">
-        <div class="block-title">🏛️ 势力交集与归属</div>
-        <div class="relations-list">
-            @foreach (var rel in GetFilteredRelations(MaterialType.Faction))
-            {
-                var target = AllMaterials.FirstOrDefault(m => m.Id == rel.TargetId); if (target != null)
-                {
-                    <div class="relation-tag" @onclick="() => OpenDrawer(target)"><span class="rel-name">@target.Name</span><span class="rel-desc-badge color-faction">@rel.Description</span>@if (!isLocked) {
-                        <button class="rel-remove" @onclick:stopPropagation="true" @onclick="() => RemoveBidirectionalRelation(rel.TargetId)">×</button>
-                    }
-                </div>
-            }
-        }
-    </div>
-    @if (!isLocked)
-    {
-        <div class="relation-form-row">
-            <select class="relation-select" @bind="NewFactionId">
-                <option value="">-- 选择势力 --</option>
-                @foreach (var m in AllMaterials.Where(x => x.Type == MaterialType.Faction && x.Id != EditingItem.Id && !EditingItem.Relations.Any(r => r.TargetId == x.Id)))
-                {
-                    <option value="@m.Id">🏛️ @m.Name</option>
-                }
-            </select>
-            <input type="text" list="dl-faction-relations" class="relation-label-input" placeholder="选择或输入标签" @bind="NewFactionLabel" />
-            <button class="relation-add-btn" @onclick="() => AddBidirectionalRelation(MaterialType.Faction)">绑定</button>
-        </div>
-    }
-</div>
-                }
-
-<!-- 3. 🗺️ 地理场景 (角色、势力展示) -->
-                @if (EditingItem.Type == MaterialType.Character || EditingItem.Type == MaterialType.Faction)
-{
-    <div class="relation-block">
-        <div class="block-title">🗺️ 关联地理与场景</div>
-        <div class="relations-list">
-            @foreach (var rel in GetFilteredRelations(MaterialType.Geography))
-            {
-                var target = AllMaterials.FirstOrDefault(m => m.Id == rel.TargetId); if (target != null)
-                {
-                    <div class="relation-tag" @onclick="() => OpenDrawer(target)"><span class="rel-name">@target.Name</span><span class="rel-desc-badge color-geo">@rel.Description</span>@if (!isLocked) {
-                        <button class="rel-remove" @onclick:stopPropagation="true" @onclick="() => RemoveBidirectionalRelation(rel.TargetId)">×</button>
-                    }
-                </div>
-            }
-        }
-    </div>
-    @if (!isLocked)
-    {
-        <div class="relation-form-row">
-            <select class="relation-select" @bind="NewGeoId">
-                <option value="">-- 选择地理 --</option>
-                @foreach (var m in AllMaterials.Where(x => x.Type == MaterialType.Geography && x.Id != EditingItem.Id && !EditingItem.Relations.Any(r => r.TargetId == x.Id)))
-                {
-                    <option value="@m.Id">🗺️ @m.Name</option>
-                }
-            </select>
-            <input type="text" list="dl-geo-relations" class="relation-label-input" placeholder="选择或输入标签" @bind="NewGeoLabel" />
-            <button class="relation-add-btn" @onclick="() => AddBidirectionalRelation(MaterialType.Geography)">绑定</button>
-        </div>
-    }
-</div>
-                }
-
-
-            }
 
 <hr class="drawer-divider" />
 <div class="drawer-section">
     <label>🛠️ 自定义数值与属性扩展</label>
-    <div class="custom-fields-list">@foreach (var key in EditingItem.CustomFields.Keys.ToList()) {
-        <div class="field-row"><div class="field-key">@key</div><input type="text" class="field-value-input" value="@EditingItem.CustomFields[key]" @onchange="(e) => UpdateCustomFieldValue(key, e.Value?.ToString() ?? string.Empty)" disabled="@isLocked" />@if (!isLocked) {
-            <button class="delete-field-btn" @onclick="() => RemoveCustomField(key)">🗑️</button>
-        }
-    </div>
-}
+    <div class="custom-fields-list">
+        @foreach (var key in EditingItem.CustomFields.Keys.ToList())
+        {
+            <div class="field-row">
+                <div class="field-key">@key</div><input type="text" class="field-value-input" value="@EditingItem.CustomFields[key]" @onchange="(e) => UpdateCustomFieldValue(key, e.Value?.ToString() ?? string.Empty)" disabled="@isLocked" />@if (!isLocked) {
+                <button class="delete-field-btn" @onclick="() => RemoveCustomField(key)">🗑️</button>
+            }
+        </div>
+    }
 </div>
-                @if (!isLocked)
+@if (!isLocked)
 {
     <div class="add-field-box"><input type="text" class="add-input" placeholder="属性名" @bind="NewFieldKey" /><input type="text" class="add-input" placeholder="值" @bind="NewFieldValue" /><button class="add-field-btn" @onclick="AddCustomField">➕</button></div>
 }
@@ -478,6 +550,91 @@
                             <div class="tpl-actions"><button class="action-btn derive-btn" @onclick="() => DeriveFromGlobal(template)">🧬 派生 (复制到本书)</button></div>
                         </div>
                     }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (ShowExtractModal)
+{
+    <div class="modal-overlay" @onclick="CloseExtractModal"></div>
+    <div class="extract-modal">
+        <div class="modal-header">
+            <h3>✨ AI 词法分析与实体提取</h3>
+            <button class="close-btn" @onclick="CloseExtractModal">✖</button>
+        </div>
+
+        <div class="modal-body hide-scrollbar">
+            @if (IsExtracting)
+            {
+                <div class="extracting-state">
+                    <div class="scanner-box">
+                        <div class="scanner-line"></div>
+                        <div class="scanner-text">正在扫描全书文本，进行命名实体识别 (NER)...</div>
+                    </div>
+                </div>
+            }
+            else if (!ExtractedResults.Any())
+            {
+                <div class="empty-result" style="text-align:center; padding:40px; color:#888;">
+                    没有提取到高频实体，请多写点正文再试！
+                </div>
+            }
+            else
+            {
+                <p class="result-tip">扫描完成！检测到以下高频人名、地名与势力，请勾选入库：</p>
+
+                <div class="results-grid">
+                    @foreach (var group in ExtractedResults.GroupBy(e => e.Type))
+                    {
+                        <div class="result-column">
+                            <h4 class="col-title">
+                                @if (group.Key == MaterialType.Character)
+                                {
+                                    <span>🧑 角色发现</span>
+                                }
+                                else if (group.Key == MaterialType.Geography)
+                                {
+
+                                    <span>🗺️ 地理发现</span>
+                                }
+                                else if (group.Key == MaterialType.Faction)
+                                {
+
+                                    <span>🏛️ 势力发现</span>
+                                }
+                                else if (group.Key == MaterialType.Item)
+                                {
+
+                                    <span>⚔️ 神兵功法</span>
+                                }
+                                else
+                                {
+
+                                    <span>📈 境界序列</span>
+                                }
+                            </h4>
+                            <div class="entity-list hide-scrollbar">
+                                @foreach (var entity in group)
+                                {
+                                    <label class="entity-item @(entity.IsSelected ? "selected" : "")">
+                                        <input type="checkbox" @bind="entity.IsSelected" />
+                                        <span class="entity-name">@entity.Name</span>
+                                        <span class="entity-freq">@entity.Frequency 次</span>
+                                    </label>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="modal-actions" style="margin-top:20px; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:13px; color:#888; font-weight:bold;">已选 @ExtractedResults.Count(x => x.IsSelected) 项</span>
+                    <div>
+                        <button class="btn-cancel" @onclick="CloseExtractModal" style="margin-right:12px; background:none; border:none; color:#888; cursor:pointer; font-weight:bold;">取消</button>
+                        <button class="btn-primary" @onclick="ConfirmImportEntities">✅ 一键入库</button>
+                    </div>
                 </div>
             }
         </div>

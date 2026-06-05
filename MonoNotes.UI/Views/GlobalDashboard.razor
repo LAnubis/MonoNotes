@@ -1,4 +1,5 @@
-﻿@using MonoNotes.Core.Models
+﻿@using Microsoft.AspNetCore.Components.Forms
+@using MonoNotes.Core.Models
 @using MonoNotes.Storage
 @inject WriteSpaceRepository Repository
 
@@ -14,6 +15,8 @@
     private int TotalWordCount = 0;
     private Dictionary<string, int> DailyStats = new();
     private List<DateTime> HeatmapDays = Enumerable.Range(0, 90).Select(i => DateTime.Now.Date.AddDays(-89 + i)).ToList();
+
+    // 🌟 导入相关状态
     private bool ShowImportModal = false;
     private bool IsParsing = false;
     private bool IsSaving = false;
@@ -75,6 +78,7 @@
         await LoadWorksAsync();
         await OnWorkSelected.InvokeAsync(newWorkId);
     }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadWorksAsync();
@@ -263,6 +267,7 @@
         }
     </div>
 </div>
+
 @if (ShowImportModal)
 {
     <div class="modal-overlay" @onclick="CloseImportModal"></div>

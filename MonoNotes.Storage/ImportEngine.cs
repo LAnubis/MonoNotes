@@ -64,7 +64,6 @@ namespace MonoNotes.Storage
                 {
                     currentVolume = new ImportPreviewVolume { Title = line.Trim() };
                     work.Volumes.Add(currentVolume);
-                    // 卷下默认挂一个空章节，准备接收正文
                     currentChapter = new ImportPreviewChapter { Title = "卷首语" };
                     currentVolume.Chapters.Add(currentChapter);
                     continue;
@@ -81,41 +80,39 @@ namespace MonoNotes.Storage
                     continue;
                 }
 
-                // 3. 如果都不是，说明是正文，追加到当前章节
+                // 3. 正文清洗与拼接
                 if (!string.IsNullOrWhiteSpace(line))
                 {
                     string cleanLine = line.Trim();
                     if (!string.IsNullOrWhiteSpace(cleanLine))
                     {
-                        // 1. 暴力扒掉所有加粗、斜体、下划线等多余 Markdown 标记
+                        // 暴力扒掉所有加粗、斜体、下划线等多余 Markdown 标记
                         cleanLine = Regex.Replace(cleanLine, @"(\*\*|__|\*|_|#|`|>)", "");
                         cleanLine = cleanLine.Trim();
 
                         if (!string.IsNullOrWhiteSpace(cleanLine))
                         {
-                            // 2. 检查是否已经有全角空格，如果没有，强行注入两个全角空格
+                            // 🌟 使用全角中文空格进行首行缩进排版洗稿
                             if (!cleanLine.StartsWith("  "))
                             {
-                                // 去除可能存在的半角空格后，加上全角空格
                                 cleanLine = "  " + cleanLine.TrimStart();
                             }
 
                             currentChapter.Content.AppendLine(cleanLine);
-                            currentChapter.Content.AppendLine(); // 段落之间加一个空行，保证 Vditor 渲染不粘连
+                            currentChapter.Content.AppendLine(); // 段落之间加一个空行，保证渲染不粘连
                             work.TotalWords += cleanLine.Length;
                         }
                     }
                 }
             }
 
-            // 清理空的卷首语和空卷
+            // 清理空的结构
             foreach (var vol in work.Volumes)
             {
-                vol.Chapters.RemoveAll(c => c.WordCount == 0 && c.Title == "卷首语" || c.Title == "引言");
+                vol.Chapters.RemoveAll(c => c.WordCount == 0 && (c.Title == "卷首语" || c.Title == "引言"));
             }
             work.Volumes.RemoveAll(v => v.Chapters.Count == 0);
 
-            // 如果整个文件连一章都没匹配出来，就当做单章处理
             if (work.Volumes.Count == 0)
             {
                 work.Volumes.Add(new ImportPreviewVolume { Chapters = new List<ImportPreviewChapter> { currentChapter } });
@@ -129,11 +126,10 @@ namespace MonoNotes.Storage
         /// </summary>
         public static async Task<string> ExecuteImportAsync(WriteSpaceRepository repo, ImportPreviewWork previewWork)
         {
-            // 1. 创建全新的底层小说架构
             var newWorkMeta = await repo.CreateNewWorkAsync(previewWork.BookName, "novel");
             var workIndex = new WorkIndex { WorkId = newWorkMeta.Id };
+            var chaptersToSave = new Dictionary<string, string>(); // 用于批量写入
 
-            // 2. 遍历内存树，生成真实的结构与文件
             foreach (var pVol in previewWork.Volumes)
             {
                 var realVol = new Volume { Title = pVol.Title };
@@ -148,12 +144,15 @@ namespace MonoNotes.Storage
                     };
                     realVol.Chapters.Add(realChap);
 
-                    // 将正文写成 Markdown 物理文件
-                    await repo.SaveChapterContentAsync(newWorkMeta.Id, realChap.Id, pChap.Content.ToString());
+                    // 暂存准备批量落盘
+                    chaptersToSave.Add(realChap.Id, pChap.Content.ToString());
                 }
             }
 
-            // 3. 保存更新后的索引目录
+            // 🌟 调用仓储层批量并发写入，极大加速大文件导入
+            await repo.BatchSaveChapterContentsAsync(newWorkMeta.Id, chaptersToSave);
+
+            // 保存索引结构
             await repo.SaveWorkIndexAsync(workIndex);
 
             return newWorkMeta.Id;
