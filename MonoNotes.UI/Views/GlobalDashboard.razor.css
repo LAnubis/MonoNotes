@@ -1,6 +1,15 @@
-﻿/* =========================================
-   1. 全局容器自适应 
-========================================= */
+﻿/* 🌟 修复按钮换行问题，增加 flex 布局 */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+}
+
+/* =========================================
+       1. 全局容器自适应
+    ========================================= */
 .dashboard-container {
     width: 100%;
     box-sizing: border-box;
@@ -58,8 +67,8 @@
     }
 
 /* =========================================
-   2. 🌟 顶部数据与热力图 (SaaS 高级质感)
-========================================= */
+       2. 🌟 顶部数据与热力图 (SaaS 高级质感)
+    ========================================= */
 .dashboard-stats-row {
     display: flex;
     gap: 24px;
@@ -180,8 +189,8 @@
 }
 
 /* =========================================
-   3. 🌟 视图切换控制
-========================================= */
+       3. 🌟 视图切换控制
+    ========================================= */
 .works-section {
     margin-top: 20px;
 }
@@ -241,8 +250,8 @@
     }
 
 /* =========================================
-   4. 瀑布流 (网格视图)
-========================================= */
+       4. 瀑布流 (网格视图)
+    ========================================= */
 .books-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -360,8 +369,8 @@
 }
 
 /* =========================================
-   5. 数据行 (列表视图 - 保留了你的优雅设计)
-========================================= */
+       5. 数据行 (列表视图 - 保留了你的优雅设计)
+    ========================================= */
 .recent-works-list {
     display: flex;
     flex-direction: column;
@@ -502,6 +511,7 @@
     margin-bottom: 16px;
     opacity: 0.5;
 }
+
 /* 🌟 大厅新增的白底按钮 */
 .btn-outline-large {
     display: flex;
@@ -662,7 +672,46 @@
     padding-top: 16px;
     border-top: 1px solid #eaeaea;
 }
-.header-actions {
-    white-space: nowrap;
-    flex-wrap: nowrap;
+
+/* 🌟 删除按钮的极简 CSS */
+.btn-trash {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255,255,255,0.9);
+    border: none;
+    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
+
+.book-card:hover .btn-trash {
+    opacity: 1;
+}
+
+.btn-trash:hover {
+    background: #fee2e2;
+    color: #d32f2f;
+    transform: scale(1.1);
+}
+
+.btn-trash-list {
+    background: transparent;
+    border: 1px solid #ffcdd2;
+    color: #d32f2f;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-left: 12px;
+}
+
+    .btn-trash-list:hover {
+        background: #fee2e2;
+    }

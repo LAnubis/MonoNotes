@@ -8,17 +8,25 @@ using System.Threading.Tasks;
 
 namespace MonoNotes.Storage
 {
+    // 🌟 新增：快照数据模型
+    public class ChapterSnapshot
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public DateTime Timestamp { get; set; }
+        public int WordCount { get; set; }
+        public string Reason { get; set; } = "自动备份"; // 比如 "每日初态", "阶段备份", "手动备份"
+        public string Content { get; set; } = "";
+    }
+
     public class WriteSpaceRepository
     {
         private readonly string _writeSpaceRoot;
-        public string RootPath => _writeSpaceRoot; // 🌟 加上这行，暴露物理根路径
+        public string RootPath => _writeSpaceRoot;
 
         public WriteSpaceRepository()
         {
-            // 物理隔离：确保所有数据都在 Writespaces 专属目录下
             string myDocs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             _writeSpaceRoot = Path.Combine(myDocs, "MonoNotes", "Writespaces");
-
             EnsureDirectories();
         }
 
@@ -104,13 +112,11 @@ namespace MonoNotes.Storage
                     chapter.WordCount = string.IsNullOrWhiteSpace(content) ? 0 : content.Length;
                     await SaveWorkIndexAsync(index);
 
-                    // 🌟 加上这行：丢到后台线程去更新 Lucene 索引，绝对不卡死 UI
                     _ = Task.Run(() => SearchEngine.UpdateChapterIndex(_writeSpaceRoot, workId, chapterId, chapter.Title, content));
                 }
             }
         }
 
-        // 🌟 这是为导入引擎专门加的极速并发写入方法！
         public async Task BatchSaveChapterContentsAsync(string workId, Dictionary<string, string> chapterContents)
         {
             var chapterDir = Path.Combine(_writeSpaceRoot, "Works", workId, "Chapters");
@@ -195,12 +201,10 @@ namespace MonoNotes.Storage
             {
                 materials = await JsonSafeWriter.ReadSafeAsync<List<MaterialItem>>(path) ?? new List<MaterialItem>();
             }
-
-            // 🌟 读取设定的同时，喂给 NLP 引擎！
             NerEngine.SyncUserDictionary(materials);
-
             return materials;
         }
+
         public async Task<List<MaterialItem>> GetGlobalMaterialsAsync()
         {
             var path = Path.Combine(GetGlobalMaterialsPath(), "global_materials.json");
@@ -213,8 +217,6 @@ namespace MonoNotes.Storage
             var path = Path.Combine(GetLocalMaterialsPath(workId), "materials.json");
             foreach (var m in materials) m.UpdatedAt = DateTime.Now;
             await JsonSafeWriter.WriteAtomicallyAsync(path, materials);
-
-            // 🌟 保存新设定后，实时更新 NLP 词典！
             NerEngine.SyncUserDictionary(materials);
         }
 
@@ -299,6 +301,90 @@ namespace MonoNotes.Storage
         {
             var path = GetForeshadowPath(workId);
             await JsonSafeWriter.WriteAtomicallyAsync(path, items);
+        }
+
+        public async Task MoveWorkToTrashAsync(string workId)
+        {
+            var metaPath = Path.Combine(_writeSpaceRoot, "Works", workId, "project.json");
+            var meta = await JsonSafeWriter.ReadSafeAsync<WorkMeta>(metaPath);
+            if (meta != null)
+            {
+                meta.IsDeleted = true;
+                meta.DeletedAt = DateTime.Now;
+                await JsonSafeWriter.WriteAtomicallyAsync(metaPath, meta);
+            }
+        }
+
+        public async Task RestoreWorkFromTrashAsync(string workId)
+        {
+            var metaPath = Path.Combine(_writeSpaceRoot, "Works", workId, "project.json");
+            var meta = await JsonSafeWriter.ReadSafeAsync<WorkMeta>(metaPath);
+            if (meta != null)
+            {
+                meta.IsDeleted = false;
+                meta.DeletedAt = null;
+                meta.LastEditedAt = DateTime.Now;
+                await JsonSafeWriter.WriteAtomicallyAsync(metaPath, meta);
+            }
+        }
+
+        public async Task HardDeleteWorkAsync(string workId)
+        {
+            var workDir = Path.Combine(_writeSpaceRoot, "Works", workId);
+            if (Directory.Exists(workDir)) Directory.Delete(workDir, true);
+            await Task.CompletedTask;
+        }
+
+        // ==========================================
+        // 🌟 时光机系统：章节历史快照
+        // ==========================================
+        public async Task<List<ChapterSnapshot>> GetChapterSnapshotsAsync(string workId, string chapterId)
+        {
+            var historyDir = Path.Combine(_writeSpaceRoot, "Works", workId, "VersionHistory", chapterId);
+            if (!Directory.Exists(historyDir)) return new List<ChapterSnapshot>();
+
+            var snapshots = new List<ChapterSnapshot>();
+            foreach (var file in Directory.GetFiles(historyDir, "*.json"))
+            {
+                var snapshot = await JsonSafeWriter.ReadSafeAsync<ChapterSnapshot>(file);
+                if (snapshot != null) snapshots.Add(snapshot);
+            }
+            return snapshots.OrderByDescending(s => s.Timestamp).ToList();
+        }
+
+        public async Task SaveChapterSnapshotAsync(string workId, string chapterId, string content, string reason)
+        {
+            if (string.IsNullOrWhiteSpace(content)) return;
+
+            var historyDir = Path.Combine(_writeSpaceRoot, "Works", workId, "VersionHistory", chapterId);
+            Directory.CreateDirectory(historyDir);
+
+            var snapshots = await GetChapterSnapshotsAsync(workId, chapterId);
+
+            // 如果是“每日初态”，且今天已经存过了，则忽略
+            if (reason == "每日初态" && snapshots.Any(s => s.Reason == "每日初态" && s.Timestamp.Date == DateTime.Now.Date))
+            {
+                return;
+            }
+
+            var newSnapshot = new ChapterSnapshot
+            {
+                Timestamp = DateTime.Now,
+                WordCount = content.Length,
+                Reason = reason,
+                Content = content
+            };
+
+            await JsonSafeWriter.WriteAtomicallyAsync(Path.Combine(historyDir, $"{newSnapshot.Id}.json"), newSnapshot);
+            snapshots.Add(newSnapshot);
+
+            // 🌟 物理淘汰：永远只保留最新的 3 个快照 (节省空间)
+            var toDelete = snapshots.OrderByDescending(s => s.Timestamp).Skip(3).ToList();
+            foreach (var old in toDelete)
+            {
+                var oldPath = Path.Combine(historyDir, $"{old.Id}.json");
+                if (File.Exists(oldPath)) File.Delete(oldPath);
+            }
         }
     }
 }

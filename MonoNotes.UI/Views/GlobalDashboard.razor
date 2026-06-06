@@ -6,9 +6,10 @@
 @code {
     [Parameter] public EventCallback<string> OnWorkSelected { get; set; }
 
-    private List<WorkMeta> Works = new();
+    // 🌟 新增：通知母画面作品列表发生变动
+    [Parameter] public EventCallback OnWorkListChanged { get; set; }
 
-    // 🌟 视图切换控制
+    private List<WorkMeta> Works = new();
     private bool IsGridView = true;
 
     private int TodayWordCount = 0;
@@ -16,7 +17,6 @@
     private Dictionary<string, int> DailyStats = new();
     private List<DateTime> HeatmapDays = Enumerable.Range(0, 90).Select(i => DateTime.Now.Date.AddDays(-89 + i)).ToList();
 
-    // 🌟 导入相关状态
     private bool ShowImportModal = false;
     private bool IsParsing = false;
     private bool IsSaving = false;
@@ -28,54 +28,37 @@
         PreviewWork = null;
     }
 
-    // 处理文件上传与智能解析
     private async Task HandleFileUpload(InputFileChangeEventArgs e)
     {
         var file = e.File;
         if (file == null) return;
-
         ShowImportModal = true;
         IsParsing = true;
         PreviewWork = null;
         StateHasChanged();
-
         try
         {
-            // 允许最大读取 50MB 的单文件小说
             using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 50);
-
-            // 刻意加一点延迟，体现引擎在高速运转的视觉感
             await Task.Delay(500);
-
             PreviewWork = await ImportEngine.ParseStreamAsync(stream, file.Name);
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"解析失败: {ex.Message}");
-        }
-        finally
-        {
-            IsParsing = false;
-            StateHasChanged();
-        }
+        catch (Exception ex) { Console.WriteLine($"解析失败: {ex.Message}"); }
+        finally { IsParsing = false; StateHasChanged(); }
     }
 
-    // 确认无误，执行落盘
     private async Task ConfirmImport()
     {
         if (PreviewWork == null) return;
-
         IsSaving = true;
         StateHasChanged();
-
-        // 执行物理写入
         string newWorkId = await ImportEngine.ExecuteImportAsync(Repository, PreviewWork);
-
         IsSaving = false;
         ShowImportModal = false;
-
-        // 重新加载大厅列表，并直接跳转进新书！
         await LoadWorksAsync();
+
+        // 🌟 导入成功后触发刷新通知
+        if (OnWorkListChanged.HasDelegate) { await OnWorkListChanged.InvokeAsync(); }
+
         await OnWorkSelected.InvokeAsync(newWorkId);
     }
 
@@ -87,8 +70,18 @@
 
     private async Task LoadWorksAsync()
     {
-        // 获取所有作品，底层已经是按 LastEditedAt 倒序排列的
-        Works = await Repository.GetAllWorksAsync();
+        var allWorks = await Repository.GetAllWorksAsync();
+        Works = allWorks.Where(w => !w.IsDeleted).ToList();
+    }
+
+    private async Task MoveToTrash(string workId)
+    {
+        await Repository.MoveWorkToTrashAsync(workId);
+        await LoadWorksAsync();
+
+        // 🌟 放入回收站后触发刷新通知
+        if (OnWorkListChanged.HasDelegate) { await OnWorkListChanged.InvokeAsync(); }
+        StateHasChanged();
     }
 
     private async Task LoadStatsAsync()
@@ -102,15 +95,14 @@
     private async Task CreateNewWork()
     {
         var newWork = await Repository.CreateNewWorkAsync("未命名新作", "novel");
-        Works.Insert(0, newWork); // 动态插入，不刷新页面
+
+        // 🌟 新建成功后触发刷新通知
+        if (OnWorkListChanged.HasDelegate) { await OnWorkListChanged.InvokeAsync(); }
+
         await OnWorkSelected.InvokeAsync(newWork.Id);
     }
 
-    private void ToggleView(bool gridView)
-    {
-        IsGridView = gridView;
-    }
-
+    private void ToggleView(bool gridView) { IsGridView = gridView; }
     private string GetHeatColor(int words)
     {
         if (words == 0) return "#ebedf0";
@@ -152,13 +144,11 @@
             <div class="stat-value">@TodayWordCount.ToString("N0")</div>
             <div class="stat-desc">保持热爱，笔耕不辍</div>
         </div>
-
         <div class="stat-card">
             <div class="stat-label">📚 累计创作 (字)</div>
             <div class="stat-value">@TotalWordCount.ToString("N0")</div>
             <div class="stat-desc">所有作品总和</div>
         </div>
-
         <div class="stat-card heatmap-card">
             <div class="heatmap-header">
                 <div class="stat-label">近 90 天创作热力图</div>
@@ -178,7 +168,6 @@
                     string dateKey = day.ToString("yyyy-MM-dd");
                     int words = DailyStats.ContainsKey(dateKey) ? DailyStats[dateKey] : 0;
                     string color = GetHeatColor(words);
-
                     <div class="heat-box" style="background-color: @color;" title="@dateKey : 写作 @words 字"></div>
                 }
             </div>
@@ -188,7 +177,6 @@
     <div class="works-section">
         <div class="section-header">
             <h2>📚 我的作品库 <span class="header-tip">(共 @Works.Count 部)</span></h2>
-
             <div class="view-toggle-group">
                 <button class="view-btn @(IsGridView ? "active" : "")" title="网格视图" @onclick="() => ToggleView(true)">🔲</button>
                 <button class="view-btn @(!IsGridView ? "active" : "")" title="列表视图" @onclick="() => ToggleView(false)">📄</button>
@@ -199,7 +187,7 @@
         {
             <div class="empty-state">
                 <span class="empty-icon">📭</span>
-                <p>暂无作品，点击右上角新建一部作品，开启你的创作之旅吧！</p>
+                <p>大厅暂无作品，点击右上角新建，或者去回收站看一眼吧！</p>
             </div>
         }
         else
@@ -219,7 +207,10 @@
                                 {
                                     <img src="@work.CoverUrl" alt="封面" />
                                 }
-                                <div class="hover-overlay"><span class="enter-text">进入写作</span></div>
+                                <div class="hover-overlay">
+                                    <span class="enter-text">进入写作</span>
+                                    <button class="btn-trash" title="移入回收站" @onclick:stopPropagation="true" @onclick="() => MoveToTrash(work.Id)">🗑️</button>
+                                </div>
                             </div>
                             <div class="book-info">
                                 <h4 class="book-title" title="@work.Title">@work.Title</h4>
@@ -248,17 +239,13 @@
                                     <img src="@work.CoverUrl" alt="cover" />
                                 }
                             </div>
-
                             <div class="item-info">
                                 <div class="item-title" title="@work.Title">@work.Title</div>
-                                <div class="item-meta">
-                                    <span class="item-time">最近修改: @work.LastEditedAt.ToString("yyyy-MM-dd HH:mm")</span>
-                                </div>
+                                <div class="item-meta"><span class="item-time">最近修改: @work.LastEditedAt.ToString("yyyy-MM-dd HH:mm")</span></div>
                             </div>
-
                             <div class="item-actions">
                                 <div class="work-status @work.Status">@GetStatusText(work.Status)</div>
-                                <div class="enter-btn">进入工作台 →</div>
+                                <button class="btn-trash-list" title="移入回收站" @onclick:stopPropagation="true" @onclick="() => MoveToTrash(work.Id)">🗑️ 删除</button>
                             </div>
                         </div>
                     }
@@ -321,3 +308,4 @@
         </div>
     </div>
 }
+

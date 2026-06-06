@@ -5,7 +5,7 @@
 @code {
     [Parameter] public EventCallback<string> OnWorkSelected { get; set; }
 
-    // 🌟 新增：向父组件传递全局菜单切换的信号
+    // 🌟 向父组件传递全局菜单切换的信号
     [Parameter] public EventCallback<string> OnGlobalMenuSelected { get; set; }
 
     private List<WorkMeta> Works = new();
@@ -16,7 +16,8 @@
     protected override async Task OnInitializedAsync()
     {
         var allWorks = await Repository.GetAllWorksAsync();
-        Works = allWorks.OrderByDescending(w => w.LastEditedAt).ToList();
+        // 🌟 修复：快捷书架必须过滤掉回收站里的书
+        Works = allWorks.Where(w => !w.IsDeleted).OrderByDescending(w => w.LastEditedAt).ToList();
     }
 
     // 🌟 菜单点击事件
@@ -25,10 +26,17 @@
         CurrentMenu = menu;
         await OnGlobalMenuSelected.InvokeAsync(menu);
     }
+
+    // 🌟 追加这个方法，让母画面(父组件)可以强制刷新快捷书架
+    public async Task RefreshAsync()
+    {
+        var allWorks = await Repository.GetAllWorksAsync();
+        Works = allWorks.Where(w => !w.IsDeleted).OrderByDescending(w => w.LastEditedAt).ToList();
+        StateHasChanged();
+    }
 }
 
 <div class="global-sidebar-container">
-
     <div class="sidebar-header">
         <div class="workspace-name">
             <span class="icon">💻</span> MonoDraft 写作台

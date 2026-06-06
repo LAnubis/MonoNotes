@@ -542,3 +542,146 @@
     .vditor-reset p {
         margin-bottom: 1em !important; /* 段落之间留出呼吸空间 */
     }
+
+/* 🌟 时光机弹窗 CSS */
+.snapshot-modal {
+    position: fixed;
+    top: 10vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 75vh;
+    background: #fff;
+    border-radius: 12px;
+    z-index: 10001;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideDown 0.2s;
+}
+
+.snapshot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #eaeaea;
+    background: #fdfdfd;
+}
+
+    .snapshot-header h3 {
+        margin: 0;
+        font-size: 16px;
+        color: #e65100;
+    }
+
+.snapshot-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.snapshot-list {
+    width: 240px;
+    border-right: 1px solid #eaeaea;
+    background: #fafbfc;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+}
+
+.btn-create-snapshot {
+    background: #fff;
+    border: 1px dashed #e65100;
+    color: #e65100;
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+    .btn-create-snapshot:hover {
+        background: #fff3e0;
+    }
+
+.snapshot-hint {
+    font-size: 11px;
+    color: #999;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.snap-card {
+    background: #fff;
+    border: 1px solid #ddd;
+    padding: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+    .snap-card:hover {
+        border-color: #ff9800;
+    }
+
+    .snap-card.active {
+        border-color: #e65100;
+        background: #fff3e0;
+        box-shadow: 0 2px 8px rgba(230,81,0,0.1);
+    }
+
+.snap-title {
+    font-weight: bold;
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 6px;
+}
+
+.snap-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #777;
+}
+
+.snapshot-preview {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+}
+
+.preview-empty {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #aaa;
+    font-size: 14px;
+}
+
+.preview-toolbar {
+    padding: 12px 20px;
+    border-bottom: 1px solid #eaeaea;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fffaf0;
+}
+
+.preview-textarea {
+    flex: 1;
+    border: none;
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: #444;
+    resize: none;
+    outline: none;
+    background: #fafafa;
+    font-family: "Microsoft YaHei", sans-serif;
+}

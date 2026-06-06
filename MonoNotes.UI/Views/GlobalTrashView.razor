@@ -1,0 +1,251 @@
+﻿@using MonoNotes.Core.Models
+@using MonoNotes.Storage
+@inject WriteSpaceRepository Repository
+
+@code {
+    // 🌟 新增：通知母画面作品列表发生变动
+    [Parameter] public EventCallback OnWorkListChanged { get; set; }
+
+    private List<WorkMeta> TrashedWorks = new();
+    private string ConfirmDeleteId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTrashedWorks();
+    }
+
+    private async Task LoadTrashedWorks()
+    {
+        var allWorks = await Repository.GetAllWorksAsync();
+        // 🌟 只显示被丢弃的作品
+        TrashedWorks = allWorks.Where(w => w.IsDeleted).OrderByDescending(w => w.DeletedAt).ToList();
+    }
+
+    private async Task RestoreWork(string workId)
+    {
+        await Repository.RestoreWorkFromTrashAsync(workId);
+        await LoadTrashedWorks();
+
+        // 🌟 触发通知，告诉母画面书被恢复了，赶紧刷新快捷书架！
+        if (OnWorkListChanged.HasDelegate)
+        {
+            await OnWorkListChanged.InvokeAsync();
+        }
+    }
+
+    private async Task HardDeleteWork(string workId)
+    {
+        // 🚨 硬盘抹除，不可逆！
+        await Repository.HardDeleteWorkAsync(workId);
+        ConfirmDeleteId = "";
+        await LoadTrashedWorks();
+
+        // 🌟 触发通知
+        if (OnWorkListChanged.HasDelegate)
+        {
+            await OnWorkListChanged.InvokeAsync();
+        }
+    }
+}
+
+<div class="trash-container">
+    <div class="trash-header">
+        <h2>🗑️ 作品回收站</h2>
+        <p class="subtitle">被删除的作品将在此保留。彻底删除后，本地硬盘文件将无法恢复。</p>
+    </div>
+
+    @if (!TrashedWorks.Any())
+    {
+        <div class="empty-state">
+            <span class="empty-icon">🍃</span>
+            <p>回收站空空如也，十分干净。</p>
+        </div>
+    }
+    else
+    {
+        <div class="trash-list">
+            @foreach (var work in TrashedWorks)
+            {
+                <div class="trash-card">
+                    <div class="trash-info">
+                        <span class="book-icon">📕</span>
+                        <div>
+                            <h3 class="trash-title">@work.Title</h3>
+                            <div class="trash-meta">
+                                <span>删除时间：@(work.DeletedAt?.ToString("yyyy-MM-dd HH:mm") ?? "未知")</span>
+                                <span style="margin-left:12px;">原字数：约 @(work.WordCountCache) 字</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="trash-actions">
+                        <button class="btn-restore" @onclick="() => RestoreWork(work.Id)">↩️ 恢复作品</button>
+
+                        @if (ConfirmDeleteId == work.Id)
+                        {
+                            <button class="btn-danger-confirm" @onclick="() => HardDeleteWork(work.Id)">⚠️ 确认粉碎 (不可逆)</button>
+                            <button class="btn-cancel" @onclick="() => ConfirmDeleteId = string.Empty">取消</button>
+                        }
+                        else
+                        {
+                            <button class="btn-danger" @onclick="() => ConfirmDeleteId = work.Id">🔥 彻底删除</button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .trash-container {
+        padding: 40px;
+        height: 100%;
+        box-sizing: border-box;
+        background: #fdfdfd;
+    }
+
+    .trash-header {
+        margin-bottom: 30px;
+        border-bottom: 1px solid #eaeaea;
+        padding-bottom: 20px;
+    }
+
+        .trash-header h2 {
+            margin: 0 0 8px 0;
+            color: #333;
+        }
+
+    .subtitle {
+        color: #888;
+        margin: 0;
+        font-size: 14px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 100px 0;
+        color: #999;
+    }
+
+    .empty-icon {
+        font-size: 64px;
+        opacity: 0.5;
+        margin-bottom: 16px;
+        display: block;
+    }
+
+    .trash-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .trash-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #fff;
+        border: 1px solid #ffcdd2;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(211,47,47,0.05);
+    }
+
+    .trash-info {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .book-icon {
+        font-size: 32px;
+        filter: grayscale(1);
+        opacity: 0.7;
+    }
+
+    .trash-title {
+        margin: 0 0 6px 0;
+        font-size: 18px;
+        color: #444;
+        text-decoration: line-through;
+    }
+
+    .trash-meta {
+        font-size: 12px;
+        color: #999;
+    }
+
+    .trash-actions {
+        display: flex;
+        gap: 12px;
+    }
+
+    .btn-restore {
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        .btn-restore:hover {
+            background: #c8e6c9;
+            transform: translateY(-1px);
+        }
+
+    .btn-danger {
+        background: #fff;
+        color: #d32f2f;
+        border: 1px solid #ef5350;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        .btn-danger:hover {
+            background: #ffebee;
+        }
+
+    .btn-danger-confirm {
+        background: #d32f2f;
+        color: #fff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+        animation: pulse 1s infinite;
+    }
+
+    .btn-cancel {
+        background: transparent;
+        border: none;
+        color: #888;
+        cursor: pointer;
+    }
+
+        .btn-cancel:hover {
+            color: #333;
+            text-decoration: underline;
+        }
+
+    @@keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(211,47,47,0.4);
+        }
+
+        70% {
+            box-shadow: 0 0 0 6px rgba(211,47,47,0);
+        }
+
+        100% {
+            box-shadow: 0 0 0 0 rgba(211,47,47,0);
+        }
+    }
+</style>

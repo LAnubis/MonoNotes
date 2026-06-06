@@ -9,7 +9,17 @@
 
     private string ActiveVolumeId { get; set; } = string.Empty;
     private string ActiveChapterId { get; set; } = string.Empty;
+    // 🌟 声明全局侧边栏的引用
+    private GlobalSidebar? _globalSidebar;
 
+    // 🌟 接收到列表变动通知后，强制刷新侧边栏
+    private async Task HandleGlobalWorkListChanged()
+    {
+        if (_globalSidebar != null)
+        {
+            await _globalSidebar.RefreshAsync();
+        }
+    }
     private void HandleGlobalMenuChanged(string menuName)
     {
         GlobalSubView = menuName;
@@ -85,7 +95,10 @@
     <div class="sidebar-region">
         @if (string.IsNullOrEmpty(ActiveWorkId))
         {
-            <GlobalSidebar OnWorkSelected="EnterWork" OnGlobalMenuSelected="HandleGlobalMenuChanged" />
+          @*   <GlobalSidebar OnWorkSelected="EnterWork" OnGlobalMenuSelected="HandleGlobalMenuChanged" /> *@
+            <GlobalSidebar @ref="_globalSidebar"
+                           OnWorkSelected="EnterWork"
+                           OnGlobalMenuSelected="HandleGlobalMenuChanged" />
         }
         else
         {
@@ -116,7 +129,8 @@
         {
             @if (GlobalSubView == "dashboard")
             {
-                <GlobalDashboard OnWorkSelected="EnterWork" />
+                <GlobalDashboard OnWorkSelected="EnterWork"
+                                 OnWorkListChanged="HandleGlobalWorkListChanged" />
             }
             else if (GlobalSubView == "materials")
             {
@@ -124,9 +138,7 @@
             }
             else if (GlobalSubView == "trash")
             {
-                <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#999;">
-                    <h2>🗑️ 回收站开发中...</h2>
-                </div>
+                <GlobalTrashView />
             }
         }
         else

@@ -11,7 +11,6 @@
     private bool _shouldInitVditor = false;
     [Parameter] public EventCallback OnTitleChanged { get; set; }
 
-    // 🌟 新增：用于通知父组件（工作台布局）切换当前章节
     [Parameter] public EventCallback<string> OnSwitchChapter { get; set; }
 
     private WorkIndex? IndexData;
@@ -22,6 +21,8 @@
     private string ChapterBody { get; set; } = "加载中...";
 
     private int _lastSavedWordCount = 0;
+    private int _snapshotWordCount = 0; // 🌟 追踪快照的字数基准
+
     private string Content { get; set; } = string.Empty;
     private string SaveStatus { get; set; } = "已同步";
 
@@ -31,35 +32,32 @@
     private CancellationTokenSource? _debounceCts;
     private DotNetObjectReference<WorkEditorDesk>? _objRef;
 
-    // 声明抽屉组件的引用
     private QuickReferenceDrawer? _drawer;
 
     public class TocItem { public int Level { get; set; } public string Text { get; set; } = string.Empty; }
     private List<TocItem> DocumentToc { get; set; } = new();
 
     protected override void OnInitialized() { _objRef = DotNetObjectReference.Create(this); }
+
     private bool _isAddingForeshadow = false;
     private string _newForeshadowText = "";
-
     private List<ForeshadowItem> _currentChapterForeshadows = new();
-
-    // 🌟 全局搜索控制
     private bool ShowSearchModal = false;
+
+    // 🌟 时光机快照状态
+    private bool ShowSnapshotModal = false;
+    private List<ChapterSnapshot> Snapshots = new();
+    private ChapterSnapshot? PreviewSnapshot = null;
 
     private void OpenSearchModal() => ShowSearchModal = true;
     private void CloseSearchModal() => ShowSearchModal = false;
 
-    // 🌟 接收搜索组件的跳转请求
     private async Task NavigateToChapter(string chapterId)
     {
-        if (OnSwitchChapter.HasDelegate)
-        {
-            await OnSwitchChapter.InvokeAsync(chapterId);
-        }
+        if (OnSwitchChapter.HasDelegate) await OnSwitchChapter.InvokeAsync(chapterId);
         CloseSearchModal();
     }
 
-    // 每次打开弹窗，拉取当前章节已有的伏笔
     private async Task OpenForeshadowModal()
     {
         _newForeshadowText = "";
@@ -67,53 +65,36 @@
         await LoadCurrentChapterForeshadows();
     }
 
-    private void CloseForeshadowModal()
-    {
-        _isAddingForeshadow = false;
-    }
+    private void CloseForeshadowModal() { _isAddingForeshadow = false; }
 
     private async Task LoadCurrentChapterForeshadows()
     {
         if (string.IsNullOrEmpty(CurrentWorkId) || ActiveChapter == null) return;
         var allItems = await Repository.GetForeshadowsAsync(CurrentWorkId);
-        // 只过滤出在本章挖的坑
         _currentChapterForeshadows = allItems
             .Where(f => f.CreatedInChapterId == ActiveChapter.Id)
             .OrderByDescending(f => f.CreatedAt)
             .ToList();
     }
 
-    // 确认保存伏笔，并刷新列表
     private async Task SaveForeshadow()
     {
         if (string.IsNullOrWhiteSpace(_newForeshadowText) || ActiveChapter == null) return;
-
         var items = await Repository.GetForeshadowsAsync(CurrentWorkId);
-
         var newForeshadow = new ForeshadowItem
         {
             Description = _newForeshadowText.Trim(),
             CreatedInChapterId = ActiveChapter.Id,
             CreatedInChapterName = ChapterPrefix + ChapterBody
         };
-
         items.Add(newForeshadow);
         await Repository.SaveForeshadowsAsync(CurrentWorkId, items);
-
-        _newForeshadowText = ""; // 清空输入框
-        await LoadCurrentChapterForeshadows(); // 刷新上方列表
-
+        _newForeshadowText = "";
+        await LoadCurrentChapterForeshadows();
         SaveStatus = "💡 伏笔已记录";
-
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay(2000);
-            SaveStatus = "";
-            await InvokeAsync(StateHasChanged);
-        });
+        _ = Task.Run(async () => { await Task.Delay(2000); SaveStatus = ""; await InvokeAsync(StateHasChanged); });
     }
 
-    // 就在弹窗里直接删除写废的伏笔
     private async Task DeleteForeshadow(ForeshadowItem item)
     {
         var items = await Repository.GetForeshadowsAsync(CurrentWorkId);
@@ -122,7 +103,7 @@
         {
             items.Remove(target);
             await Repository.SaveForeshadowsAsync(CurrentWorkId, items);
-            await LoadCurrentChapterForeshadows(); // 刷新列表
+            await LoadCurrentChapterForeshadows();
         }
     }
 
@@ -150,6 +131,11 @@
 
         Content = await Repository.ReadChapterContentAsync(CurrentWorkId, CurrentChapterId);
         _lastSavedWordCount = Content.Length;
+        _snapshotWordCount = Content.Length;
+
+        // 🌟 当第一次打开时，尝试静默打一个“每日初态”的快照
+        _ = Repository.SaveChapterSnapshotAsync(CurrentWorkId, CurrentChapterId, Content, "每日初态");
+
         GenerateToc();
         SaveStatus = "已同步";
         _shouldInitVditor = true;
@@ -188,8 +174,8 @@
             if (diff > 0)
             {
                 await Repository.AddDailyWordCountAsync(diff);
-                _lastSavedWordCount = currentWords;
             }
+            _lastSavedWordCount = currentWords;
 
             await Repository.SaveChapterContentAsync(CurrentWorkId, CurrentChapterId, Content);
 
@@ -198,6 +184,13 @@
                 ActiveChapter.Title = ChapterPrefix + ChapterBody;
                 await Repository.SaveWorkIndexAsync(IndexData);
                 if (OnTitleChanged.HasDelegate) { await OnTitleChanged.InvokeAsync(); }
+            }
+
+            // 🌟 智能快照触发：字数变化超过 500 字，自动备份
+            if (Math.Abs(currentWords - _snapshotWordCount) >= 500)
+            {
+                await Repository.SaveChapterSnapshotAsync(CurrentWorkId, CurrentChapterId, Content, "阶段备份 (字数激变)");
+                _snapshotWordCount = currentWords;
             }
 
             GenerateToc();
@@ -223,11 +216,7 @@
         await JS.InvokeVoidAsync("writingVditor.scrollToHeading", "vditor-writing-area", headingText);
     }
 
-    // 打开抽屉
-    private void OpenDrawer()
-    {
-        _drawer?.Open();
-    }
+    private void OpenDrawer() { _drawer?.Open(); }
 
     public void Dispose()
     {
@@ -242,6 +231,37 @@
             _shouldInitVditor = false;
             await LoadVditorAsync();
         }
+    }
+
+    // ==========================================
+    // 🌟 时光机方法逻辑
+    // ==========================================
+    private async Task OpenSnapshotModal()
+    {
+        Snapshots = await Repository.GetChapterSnapshotsAsync(CurrentWorkId, CurrentChapterId);
+        PreviewSnapshot = null;
+        ShowSnapshotModal = true;
+    }
+
+    private void CloseSnapshotModal() { ShowSnapshotModal = false; }
+
+    private async Task CreateManualSnapshot()
+    {
+        await Repository.SaveChapterSnapshotAsync(CurrentWorkId, CurrentChapterId, Content, "手动安全备份");
+        Snapshots = await Repository.GetChapterSnapshotsAsync(CurrentWorkId, CurrentChapterId);
+        _snapshotWordCount = Content.Length;
+        StateHasChanged();
+    }
+
+    private async Task RestoreSnapshot(ChapterSnapshot snapshot)
+    {
+        Content = snapshot.Content;
+        // 销毁并重建编辑器，把旧文字强行覆盖进去
+        await JS.InvokeVoidAsync("writingVditor.destroy", "vditor-writing-area");
+        await JS.InvokeVoidAsync("writingVditor.init", "vditor-writing-area", Content, _objRef);
+
+        await TriggerAutoSave(); // 保存还原后的状态
+        CloseSnapshotModal();
     }
 }
 
@@ -266,12 +286,15 @@
                 <span class="save-status"><span class="icon">☁️</span> @SaveStatus</span>
                 <span class="word-count-badge">@WordCount 字</span>
 
+                <button class="tool-btn snapshot-btn" title="查看本章的三份历史备份" @onclick="OpenSnapshotModal" style="background:#fff3e0; color:#e65100; font-weight:bold;">
+                    🕒 时光机
+                </button>
+
                 <button class="tool-btn search-btn" title="毫秒级全文检索" @onclick="OpenSearchModal" style="background:#e3f2fd; color:#1976d2; font-weight:bold;">
                     🔍 全文检索
                 </button>
 
                 <button class="tool-btn foreshadow-btn" title="快速挖个坑" @onclick="OpenForeshadowModal">💡 设为伏笔</button>
-
                 <button class="tool-btn material-btn" title="速查设定与大纲" @onclick="OpenDrawer">📚 素材速查</button>
 
                 <button class="tool-btn toggle-outline-btn @(ShowOutlinePanel ? "active" : "")" @onclick="() => ShowOutlinePanel = !ShowOutlinePanel">
@@ -323,49 +346,86 @@
     }
 </div>
 
+@if (ShowSnapshotModal)
+{
+    <div class="modal-overlay" @onclick="CloseSnapshotModal"></div>
+    <div class="snapshot-modal">
+        <div class="snapshot-header">
+            <h3>🕒 章节时光机 (历史快照)</h3>
+            <button class="close-btn" @onclick="CloseSnapshotModal">✖</button>
+        </div>
+
+        <div class="snapshot-body">
+            <div class="snapshot-list">
+                <button class="btn-create-snapshot" @onclick="CreateManualSnapshot">📸 手动打一个备份</button>
+                <div class="snapshot-hint">系统仅保留最新的 3 份快照</div>
+
+                @if (!Snapshots.Any())
+                {
+                    <div style="text-align:center; padding: 20px; color:#999; font-size:13px;">暂无备份</div>
+                }
+                else
+                {
+                    @foreach (var snap in Snapshots)
+                    {
+                        <div class="snap-card @(PreviewSnapshot == snap ? "active" : "")" @onclick="() => PreviewSnapshot = snap">
+                            <div class="snap-title">@snap.Reason</div>
+                            <div class="snap-meta">
+                                <span>@snap.Timestamp.ToString("MM-dd HH:mm")</span>
+                                <span>@snap.WordCount 字</span>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="snapshot-preview">
+                @if (PreviewSnapshot == null)
+                {
+                    <div class="preview-empty">请在左侧选择一个版本预览</div>
+                }
+                else
+                {
+                    <div class="preview-toolbar">
+                        <span style="color:#d32f2f; font-weight:bold; font-size:13px;">⚠️ 警告：恢复将覆盖当前正文！</span>
+                        <button class="btn-primary" @onclick="() => RestoreSnapshot(PreviewSnapshot)">↩️ 还原到此版本</button>
+                    </div>
+                    <textarea class="preview-textarea" readonly>@PreviewSnapshot.Content</textarea>
+                }
+            </div>
+        </div>
+    </div>
+}
+
 @if (_isAddingForeshadow)
 {
+    // (省略伏笔弹窗的 HTML，保留你原来的一样即可，或者用下面极简形式放回去)
     <div class="foreshadow-overlay" @onclick="CloseForeshadowModal"></div>
     <div class="foreshadow-modal">
         <div class="fs-header">
-            <div>
-                <h3 class="fs-title">💡 本章伏笔管理</h3>
-                <p class="fs-desc">【@(ChapterPrefix + ChapterBody)】</p>
-            </div>
+            <div><h3 class="fs-title">💡 本章伏笔管理</h3><p class="fs-desc">【@(ChapterPrefix + ChapterBody)】</p></div>
             <button class="fs-btn-close" @onclick="CloseForeshadowModal">✖</button>
         </div>
-
         @if (_currentChapterForeshadows.Any())
         {
             <div class="fs-list hide-scrollbar">
                 <div class="fs-label">本章已埋下的坑：</div>
                 @foreach (var item in _currentChapterForeshadows)
                 {
-                    <div class="fs-list-item">
-                        <span class="fs-item-text">@item.Description</span>
-                        <button class="fs-btn-delete" title="删除这个坑" @onclick="() => DeleteForeshadow(item)">删除</button>
-                    </div>
+                    <div class="fs-list-item"><span class="fs-item-text">@item.Description</span><button class="fs-btn-delete" @onclick="() => DeleteForeshadow(item)">删除</button></div>
                 }
             </div>
         }
-
         <div class="fs-label" style="margin-top: @(_currentChapterForeshadows.Any() ? "16px" : "0");">埋个新坑：</div>
-        <textarea class="fs-textarea" @bind="_newForeshadowText" placeholder="描述你埋下的悬念（例如：山洞里的神秘戒指其实是...）" autofocus></textarea>
-
-        <div class="fs-actions">
-            <button class="fs-btn-save" @onclick="SaveForeshadow">💾 记录伏笔</button>
-        </div>
+        <textarea class="fs-textarea" @bind="_newForeshadowText" placeholder="描述你埋下的悬念..."></textarea>
+        <div class="fs-actions"><button class="fs-btn-save" @onclick="SaveForeshadow">💾 记录伏笔</button></div>
     </div>
 }
 
-<QuickReferenceDrawer @ref="_drawer"
-                      CurrentWorkId="@CurrentWorkId"
-                      CurrentVolumeId="@(ActiveVolume?.Id ?? "")"
-                      CurrentChapterId="@(ActiveChapter?.Id ?? "")" />
+<QuickReferenceDrawer @ref="_drawer" CurrentWorkId="@CurrentWorkId" CurrentVolumeId="@(ActiveVolume?.Id ?? "")" CurrentChapterId="@(ActiveChapter?.Id ?? "")" />
 
 @if (ShowSearchModal)
 {
-    <WorkSearchModal CurrentWorkId="@CurrentWorkId"
-                     OnClose="CloseSearchModal"
-                     OnNavigateToChapter="NavigateToChapter" />
+    <WorkSearchModal CurrentWorkId="@CurrentWorkId" OnClose="CloseSearchModal" OnNavigateToChapter="NavigateToChapter" />
 }
+

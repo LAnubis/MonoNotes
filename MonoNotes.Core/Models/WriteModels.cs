@@ -25,15 +25,18 @@ namespace MonoNotes.Core.Models
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateTime LastEditedAt { get; set; } = DateTime.Now;
 
+        // 🌟 回收站标记
+        public bool IsDeleted { get; set; } = false;
+        public DateTime? DeletedAt { get; set; } = null;
+
         // 缓存数据：字数统计（可随时从 Markdown 重新计算）
         public int WordCountCache { get; set; } = 0;
 
-        // 在 WorkMeta 类中追加这些属性
         public string Synopsis { get; set; } = "暂无简介...";
         public string Tags { get; set; } = ""; // 逗号分隔的标签
         public string CoverUrl { get; set; } = ""; // 封面图路径
 
-        // 🌟 新增：五大核心设定区
+        // 五大核心设定区
         public string Outline { get; set; } = "";            // 📜 核心大纲
         public string CharacterSettings { get; set; } = "";  // 🧑 角色设定
         public string WorldviewSettings { get; set; } = "";  // 🌍 世界观设定
