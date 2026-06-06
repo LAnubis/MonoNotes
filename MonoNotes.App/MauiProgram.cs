@@ -56,6 +56,8 @@ namespace MonoNotes.App
             builder.Services.AddSingleton<INativeDialogService, MauiNativeDialogService>();
 
             builder.Services.AddSingleton<WriteSpaceRepository>();
+
+            builder.Services.AddSingleton<LocalBackupService>();
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();

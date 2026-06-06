@@ -2,6 +2,8 @@
 @using MonoNotes.UI.Views
 @using Microsoft.AspNetCore.Components.Web
 
+@inject MonoNotes.Storage.LocalBackupService BackupService
+
 <div class="global-mode-switcher" style="position: absolute; bottom: 20px; right: 20px; z-index: 9999;">
     <button @onclick="ToggleAppMode" style="padding: 10px 20px; border-radius: 8px; background: #3b82f6; color: white; border: none; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-weight: bold;">
         🔄 切换至 @(IsWritingMode ? "笔记模式" : "写作模式")
@@ -46,6 +48,24 @@
     private bool IsMobile =>
         DeviceInfo.Current.Platform == DevicePlatform.Android ||
         DeviceInfo.Current.Platform == DevicePlatform.iOS;
+
+    // 🌟 2. 软件启动时的全局静默任务
+    protected override async Task OnInitializedAsync()
+    {
+        // 延时 5 秒执行，让出 CPU 资源给软件界面的首次渲染，保证极速启动
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(5000);
+
+            // 引擎内部会自己判断：今天是不是该备份？今天是不是已经备过了？
+            bool didBackup = await BackupService.CheckAndRunAutoBackupAsync();
+
+            if (didBackup)
+            {
+                Console.WriteLine("【本地灾备】后台静默打包成功！");
+            }
+        });
+    }
 
     private void ToggleAppMode()
     {
