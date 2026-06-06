@@ -10,79 +10,177 @@
         <div class="settings-sidebar">
             <div class="sidebar-title">全局设置</div>
 
-            <div class="settings-nav-item @(_settingsActiveTab == "sync" ? "active" : "")"
-                 @onclick="@(() => _settingsActiveTab = "sync")">
+            <div class="settings-nav-item @(_settingsActiveTab == "sync" ? "active" : "")" @onclick="@(() => _settingsActiveTab = "sync")">
                 ☁️ 同步 (WebDAV)
             </div>
 
-            <div class="settings-nav-item @(_settingsActiveTab == "appearance" ? "active" : "")"
-                 @onclick="@(() => _settingsActiveTab = "appearance")">
+            <div class="settings-nav-item @(_settingsActiveTab == "backup" ? "active" : "")" @onclick="@(() => _settingsActiveTab = "backup")">
+                📦 本地灾备
+            </div>
+
+            <div class="settings-nav-item @(_settingsActiveTab == "ai" ? "active" : "")" @onclick="@(() => _settingsActiveTab = "ai")">
+                🤖 AI 助手
+            </div>
+
+            <div class="settings-nav-item @(_settingsActiveTab == "appearance" ? "active" : "")" @onclick="@(() => _settingsActiveTab = "appearance")">
                 🎨 外观与行为
             </div>
         </div>
 
         <div class="settings-body">
             <div class="settings-header">
-                <h3>@(_settingsActiveTab == "sync" ? "WebDAV 同步配置" : "外观与行为")</h3>
+                <h3>@GetTabTitle()</h3>
                 <button class="settings-close-btn" @onclick="CancelSettings">×</button>
             </div>
 
-            @if (_settingsActiveTab == "sync")
-            {
-                <div class="setting-row" style="padding-bottom: 20px; border-bottom: 1px solid var(--nt-border, #eaeaea);">
-                    <div>
-                        <div class="setting-label">开启后台自动同步</div>
-                        <div class="setting-desc">开启后，应用会在后台静默合并云端数据（笔记与小说库共享此配置）。</div>
-                    </div>
-                    <input type="checkbox" @bind="_appSettings.EnableWebDavSync" class="setting-checkbox" />
-                </div>
-
-                <div class="setting-group">
-                    <label class="setting-label">服务器地址 (Server URL)</label>
-                    <input type="text" class="setting-input" @bind="_appSettings.WebDavUrl" placeholder="https://dav.jianguoyun.com/dav/" />
-                    <div class="setting-desc">推荐使用坚果云。只填根目录即可，应用会自动创建子文件夹。</div>
-                </div>
-
-                <div class="setting-group">
-                    <label class="setting-label">账号 (Username)</label>
-                    <input type="text" class="setting-input" @bind="_appSettings.WebDavUsername" placeholder="例如：your-email@example.com" />
-                </div>
-
-                <div class="setting-group">
-                    <label class="setting-label">应用授权密码 (App Password)</label>
-                    <input type="password" class="setting-input" @bind="_webDavPassword" placeholder="请填入坚果云的第三方应用授权密码" />
-                    <div class="setting-warning">
-                        ⚠️ 绝不上传服务器。密码将调用底层的 DPAPI/Keychain 进行硬件级加密保护。
-                    </div>
-                </div>
-            }
-
-            @if (_settingsActiveTab == "appearance")
-            {
-                <div class="setting-group">
-                    <div class="setting-label" style="margin-bottom: 12px;">主题模式 (Theme)</div>
-                    <select class="setting-select" @bind="_appSettings.Theme" @bind:after="ApplyVisualPreview">
-                        <option value="System">💻 跟随系统</option>
-                        <option value="Light">☀️ 浅色模式</option>
-                        <option value="Dark">🌙 深色模式</option>
-                    </select>
-                </div>
-
-                <div class="setting-group">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <div class="setting-label">界面缩放 (Zoom)</div>
-                        <div style="font-size: 13px; color: #1976d2; font-weight: 600;">@Math.Round(_appSettings.ZoomLevel * 100)%</div>
+            <div class="settings-scroll-area hide-scrollbar">
+                @if (_settingsActiveTab == "sync")
+                {
+                    <div class="setting-row" style="padding-bottom: 20px; border-bottom: 1px solid var(--nt-border, #eaeaea);">
+                        <div>
+                            <div class="setting-label">开启后台自动同步</div>
+                            <div class="setting-desc">开启后，应用会在后台静默合并云端数据（笔记与小说库共享此配置）。</div>
+                        </div>
+                        <input type="checkbox" @bind="_appSettings.EnableWebDavSync" class="setting-checkbox" />
                     </div>
 
-                    <div style="display: flex; align-items: center; gap: 16px;">
-                        <span style="font-size: 12px; color: #999;">A</span>
-                        <input type="range" min="0.8" max="1.3" step="0.05" style="flex: 1; cursor: pointer;"
-                               @bind="_appSettings.ZoomLevel" @bind:event="oninput" @bind:after="ApplyVisualPreview" />
-                        <span style="font-size: 18px; color: #999;">A</span>
+                    <div class="setting-group" style="margin-top: 24px;">
+                        <label class="setting-label">服务器地址 (Server URL)</label>
+                        <input type="text" class="setting-input" @bind="_appSettings.WebDavUrl" placeholder="https://dav.jianguoyun.com/dav/" />
+                        <div class="setting-desc">推荐使用坚果云。只填根目录即可，应用会自动创建子文件夹。</div>
                     </div>
-                    <div class="setting-desc" style="margin-top: 8px;">全局放大或缩小界面的字体与元素大小。</div>
-                </div>
-            }
+
+                    <div class="setting-group">
+                        <label class="setting-label">账号 (Username)</label>
+                        <input type="text" class="setting-input" @bind="_appSettings.WebDavUsername" placeholder="例如：your-email@example.com" />
+                    </div>
+
+                    <div class="setting-group">
+                        <label class="setting-label">应用授权密码 (App Password)</label>
+                        <input type="password" class="setting-input" @bind="_webDavPassword" placeholder="请填入坚果云的第三方应用授权密码" />
+                        <div class="setting-warning">⚠️ 绝不上传服务器。密码将调用底层的 DPAPI/Keychain 进行加密保护。</div>
+                    </div>
+                }
+
+                @if (_settingsActiveTab == "backup")
+                {
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">开启静默自动打包</div>
+                            <div class="setting-desc">系统将在后台将所有笔记和小说打包为 Zip 文件，并保存到本地 Backups 文件夹中。不依赖网络。</div>
+                        </div>
+                        <input type="checkbox" @bind="_appSettings.EnableAutoBackup" class="setting-checkbox" />
+                    </div>
+
+                    <div class="setting-group">
+                        <label class="setting-label">自动备份频率 (每周几)</label>
+                        <select class="setting-select" @bind="_appSettings.BackupDayOfWeek" disabled="@(!_appSettings.EnableAutoBackup)">
+                            <option value="Monday">每周一</option>
+                            <option value="Wednesday">每周三</option>
+                            <option value="Friday">每周五</option>
+                            <option value="Sunday">每周日</option>
+                        </select>
+                    </div>
+
+                    <div class="setting-group">
+                        <label class="setting-label">最大保留数量</label>
+                        <input type="number" class="setting-input" style="width: 200px;" @bind="_appSettings.MaxBackupCount" min="1" max="10" disabled="@(!_appSettings.EnableAutoBackup)" />
+                        <div class="setting-desc">超过该数量时，最旧的备份文件将被自动删除以节省硬盘空间。</div>
+                    </div>
+
+                    <div style="margin-top: 40px; padding: 20px; background: rgba(25, 118, 210, 0.05); border: 1px dashed #1976d2; border-radius: 8px; text-align: center;">
+                        <div style="font-weight: 600; color: #1976d2; margin-bottom: 8px;">终极数据安全防线</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 16px;">随时一键生成整个宇宙的冷备份，存放于我的文档/MonoNotes/Backups</div>
+                        <button type="button" class="btn-solid" style="background: #1976d2;" @onclick="TriggerManualBackup">💡 立即执行手动备份</button>
+                    </div>
+                }
+
+                @if (_settingsActiveTab == "ai")
+                {
+                    <div class="setting-group" style="padding-bottom: 20px; border-bottom: 1px dashed var(--nt-border, #eaeaea);">
+                        <div class="setting-label">当前默认模型 (Default AI)</div>
+                        <select class="setting-select" @bind="_appSettings.ActiveAiProviderId" style="width: 100%;">
+                            @if (!_appSettings.AiProviders.Any())
+                            {
+                                <option value="">请先添加模型配置</option>
+                            }
+                            @foreach (var ai in _appSettings.AiProviders)
+                            {
+                                <option value="@ai.Id">@ai.Name (@ai.ModelName)</option>
+                            }
+                        </select>
+                        <div class="setting-desc">此模型将被用于写作助手、文风润色以及笔记总结等全局功能。</div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <div class="setting-label" style="margin: 0;">所有模型配置列表</div>
+                        <button class="btn-outline" style="padding: 4px 12px; font-size: 12px;" @onclick="AddNewAiProvider">➕ 添加配置</button>
+                    </div>
+
+                    @foreach (var ai in _appSettings.AiProviders)
+                    {
+                        <div style="background: rgba(0,0,0,0.02); border: 1px solid @(_appSettings.ActiveAiProviderId == ai.Id ? "#1976d2" : "var(--nt-border, #ccc)"); padding: 16px; border-radius: 8px; margin-bottom: 16px; position: relative;">
+
+                            @if (_appSettings.ActiveAiProviderId == ai.Id)
+                            {
+                                <div style="position: absolute; top: 8px; left: 8px; background: #1976d2; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">默认启用</div>
+                            }
+
+                            <button class="settings-close-btn" style="position: absolute; top: 8px; right: 12px; font-size: 18px; color: #ff4d4f;" title="删除" @onclick="() => RemoveAiProvider(ai)">×</button>
+                            <button class="btn-outline" style="position: absolute; top: 8px; right: 40px; font-size: 11px; padding: 2px 8px;" @onclick="() => SetDefaultAi(ai.Id)">设为默认</button>
+
+                            <div style="display: flex; gap: 12px; margin-top: 20px; margin-bottom: 12px;">
+                                <div style="flex: 1;">
+                                    <label class="setting-desc" style="font-weight:bold; color:#444;">配置名称 (显示用)</label>
+                                    <input type="text" class="setting-input" @bind="ai.Name" placeholder="如: DeepSeek-Pro" />
+                                </div>
+                                <div style="flex: 1;">
+                                    <label class="setting-desc" style="font-weight:bold; color:#444;">Model ID (模型ID)</label>
+                                    <input type="text" class="setting-input" @bind="ai.ModelName" placeholder="如: deepseek-chat" />
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <label class="setting-desc" style="font-weight:bold; color:#444;">Base URL (接口地址)</label>
+                                <input type="text" class="setting-input" @bind="ai.BaseUrl" placeholder="https://api.deepseek.com/v1" />
+                            </div>
+
+                            <div>
+                                <label class="setting-desc" style="font-weight:bold; color:#444;">API Key (密钥)</label>
+                                <input type="password" class="setting-input" placeholder="输入密钥，保存时自动加密"
+                                       value="@GetAiKeyForUI(ai.Id)"
+                                       @onchange="(e) => SetAiKeyForUI(ai.Id, e.Value?.ToString())" />
+                            </div>
+                        </div>
+                    }
+                }
+
+                @if (_settingsActiveTab == "appearance")
+                {
+                    <div class="setting-group">
+                        <div class="setting-label" style="margin-bottom: 12px;">主题模式 (Theme)</div>
+                        <select class="setting-select" @bind="_appSettings.Theme" @bind:after="ApplyVisualPreview">
+                            <option value="System">💻 跟随系统</option>
+                            <option value="Light">☀️ 浅色模式</option>
+                            <option value="Dark">🌙 深色模式</option>
+                        </select>
+                    </div>
+
+                    <div class="setting-group">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div class="setting-label">界面缩放 (Zoom)</div>
+                            <div style="font-size: 13px; color: #1976d2; font-weight: 600;">@Math.Round(_appSettings.ZoomLevel * 100)%</div>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <span style="font-size: 12px; color: #999;">A</span>
+                            <input type="range" min="0.8" max="1.3" step="0.05" style="flex: 1; cursor: pointer;"
+                                   @bind="_appSettings.ZoomLevel" @bind:event="oninput" @bind:after="ApplyVisualPreview" />
+                            <span style="font-size: 18px; color: #999;">A</span>
+                        </div>
+                    </div>
+                }
+            </div>
 
             <div class="settings-footer">
                 <div class="footer-msg">
@@ -103,7 +201,7 @@
                         </button>
                     }
                     <button type="button" class="btn-outline" @onclick="CancelSettings">取消</button>
-                    <button type="button" class="btn-solid" @onclick="SaveSettings">💾 保存配置</button>
+                    <button type="button" class="btn-solid" @onclick="SaveSettings">💾 保存全局配置</button>
                 </div>
             </div>
         </div>
@@ -111,7 +209,7 @@
 </div>
 
 <style>
-    /* 🌟 绝对脱离文档流，铺满全屏，强制弹性居中 */
+    /* CSS 沿用你刚刚那套极其优雅的框架，增加了滚动条隐藏 */
     .global-settings-overlay {
         position: fixed;
         top: 0;
@@ -123,12 +221,12 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        z-index: 2147483647; /* 保证在最顶层 */
+        z-index: 2147483647;
     }
 
     .global-settings-content {
-        width: 720px;
-        min-height: 500px;
+        width: 760px;
+        height: 600px;
         display: flex;
         flex-direction: row;
         background: var(--nt-bg-main, #ffffff);
@@ -181,13 +279,30 @@
         padding: 32px 40px;
         display: flex;
         flex-direction: column;
+        overflow: hidden;
+    }
+
+    .settings-scroll-area {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 8px;
+    }
+
+    .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .hide-scrollbar {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
     }
 
     .settings-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 32px;
+        margin-bottom: 24px;
+        flex-shrink: 0;
     }
 
         .settings-header h3 {
@@ -217,13 +332,14 @@
     }
 
     .setting-group {
-        margin-bottom: 24px;
+        margin-bottom: 20px;
     }
 
     .setting-label {
         font-size: 14px;
         font-weight: 600;
         margin-bottom: 8px;
+        color: var(--nt-text-main, #333);
     }
 
     .setting-desc {
@@ -274,11 +390,12 @@
     }
 
     .settings-footer {
-        margin-top: auto;
+        flex-shrink: 0;
+        margin-top: 24px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding-top: 24px;
+        padding-top: 20px;
         border-top: 1px solid var(--nt-border, #eaeaea);
     }
 
@@ -322,7 +439,6 @@
         .btn-solid:hover {
             background: #1565c0;
         }
-
     @@keyframes scaleIn {
         from {
             transform: scale(0.95);
@@ -339,12 +455,15 @@
 @code {
     [Parameter] public EventCallback OnClose { get; set; }
 
-    private string _settingsActiveTab = "sync";
+    private string _settingsActiveTab = "sync"; // sync, backup, ai, appearance
     private string _originalTheme = "System";
     private double _originalZoom = 1.0;
 
     private AppSettings _appSettings = new();
     private string _webDavPassword = string.Empty;
+
+    // 临时存放尚未保存的 API Keys
+    private Dictionary<string, string> _tempAiKeys = new();
 
     private bool _isTestingConnection = false;
     private string _connectionTestResult = string.Empty;
@@ -356,8 +475,64 @@
         _appSettings = await SettingsService.GetSettingsAsync();
         _webDavPassword = await SettingsService.GetSecurePasswordAsync("MonoNotes_WebDav_Password");
 
+        // 🌟 初始化提取所有 AI 的密码用于 UI 展示
+        if (_appSettings.AiProviders == null) _appSettings.AiProviders = new List<AiProvider>();
+
+        // 如果系统里一个 AI 都没有，给一个默认推荐的占位符体验一下
+        if (!_appSettings.AiProviders.Any())
+        {
+            var def = new AiProvider { Name = "DeepSeek (推荐)", BaseUrl = "https://api.deepseek.com/v1", ModelName = "deepseek-chat" };
+            _appSettings.AiProviders.Add(def);
+            _appSettings.ActiveAiProviderId = def.Id;
+        }
+
+        foreach (var ai in _appSettings.AiProviders)
+        {
+            string key = await SettingsService.GetSecurePasswordAsync($"AI_Key_{ai.Id}");
+            _tempAiKeys[ai.Id] = string.IsNullOrEmpty(key) ? "" : key;
+        }
+
         _originalTheme = _appSettings.Theme;
         _originalZoom = _appSettings.ZoomLevel;
+    }
+
+    private string GetTabTitle() => _settingsActiveTab switch
+    {
+        "sync" => "WebDAV 同步配置",
+        "backup" => "本地灾备控制台",
+        "ai" => "AI 大脑模型管理",
+        "appearance" => "外观与行为",
+        _ => "设置"
+    };
+
+    // --- AI 配置 UI 辅助方法 ---
+    private void AddNewAiProvider()
+    {
+        var newAi = new AiProvider { Name = "新建模型", BaseUrl = "", ModelName = "" };
+        _appSettings.AiProviders.Add(newAi);
+        _tempAiKeys[newAi.Id] = "";
+    }
+
+    private void RemoveAiProvider(AiProvider ai)
+    {
+        _appSettings.AiProviders.Remove(ai);
+        _tempAiKeys.Remove(ai.Id);
+        if (_appSettings.ActiveAiProviderId == ai.Id)
+            _appSettings.ActiveAiProviderId = _appSettings.AiProviders.FirstOrDefault()?.Id ?? "";
+    }
+
+    private string GetAiKeyForUI(string id) => _tempAiKeys.TryGetValue(id, out var k) ? k : "";
+    private void SetAiKeyForUI(string id, string? val) => _tempAiKeys[id] = val ?? "";
+
+    // --- 第二战预留口：手动触发备份 ---
+    private async Task TriggerManualBackup()
+    {
+        _warningMessage = "正在打包，请稍候...";
+        StateHasChanged();
+        // 🌟 第二战将在此处接入 LocalBackupService
+        await Task.Delay(1000); // 模拟耗时
+        _warningMessage = "✅ 备份完成！(暂为模拟演示，具体引擎将在第二战落地)";
+        StateHasChanged();
     }
 
     private async Task ApplyVisualPreview()
@@ -367,14 +542,23 @@
 
     private async Task SaveSettings()
     {
+        // 1. 保存普通设定
         await SettingsService.SaveSettingsAsync(_appSettings);
+
+        // 2. 存储 WebDAV 密码
         if (!string.IsNullOrWhiteSpace(_webDavPassword))
-        {
             await SettingsService.SaveSecurePasswordAsync("MonoNotes_WebDav_Password", _webDavPassword.Trim());
-        }
         else
-        {
             SettingsService.RemoveSecurePassword("MonoNotes_WebDav_Password");
+
+        // 🌟 3. 循环存储 AI 的加密 API Key
+        foreach (var ai in _appSettings.AiProviders)
+        {
+            string key = GetAiKeyForUI(ai.Id);
+            if (!string.IsNullOrWhiteSpace(key))
+                await SettingsService.SaveSecurePasswordAsync($"AI_Key_{ai.Id}", key.Trim());
+            else
+                SettingsService.RemoveSecurePassword($"AI_Key_{ai.Id}");
         }
 
         await VisualEngine.ApplySettingsAsync(_appSettings);
@@ -395,7 +579,7 @@
 
     private async Task TestWebDavConnection()
     {
-        await SaveSettingsSilently();
+        await SettingsService.SaveSettingsAsync(_appSettings); // 静默保存
         _warningMessage = "";
         _isTestingConnection = true;
         _connectionTestResult = "正在向云端发送握手请求...";
@@ -403,28 +587,16 @@
 
         _connectionTestSuccess = await WebDavService.TestConnectionAsync();
         if (_connectionTestSuccess)
-        {
             _connectionTestResult = "✅ 连接成功！服务器响应正常。";
-        }
         else
-        {
             _connectionTestResult = "❌ 连接失败，请检查账号、密码或网络。";
-        }
 
         _isTestingConnection = false;
         StateHasChanged();
     }
-
-    private async Task SaveSettingsSilently()
+    private void SetDefaultAi(string id)
     {
-        await SettingsService.SaveSettingsAsync(_appSettings);
-        if (!string.IsNullOrWhiteSpace(_webDavPassword))
-        {
-            await SettingsService.SaveSecurePasswordAsync("MonoNotes_WebDav_Password", _webDavPassword.Trim());
-        }
-        else
-        {
-            SettingsService.RemoveSecurePassword("MonoNotes_WebDav_Password");
-        }
+        _appSettings.ActiveAiProviderId = id;
+        StateHasChanged();
     }
 }
