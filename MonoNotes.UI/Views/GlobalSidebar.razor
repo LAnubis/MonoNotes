@@ -12,7 +12,11 @@
 
     // 记录当前选中的全局菜单项
     private string CurrentMenu = "dashboard";
+    // 🌟 控制全局设置的弹窗
+    private bool _showSettingsDialog = false;
 
+    private void OpenSettingsDialog() => _showSettingsDialog = true;
+    private void CloseSettingsDialog() => _showSettingsDialog = false;
     protected override async Task OnInitializedAsync()
     {
         var allWorks = await Repository.GetAllWorksAsync();
@@ -82,8 +86,13 @@
     </div>
 
     <div class="sidebar-footer">
-        <div class="nav-item">
-            <span class="icon">⚙️</span> 软件设置
+        <div class="nav-item" style="cursor: pointer;" @onclick="OpenSettingsDialog">
+            <span class="icon">⚙️</span> 设置
         </div>
     </div>
 </div>
+
+@if (_showSettingsDialog)
+{
+    <GlobalSettingsModal OnClose="CloseSettingsDialog" />
+}

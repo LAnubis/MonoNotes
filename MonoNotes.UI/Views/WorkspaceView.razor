@@ -828,113 +828,7 @@
 
     @if (_showSettingsDialog)
     {
-        <div class="modal-overlay" @onclick="CancelSettings">
-            <div class="modal-content" style="width: 720px; min-height: 500px; display: flex; flex-direction: row; padding: 0; background: var(--nt-bg-main); color: var(--nt-text-main);" @onclick:stopPropagation="true">
-                <div style="width: 160px; background: var(--nt-bg-sidebar); border-right: 1px solid var(--nt-border); padding: 20px 12px; border-radius: 8px 0 0 8px;">
-                    <div style="font-size: 11px; font-weight: 600; color: var(--nt-text-gray); padding-left: 8px; margin-bottom: 12px;">用户设置</div>
-
-                    <div class="nav-item @(_settingsActiveTab == "sync" ? "active" : "")"
-                         style="padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;"
-                         @onclick="@(() => _settingsActiveTab = "sync")">
-                        ☁️ 同步 (WebDAV)
-                    </div>
-
-                    <div class="nav-item @(_settingsActiveTab == "appearance" ? "active" : "")"
-                         style="padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; margin-top: 4px;"
-                         @onclick="@(() => _settingsActiveTab = "appearance")">
-                        🎨 外观与行为
-                    </div>
-                </div>
-
-                <div style="flex: 1; padding: 32px; display: flex; flex-direction: column;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
-                        <h3 style="margin: 0; font-size: 18px; font-weight: 600;">
-                            @(_settingsActiveTab == "sync" ? "WebDAV 同步配置" : "外观与行为")
-                        </h3>
-                        <button class="icon-btn" style="color: var(--nt-text-gray);" @onclick="CancelSettings">×</button>
-                    </div>
-
-                    @if (_settingsActiveTab == "sync")
-                    {
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--nt-border);">
-                            <div>
-                                <div style="font-size: 14px; font-weight: 500;">开启后台自动同步</div>
-                                <div style="font-size: 12px; color: var(--nt-text-gray); margin-top: 6px;">开启后，应用会在后台静默比提示并合并云端数据。</div>
-                            </div>
-                            <input type="checkbox" @bind="_appSettings.EnableWebDavSync" style="width: 18px; height: 18px; cursor: pointer;" />
-                        </div>
-
-                        <div style="margin-bottom: 20px;">
-                            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">服务器地址 (Server URL)</label>
-                            <input type="text" class="search-box" @bind="_appSettings.WebDavUrl" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px; background: transparent; color: inherit;" placeholder="https://dav.jianguoyun.com/dav/" />
-                            <div style="font-size: 12px; color: var(--nt-text-gray); opacity: 0.8; margin-top: 6px;">推荐使用坚果云。只填根目录即可，应用会在同步时自动创建子文件夹。</div>
-                        </div>
-
-                        <div style="margin-bottom: 20px;">
-                            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">账号 (Username)</label>
-                            <input type="text" class="search-box" @bind="_appSettings.WebDavUsername" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px; background: transparent; color: inherit;" placeholder="例如：your-email@example.com" />
-                        </div>
-
-                        <div style="margin-bottom: 32px;">
-                            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--nt-text-gray); margin-bottom: 8px;">应用授权密码 (App Password)</label>
-                            <input type="password" class="search-box" @bind="_webDavPassword" style="width: 100%; border: 1px solid var(--nt-border); padding: 8px 12px; background: transparent; color: inherit;" placeholder="请填入坚果云的第三方应用授权密码" />
-                            <div style="font-size: 12px; color: #faad14; margin-top: 8px; line-height: 1.5;">
-                                ⚠️ 绝不上传服务器。密码将调用底层的 DPAPI/Keychain 进行硬件级加密保护。
-                            </div>
-                        </div>
-                    }
-
-                    @if (_settingsActiveTab == "appearance")
-                    {
-                        <div style="margin-bottom: 32px;">
-                            <div style="font-size: 14px; font-weight: 600; color: var(--nt-text-main); margin-bottom: 12px;">主题模式 (Theme)</div>
-                            <select class="search-box" style="width: 200px; padding: 8px 12px; background: transparent; color: var(--nt-text-main); border: 1px solid var(--nt-border); border-radius: 6px; outline: none; cursor: pointer;"
-                                    @bind="_appSettings.Theme" @bind:after="ApplyVisualPreview">
-                                <option value="System" style="color: black;">💻 跟随系统</option>
-                                <option value="Light" style="color: black;">☀️ 浅色模式</option>
-                                <option value="Dark" style="color: black;">🌙 深色模式</option>
-                            </select>
-                        </div>
-
-                        <div style="margin-bottom: 32px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                                <div style="font-size: 14px; font-weight: 600; color: var(--nt-text-main);">界面缩放 (Zoom)</div>
-                                <div style="font-size: 13px; color: var(--nt-accent); font-weight: 600;">@Math.Round(_appSettings.ZoomLevel * 100)%</div>
-                            </div>
-
-                            <div style="display: flex; align-items: center; gap: 16px;">
-                                <span style="font-size: 12px; color: var(--nt-text-gray);">A</span>
-                                <input type="range" min="0.8" max="1.3" step="0.05" style="flex: 1; cursor: pointer;"
-                                       @bind="_appSettings.ZoomLevel" @bind:event="oninput" @bind:after="ApplyVisualPreview" />
-                                <span style="font-size: 18px; color: var(--nt-text-gray);">A</span>
-                            </div>
-                            <div style="font-size: 12px; color: var(--nt-text-gray); margin-top: 8px;">全局放大或缩小界面的字体与元素大小。</div>
-                        </div>
-                    }
-
-                    <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 20px; border-top: 1px solid var(--nt-border);">
-                        <div>
-                            @if (_settingsActiveTab == "sync" && !string.IsNullOrEmpty(_connectionTestResult))
-                            {
-                                <span style="font-size: 13px; font-weight: 500; color: @(_connectionTestSuccess ? "#52c41a" : "#ff4d4f");">
-                                    @_connectionTestResult
-                                </span>
-                            }
-                        </div>
-                        <div style="display: flex; gap: 12px;">
-                            @if (_settingsActiveTab == "sync")
-                            {
-                                <button type="button" class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; color: var(--nt-text-main); border-radius: 6px; font-weight: 500;" @onclick="TestWebDavConnection" disabled="@_isTestingConnection">
-                                    @(_isTestingConnection ? "正在连接..." : "🔌 测试连接")
-                                </button>
-                            }
-                            <button type="button" class="btn-cancel" style="padding: 8px 16px; border: 1px solid var(--nt-border); background: transparent; color: var(--nt-text-main); border-radius: 6px;" @onclick="CancelSettings">取消</button>
-                            <button type="button" class="btn-primary" style="padding: 8px 20px; border: none; background: var(--nt-accent); color: white; border-radius: 6px; font-weight: 500;" @onclick="SaveSettings">💾 保存配置</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <GlobalSettingsModal OnClose="CloseSettingsDialog" />
     }
 
     @if (_showConflictCenter)
@@ -1332,12 +1226,8 @@
     private string _newWorkspaceName = string.Empty;
 
     private bool _showSettingsDialog = false;
-    private AppSettings _appSettings = new();
-    private string _webDavPassword = string.Empty;
 
-    private bool _isTestingConnection = false;
-    private string _connectionTestResult = string.Empty;
-    private bool _connectionTestSuccess = false;
+
     // === 🌟 后台同步与冲突处理 ===
     private Timer _bgSyncTimer = new Timer(30000);
     private bool _isSyncingUI = false;
@@ -1347,11 +1237,6 @@
     private bool _showSuperSearch = false;
     private string _superSearchQuery = string.Empty;
     private List<SearchResultItem> _searchResults = new();
-
-    // === ⚙️ 设置面板控制状态 ===
-    private string _settingsActiveTab = "sync";
-    private string _originalTheme = "System";
-    private double _originalZoom = 1.0;
 
     private bool _isGraphExpanded = false;
 
@@ -2502,72 +2387,14 @@
 
     private async Task OpenSettingsDialog()
     {
-        _appSettings = await SettingsService.GetSettingsAsync();
-        _webDavPassword = await SettingsService.GetSecurePasswordAsync("MonoNotes_WebDav_Password");
-
-        _originalTheme = _appSettings.Theme;
-        _originalZoom = _appSettings.ZoomLevel;
-
-        _settingsActiveTab = "sync";
         _showSettingsDialog = true;
+        StateHasChanged();
     }
 
     private void CloseSettingsDialog()
     {
         _showSettingsDialog = false;
-    }
-
-    private async Task SaveSettings()
-    {
-        await SettingsService.SaveSettingsAsync(_appSettings);
-        if (!string.IsNullOrWhiteSpace(_webDavPassword))
-        {
-            await SettingsService.SaveSecurePasswordAsync("MonoNotes_WebDav_Password", _webDavPassword.Trim());
-        }
-        else
-        {
-            SettingsService.RemoveSecurePassword("MonoNotes_WebDav_Password");
-        }
-
-        await VisualEngine.ApplySettingsAsync(_appSettings);
-        _warningMessage = "设置保存成功！";
-        _showWarningDialog = true;
-        _showSettingsDialog = false;
         StateHasChanged();
-    }
-
-    private async Task TestWebDavConnection()
-    {
-        await SaveSettingsSilently();
-        _isTestingConnection = true;
-        _connectionTestResult = "正在向云端发送握手请求...";
-        StateHasChanged();
-
-        _connectionTestSuccess = await WebDavService.TestConnectionAsync();
-        if (_connectionTestSuccess)
-        {
-            _connectionTestResult = "✅ 连接成功！服务器响应正常。";
-        }
-        else
-        {
-            _connectionTestResult = "❌ 连接失败，请检查账号、授权密码或网络。";
-        }
-
-        _isTestingConnection = false;
-        StateHasChanged();
-    }
-
-    private async Task SaveSettingsSilently()
-    {
-        await SettingsService.SaveSettingsAsync(_appSettings);
-        if (!string.IsNullOrWhiteSpace(_webDavPassword))
-        {
-            await SettingsService.SaveSecurePasswordAsync("MonoNotes_WebDav_Password", _webDavPassword.Trim());
-        }
-        else
-        {
-            SettingsService.RemoveSecurePassword("MonoNotes_WebDav_Password");
-        }
     }
 
     private void OpenSuperSearch()
@@ -2615,19 +2442,6 @@
         _sortMode = _sortMode == 2 ?
         3 : 2;
         RefreshSelection();
-    }
-
-    private async Task ApplyVisualPreview()
-    {
-        await VisualEngine.ApplySettingsAsync(_appSettings);
-    }
-
-    private async Task CancelSettings()
-    {
-        _appSettings.Theme = _originalTheme;
-        _appSettings.ZoomLevel = _originalZoom;
-        await VisualEngine.ApplySettingsAsync(_appSettings);
-        _showSettingsDialog = false;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
