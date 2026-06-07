@@ -58,6 +58,8 @@ namespace MonoNotes.App
             builder.Services.AddSingleton<WriteSpaceRepository>();
 
             builder.Services.AddSingleton<LocalBackupService>();
+
+            builder.Services.AddSingleton<IAiService, AiRoutingService>();
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();

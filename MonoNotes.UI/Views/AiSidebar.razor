@@ -1,0 +1,499 @@
+﻿@using MonoNotes.Core.Interfaces
+@inject IAiService AiService
+@inject IJSRuntime JSRuntime
+
+<div class="ai-sidebar-overlay @(IsVisible ? "visible" : "")" @onclick="CloseSidebar"></div>
+
+<div class="ai-sidebar @(IsVisible ? "open" : "")" @onclick:stopPropagation="true">
+
+    <div class="ai-header">
+        <div class="title-area">
+            <span class="icon">🤖</span>
+            <span class="text">写作伴读大脑</span>
+        </div>
+        <button class="close-btn" @onclick="CloseSidebar">×</button>
+    </div>
+
+    <div class="ai-context-chips">
+        <div class="chip-label">快捷载入上下文:</div>
+        <div class="chips-container">
+            <button class="chip-btn" @onclick="LoadChapterToInput" title="将当前章节的正文追加到输入框">
+                📄 当前章节
+            </button>
+            <button class="chip-btn" @onclick="LoadOutlineToInput" title="将设定集/大纲追加到输入框">
+                📑 设定大纲
+            </button>
+        </div>
+    </div>
+
+    <div class="ai-chat-history" id="ai-chat-container">
+        @if (!_messages.Any())
+        {
+            <div class="empty-state">
+                <div class="bot-icon">✨</div>
+                <p>我是您的专属写作 AI。<br />可以帮您润色文笔、构思剧情、或者推演大纲。</p>
+                <div class="suggestion-pills">
+                    <button @onclick="@(() => _userInput = "帮我构思一个赛博朋克风格的反派名字及背景：")">构思反派角色</button>
+                    <button @onclick="@(() => _userInput = "针对我刚刚写的这章，提供一些悬念设置的建议：")">制造剧情悬念</button>
+                </div>
+            </div>
+        }
+        else
+        {
+            @foreach (var msg in _messages)
+            {
+                <div class="chat-bubble @(msg.Role == "user" ? "user-bubble" : "ai-bubble")">
+                    <div class="bubble-avatar">@(msg.Role == "user" ? "🧑‍💻" : "🤖")</div>
+                    <div class="bubble-content">
+                        @if (msg.Role == "assistant" && string.IsNullOrEmpty(msg.Content) && _isGenerating)
+                        {
+                            <span class="typing-indicator">思考中...</span>
+                        }
+                        else
+                        {
+                            @((MarkupString)System.Web.HttpUtility.HtmlEncode(msg.Content).Replace("\n", "<br/>"))
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <div class="ai-input-area">
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="error-toast">@_errorMessage <button @onclick="() => _errorMessage = string.Empty">×</button></div>
+        }
+
+        <div class="input-wrapper">
+            <textarea class="chat-input"
+                      placeholder="输入您的指令或灵感 (Shift+Enter 换行)..."
+                      @bind="_userInput"
+                      @bind:event="oninput"
+                      @onkeydown="HandleKeyDown"
+                      disabled="@_isGenerating"></textarea>
+
+            <button class="send-btn" @onclick="SendMessage" disabled="@(string.IsNullOrWhiteSpace(_userInput) || _isGenerating)">
+                @if (_isGenerating)
+                {
+                    <span class="spin">⏳</span>
+                }
+                else
+                {
+                    <span>发送</span>
+                }
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ai-sidebar-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.2);
+        z-index: 9998;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+
+        .ai-sidebar-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+    .ai-sidebar {
+        position: fixed;
+        top: 0;
+        right: -400px;
+        width: 380px;
+        height: 100vh;
+        background: var(--nt-bg-main, #fff);
+        box-shadow: -4px 0 24px rgba(0,0,0,0.1);
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        border-left: 1px solid var(--nt-border, #eaeaea);
+    }
+
+        .ai-sidebar.open {
+            right: 0;
+        }
+
+    .ai-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--nt-border, #eaeaea);
+        background: rgba(55,53,47,0.02);
+    }
+
+    .title-area {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 15px;
+        color: var(--nt-text-main, #333);
+    }
+
+    .close-btn {
+        background: transparent;
+        border: none;
+        font-size: 20px;
+        color: #999;
+        cursor: pointer;
+        transition: color 0.2s;
+        padding: 0;
+    }
+
+        .close-btn:hover {
+            color: #ff4d4f;
+        }
+
+    .ai-context-chips {
+        padding: 12px 20px;
+        border-bottom: 1px dashed var(--nt-border, #eaeaea);
+        background: #fafafa;
+    }
+
+    .chip-label {
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 8px;
+        font-weight: 600;
+    }
+
+    .chips-container {
+        display: flex;
+        gap: 8px;
+    }
+
+    .chip-btn {
+        background: #fff;
+        border: 1px solid #d9d9d9;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        color: #555;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+
+        .chip-btn:hover {
+            background: #f0f7ff;
+            border-color: #2eaadc;
+            color: #2eaadc;
+        }
+
+    .ai-chat-history {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        scroll-behavior: smooth;
+    }
+
+    .empty-state {
+        text-align: center;
+        margin-top: 40px;
+        color: #888;
+    }
+
+        .empty-state .bot-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            filter: grayscale(1) opacity(0.3);
+        }
+
+        .empty-state p {
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+    .suggestion-pills {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+    }
+
+        .suggestion-pills button {
+            background: rgba(46,170,220,0.08);
+            border: 1px solid rgba(46,170,220,0.2);
+            color: #2eaadc;
+            padding: 8px 16px;
+            border-radius: 16px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+            .suggestion-pills button:hover {
+                background: rgba(46,170,220,0.15);
+            }
+
+    .chat-bubble {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        max-width: 100%;
+    }
+
+        .chat-bubble.user-bubble {
+            flex-direction: row-reverse;
+        }
+
+    .bubble-avatar {
+        font-size: 20px;
+        background: rgba(55,53,47,0.05);
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .bubble-content {
+        padding: 10px 14px;
+        border-radius: 12px;
+        font-size: 13px;
+        line-height: 1.6;
+        max-width: 85%;
+        word-wrap: break-word;
+    }
+
+    .user-bubble .bubble-content {
+        background: #2eaadc;
+        color: #fff;
+        border-top-right-radius: 2px;
+    }
+
+    .ai-bubble .bubble-content {
+        background: #f4f5f7;
+        color: #333;
+        border-top-left-radius: 2px;
+        border: 1px solid rgba(0,0,0,0.03);
+    }
+
+    .typing-indicator {
+        color: #888;
+        font-style: italic;
+        animation: pulse 1.5s infinite;
+    }
+
+    .ai-input-area {
+        padding: 16px 20px;
+        border-top: 1px solid var(--nt-border, #eaeaea);
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .input-wrapper {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+    }
+
+    .chat-input {
+        flex: 1;
+        height: 60px;
+        min-height: 40px;
+        max-height: 150px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 13px;
+        outline: none;
+        resize: vertical;
+        font-family: inherit;
+        transition: border-color 0.2s;
+    }
+
+        .chat-input:focus {
+            border-color: #2eaadc;
+        }
+
+        .chat-input:disabled {
+            background: #f9f9f9;
+            cursor: not-allowed;
+        }
+
+    .send-btn {
+        background: #2eaadc;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 0 16px;
+        height: 40px;
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+        transition: opacity 0.2s;
+        flex-shrink: 0;
+    }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+    .error-toast {
+        background: #fff1f0;
+        border: 1px solid #ffa39e;
+        color: #cf1322;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        display: flex;
+        justify-content: space-between;
+    }
+
+        .error-toast button {
+            background: transparent;
+            border: none;
+            color: #cf1322;
+            cursor: pointer;
+        }
+
+    @@keyframes pulse {
+        0% {
+            opacity: 0.4;
+        }
+
+        50% {
+            opacity: 1;
+        }
+
+        100% {
+            opacity: 0.4;
+        }
+    }
+
+    @@keyframes spin {
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .spin {
+        display: inline-block;
+        animation: spin 1.5s linear infinite;
+    }
+</style>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback<bool> IsVisibleChanged { get; set; }
+
+    // 🌟 这是父组件（写作界面）传过来的实时文本，用户点击按钮时才会真正加载它
+    [Parameter] public string CurrentChapterText { get; set; } = string.Empty;
+    [Parameter] public string CurrentOutlineText { get; set; } = string.Empty;
+
+    private List<AiChatMessage> _messages = new();
+    private string _userInput = string.Empty;
+    private bool _isGenerating = false;
+    private string _errorMessage = string.Empty;
+
+    private async Task CloseSidebar()
+    {
+        IsVisible = false;
+        await IsVisibleChanged.InvokeAsync(IsVisible);
+    }
+
+    // 🌟 交互亮点：不是强行塞给 AI，而是追加到用户的输入框中，让用户自己决定如何提问
+    private void LoadChapterToInput()
+    {
+        if (string.IsNullOrWhiteSpace(CurrentChapterText))
+        {
+            _errorMessage = "当前章节没有内容！";
+            return;
+        }
+        _userInput += $"\n\n【以下是当前章节的正文，请参考这段文本回答】：\n{CurrentChapterText}\n\n";
+    }
+
+    private void LoadOutlineToInput()
+    {
+        if (string.IsNullOrWhiteSpace(CurrentOutlineText))
+        {
+            _errorMessage = "未检测到设定或大纲！";
+            return;
+        }
+        _userInput += $"\n\n【以下是本作品的背景设定/大纲】：\n{CurrentOutlineText}\n\n";
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        // 允许用户按 Enter 直接发送，按 Shift+Enter 换行
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_userInput) || _isGenerating) return;
+
+        _errorMessage = string.Empty;
+        var userMsg = new AiChatMessage { Role = "user", Content = _userInput.Trim() };
+        _messages.Add(userMsg);
+        _userInput = string.Empty;
+        _isGenerating = true;
+
+        await ScrollToBottom();
+        StateHasChanged();
+
+        var aiMsg = new AiChatMessage { Role = "assistant", Content = "" };
+        _messages.Add(aiMsg);
+
+        try
+        {
+            // 🌟 呼叫底层打字机引擎！
+            await foreach (var chunk in AiService.StreamChatCompletionAsync(_messages))
+            {
+                aiMsg.Content += chunk;
+                StateHasChanged();
+                await ScrollToBottom(); // 边打字边自动向下滚动
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+            if (string.IsNullOrEmpty(aiMsg.Content))
+            {
+                _messages.Remove(aiMsg); // 如果连字都没吐出来就报错了，直接把空气泡删掉
+            }
+        }
+        finally
+        {
+            _isGenerating = false;
+            StateHasChanged();
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        // 调用一点极简 JS 将聊天容器滚动到底部
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval", "var el = document.getElementById('ai-chat-container'); if(el) el.scrollTop = el.scrollHeight;");
+        }
+        catch { }
+    }
+}
