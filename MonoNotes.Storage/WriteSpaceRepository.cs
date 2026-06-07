@@ -8,13 +8,12 @@ using System.Threading.Tasks;
 
 namespace MonoNotes.Storage
 {
-    // 🌟 新增：快照数据模型
     public class ChapterSnapshot
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
         public DateTime Timestamp { get; set; }
         public int WordCount { get; set; }
-        public string Reason { get; set; } = "自动备份"; // 比如 "每日初态", "阶段备份", "手动备份"
+        public string Reason { get; set; } = "自动备份";
         public string Content { get; set; } = "";
     }
 
@@ -88,10 +87,7 @@ namespace MonoNotes.Storage
         public async Task<string> ReadChapterContentAsync(string workId, string chapterId)
         {
             var filePath = Path.Combine(_writeSpaceRoot, "Works", workId, "Chapters", $"{chapterId}.md");
-            if (File.Exists(filePath))
-            {
-                return await File.ReadAllTextAsync(filePath);
-            }
+            if (File.Exists(filePath)) return await File.ReadAllTextAsync(filePath);
             return string.Empty;
         }
 
@@ -111,7 +107,6 @@ namespace MonoNotes.Storage
                 {
                     chapter.WordCount = string.IsNullOrWhiteSpace(content) ? 0 : content.Length;
                     await SaveWorkIndexAsync(index);
-
                     _ = Task.Run(() => SearchEngine.UpdateChapterIndex(_writeSpaceRoot, workId, chapterId, chapter.Title, content));
                 }
             }
@@ -164,10 +159,7 @@ namespace MonoNotes.Storage
         public async Task<Dictionary<string, int>> GetDailyStatsAsync()
         {
             var statsPath = Path.Combine(_writeSpaceRoot, "daily-stats.json");
-            if (File.Exists(statsPath))
-            {
-                return await JsonSafeWriter.ReadSafeAsync<Dictionary<string, int>>(statsPath) ?? new();
-            }
+            if (File.Exists(statsPath)) return await JsonSafeWriter.ReadSafeAsync<Dictionary<string, int>>(statsPath) ?? new();
             return new Dictionary<string, int>();
         }
 
@@ -197,10 +189,7 @@ namespace MonoNotes.Storage
         {
             var path = Path.Combine(GetLocalMaterialsPath(workId), "materials.json");
             var materials = new List<MaterialItem>();
-            if (File.Exists(path))
-            {
-                materials = await JsonSafeWriter.ReadSafeAsync<List<MaterialItem>>(path) ?? new List<MaterialItem>();
-            }
+            if (File.Exists(path)) materials = await JsonSafeWriter.ReadSafeAsync<List<MaterialItem>>(path) ?? new List<MaterialItem>();
             NerEngine.SyncUserDictionary(materials);
             return materials;
         }
@@ -248,12 +237,7 @@ namespace MonoNotes.Storage
         public async Task ReferenceMaterialToLocalAsync(string workId, MaterialItem globalTemplate)
         {
             var locals = await GetLocalMaterialsAsync(workId);
-            var refInstance = new MaterialItem
-            {
-                Id = Guid.NewGuid().ToString("N"),
-                Type = globalTemplate.Type,
-                ReferenceId = globalTemplate.Id
-            };
+            var refInstance = new MaterialItem { Id = Guid.NewGuid().ToString("N"), Type = globalTemplate.Type, ReferenceId = globalTemplate.Id };
             locals.Add(refInstance);
             await SaveLocalMaterialsAsync(workId, locals);
         }
@@ -331,13 +315,14 @@ namespace MonoNotes.Storage
         public async Task HardDeleteWorkAsync(string workId)
         {
             var workDir = Path.Combine(_writeSpaceRoot, "Works", workId);
+
+            // 🌟 记录墓碑 (相对 MonoNotes 根目录的路径)
+           TombstoneManager.Add($"Writespaces/Works/{workId}");
+
             if (Directory.Exists(workDir)) Directory.Delete(workDir, true);
             await Task.CompletedTask;
         }
 
-        // ==========================================
-        // 🌟 时光机系统：章节历史快照
-        // ==========================================
         public async Task<List<ChapterSnapshot>> GetChapterSnapshotsAsync(string workId, string chapterId)
         {
             var historyDir = Path.Combine(_writeSpaceRoot, "Works", workId, "VersionHistory", chapterId);
@@ -361,7 +346,6 @@ namespace MonoNotes.Storage
 
             var snapshots = await GetChapterSnapshotsAsync(workId, chapterId);
 
-            // 如果是“每日初态”，且今天已经存过了，则忽略
             if (reason == "每日初态" && snapshots.Any(s => s.Reason == "每日初态" && s.Timestamp.Date == DateTime.Now.Date))
             {
                 return;
@@ -378,7 +362,6 @@ namespace MonoNotes.Storage
             await JsonSafeWriter.WriteAtomicallyAsync(Path.Combine(historyDir, $"{newSnapshot.Id}.json"), newSnapshot);
             snapshots.Add(newSnapshot);
 
-            // 🌟 物理淘汰：永远只保留最新的 3 个快照 (节省空间)
             var toDelete = snapshots.OrderByDescending(s => s.Timestamp).Skip(3).ToList();
             foreach (var old in toDelete)
             {

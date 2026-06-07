@@ -1,4 +1,5 @@
-﻿using MonoNotes.Core.Interfaces;
+﻿using Microsoft.VisualBasic;
+using MonoNotes.Core.Interfaces;
 using System.Net.Http.Headers;
 using System.Runtime;
 using System.Text;
@@ -48,7 +49,19 @@ namespace MonoNotes.Sync
             request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authString);
             return request;
         }
+        private async Task<HttpRequestMessage> CreateRequestAsync(HttpMethod method, string url,string username,string password)
+        {
+            var request = new HttpRequestMessage(method, url);
 
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                throw new InvalidOperationException("未配置 WebDAV 账号或密码");
+            }
+
+            var authString = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{password}"));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authString);
+            return request;
+        }
         private string NormalizeUrl(string baseUrl, string path = "")
         {
             baseUrl = baseUrl.TrimEnd('/');
@@ -71,47 +84,46 @@ namespace MonoNotes.Sync
             }
         }
 
-        // 1. 测试连接 (向根目录发送 PROPFIND)
         public async Task<bool> TestConnectionAsync()
         {
             var settings = await _settingsService.GetSettingsAsync();
             var password = await _settingsService.GetSecurePasswordAsync("MonoNotes_WebDav_Password");
 
-            // 🌟 1. 拦截空配置：明确抛出异常，不再让底层瞎猜
-            if (string.IsNullOrWhiteSpace(settings.WebDavUrl) ||
-                string.IsNullOrWhiteSpace(settings.WebDavUsername) ||
-                string.IsNullOrWhiteSpace(password))
-            {
-                throw new Exception("账号、密码或服务器地址不能为空！");
-            }
-
-            var url = NormalizeUrl(settings.WebDavUrl);
-            var request = await CreateRequestAsync(new HttpMethod("PROPFIND"), url);
-            request.Headers.Add("Depth", "0");
-
-            // 🌟 2. 去掉全局的 try-catch，让网络异常自然抛给 UI
-            var response = await _httpClient.SendAsync(request);
-
-            if (response.IsSuccessStatusCode)
-            {
-                return true;
-            }
-
-            // 🌟 3. 把冰冷的 HTTP 状态码翻译成人类能看懂的红字提示
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                throw new Exception("账号或密码错误 (401)");
-            }
-            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                throw new Exception("找不到服务器路径，请检查 URL 是否填写正确 (404)");
-            }
-            else
-            {
-                throw new Exception($"服务器拒绝了连接，状态码: {response.StatusCode}");
-            }
+            // 直接调用下方的方法
+            return await TestSpecificConnectionAsync(settings.WebDavUrl, settings.WebDavUsername, password);
         }
 
+
+        // 🌟 新增：给设置界面调用的方法（传入 UI 上的临时值）
+        public async Task<bool> TestSpecificConnectionAsync(string url, string username, string password)
+        {
+            // 1. 基础校验
+            if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+                throw new Exception("账号、密码或服务器地址不能为空！");
+
+            // 2. 🌟 坚果云的 URL 陷阱：必须确保是根路径
+            //var baseUrl = url.TrimEnd('/');
+            var baseUrl = NormalizeUrl(url);
+            var request = await CreateRequestAsync(new HttpMethod("PROPFIND"), url, username, password);
+            request.Headers.Add("Depth", "0");
+            var response = await _httpClient.SendAsync(request);
+            try
+            {
+                if (response.IsSuccessStatusCode)
+                {
+                    return true;
+                }
+
+                // 4. 报错翻译
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                    throw new Exception("鉴权失败：账号或授权密码错误。");
+                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                    throw new Exception("连接被拒绝：请检查 WebDAV 开关是否已在云盘开启。");
+
+                throw new Exception($"服务器返回错误: {response.StatusCode}");
+            }
+            catch (Exception ex) { throw new Exception($"网络连接异常: {ex.Message}"); }
+        }
         // 2. 确保目录存在 (发送 MKCOL)
         public async Task<bool> EnsureDirectoryExistsAsync(string remotePath)
         {

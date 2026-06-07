@@ -5,6 +5,9 @@
         // 测试账号密码是否正确
         Task<bool> TestConnectionAsync();
 
+        // 🌟 新增：专门给 UI 界面“不保存直接测试”用的方法
+        Task<bool> TestSpecificConnectionAsync(string url, string username, string password);
+
         // 确保云端目录存在（如果不存在则创建）
         Task<bool> EnsureDirectoryExistsAsync(string remotePath);
 

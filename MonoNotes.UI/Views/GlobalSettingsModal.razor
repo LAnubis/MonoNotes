@@ -691,19 +691,37 @@
 
     private async Task TestWebDavConnection()
     {
-        await SettingsService.SaveSettingsAsync(_appSettings);
+        // 🌟 1. 移除了 SaveSettingsSilently()，彻底实现不保存直接测试！
+
         _warningMessage = "";
         _isTestingConnection = true;
         _connectionTestResult = "正在向云端发送握手请求...";
         StateHasChanged();
 
-        _connectionTestSuccess = await WebDavService.TestConnectionAsync();
-        if (_connectionTestSuccess)
-            _connectionTestResult = "✅ 连接成功！服务器响应正常。";
-        else
-            _connectionTestResult = "❌ 连接失败，请检查账号、密码或网络。";
+        try
+        {
+            // 🌟 2. 调用我们刚写好的带参数方法，直接把输入框里的值传进去
+            _connectionTestSuccess = await WebDavService.TestSpecificConnectionAsync(
+                _appSettings.WebDavUrl,
+                _appSettings.WebDavUsername,
+                _webDavPassword);
 
-        _isTestingConnection = false;
-        StateHasChanged();
+            if (_connectionTestSuccess)
+            {
+                _connectionTestResult = "✅ 连接成功！服务器响应正常。";
+            }
+        }
+        catch (Exception ex)
+        {
+            // 🌟 3. UI 完美接住了底层抛出的 Exception，不会再崩溃了！
+            _connectionTestSuccess = false;
+            _connectionTestResult = $"❌ {ex.Message}";
+        }
+        finally
+        {
+            // 无论成功还是失败，最后都要解除按钮的 Loading 状态
+            _isTestingConnection = false;
+            StateHasChanged();
+        }
     }
 }

@@ -1306,10 +1306,14 @@
     {
         if (_isSyncingUI) return;
         var settings = await SettingsService.GetSettingsAsync();
-        if (!settings.EnableWebDavSync && !isManual)
+        if(!isManual)
         {
-            return;
+            if (!settings.EnableWebDavSync)
+            {
+                return;
+            }
         }
+     
 
         _isSyncingUI = true;
         await InvokeAsync(StateHasChanged);
@@ -1539,7 +1543,6 @@
                 return;
             }
 
-
             if (_folderActionType == 0)
             {
                 await NoteRepository.CreateFolderAsync("", val);
@@ -1552,9 +1555,14 @@
             {
                 try
                 {
-                    string oldRemote = $"MonoNotes/{NoteRepository.CurrentWorkspace}/{_contextMenuTarget.FullPath}";
-                    string encodedOld = string.Join("/", oldRemote.Split('/').Select(Uri.EscapeDataString));
-                    await WebDavService.DeleteItemAsync(encodedOld);
+                    // 🌟 探测云端是否在线，在线才去删云端的旧文件夹名
+                    bool isConnected = await IsWebDavReadyAsync();
+                    if (isConnected)
+                    {
+                        string oldRemote = $"MonoNotes/{NoteRepository.CurrentWorkspace}/{_contextMenuTarget.FullPath}";
+                        string encodedOld = string.Join("/", oldRemote.Split('/').Select(Uri.EscapeDataString));
+                        await WebDavService.DeleteItemAsync(encodedOld);
+                    }
                 }
                 catch { }
 
@@ -2080,9 +2088,11 @@
 
         if (_contextMenuNote != null)
         {
-            bool cloudDeleted = await SafeCloudDeleteAsync(_contextMenuNote.Folder, _contextMenuNote.Id);
+            // 🌟 探测云端是否在线
+            bool isConnected = await IsWebDavReadyAsync();
+            bool cloudDeleted = isConnected && await SafeCloudDeleteAsync(_contextMenuNote.Folder, _contextMenuNote.Id);
 
-            if (cloudDeleted || !await WebDavService.TestConnectionAsync())
+            if (cloudDeleted || !isConnected)
             {
                 await NoteRepository.DeleteNoteAsync(_contextMenuNote.Id);
                 IndexItems.Remove(_contextMenuNote);
@@ -2149,18 +2159,22 @@
             return;
         }
 
-        // 🌟 修复 Windows 文件夹路径分隔符导致云端 404 删不掉文件夹的 Bug
-        string normalizedPath = _contextMenuTarget.FullPath.Replace('\\', '/').Trim('/');
-        string remotePath = $"MonoNotes/{NoteRepository.CurrentWorkspace}/{normalizedPath}";
-
-        bool cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
-        if (!cloudDeleted)
+        // 🌟 探测云端是否在线
+        bool isConnected = await IsWebDavReadyAsync();
+        if (isConnected)
         {
-            _warningMessage = "本地文件夹已删除，但云端数据销毁失败（可能是网络波动或授权过期）。这可能会导致它在下次同步时复活，建议稍后去坚果云网页端手动清理。";
-            _showWarningDialog = true;
+            string normalizedPath = _contextMenuTarget.FullPath.Replace('\\', '/').Trim('/');
+            string remotePath = $"MonoNotes/{NoteRepository.CurrentWorkspace}/{normalizedPath}";
+
+            bool cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
+            if (!cloudDeleted)
+            {
+                _warningMessage = "本地文件夹已删除，但云端数据销毁失败（可能是网络波动或授权过期）。这可能会导致它在下次同步时复活，建议稍后去云端手动清理。";
+                _showWarningDialog = true;
+            }
         }
 
-        // 2. 云端处理完后，再执行本地删除
+        // 2. 云端处理完（或离线）后，再执行本地删除
         await NoteRepository.DeleteFolderAsync(_contextMenuTarget.FullPath, moveNotesToTrash);
         var allNotes = await NoteRepository.GetAllNotesAsync();
 
@@ -2587,6 +2601,10 @@
         }
 
         int failCount = 0;
+
+        // 🌟 探测云端是否在线
+        bool isConnected = await IsWebDavReadyAsync();
+
         var idsToProcess = _selectedNoteIds.ToList();
 
         foreach (var id in idsToProcess)
@@ -2594,9 +2612,9 @@
             var item = IndexItems.FirstOrDefault(n => n.Id == id);
             if (item != null)
             {
-                bool cloudDeleted = await SafeCloudDeleteAsync(item.Folder, item.Id);
+                bool cloudDeleted = isConnected && await SafeCloudDeleteAsync(item.Folder, item.Id);
 
-                if (cloudDeleted || !await WebDavService.TestConnectionAsync())
+                if (cloudDeleted || !isConnected)
                 {
                     await NoteRepository.DeleteNoteAsync(id);
                     IndexItems.RemoveAll(n => n.Id == id);
@@ -2637,15 +2655,17 @@
         int successCount = 0;
         int failCount = 0;
 
-        _saveStatus = "正在清理云端...";
+        bool isConnected = await IsWebDavReadyAsync();
+        _saveStatus = isConnected ? "正在清理云端..." : "正在清理本地...";
+        //_saveStatus = "正在清理云端...";
         await InvokeAsync(StateHasChanged);
 
         foreach (var item in trashItems)
         {
-            bool cloudDeleted = await SafeCloudDeleteAsync(item.Folder, item.Id);
+            bool cloudDeleted = isConnected && await SafeCloudDeleteAsync(item.Folder, item.Id);
 
             // 🌟 只有云端真删掉了，才允许删本地
-            if (cloudDeleted || !await WebDavService.TestConnectionAsync())
+            if (cloudDeleted || !isConnected)
             {
                 await NoteRepository.DeleteNoteAsync(item.Id);
                 IndexItems.RemoveAll(n => n.Id == item.Id);
@@ -3142,16 +3162,23 @@
             return;
         }
 
-        string remotePath = $"MonoNotes/{NoteRepository.CurrentWorkspace}/.templates/{id}.md";
-        bool cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
+        // 🌟 探测云端是否在线
+        bool isConnected = await IsWebDavReadyAsync();
+        bool cloudDeleted = false;
 
-        if (!cloudDeleted)
+        if (isConnected)
         {
-            await Task.Delay(1000);
+            string remotePath = $"MonoNotes/{NoteRepository.CurrentWorkspace}/.templates/{id}.md";
             cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
+
+            if (!cloudDeleted)
+            {
+                await Task.Delay(1000);
+                cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
+            }
         }
 
-        if (cloudDeleted || !await WebDavService.TestConnectionAsync())
+        if (cloudDeleted || !isConnected)
         {
             await NoteRepository.DeleteTemplateAsync(id);
             _manageTemplatesList = await NoteRepository.GetAllTemplatesAsync();
@@ -3185,5 +3212,23 @@
             cloudDeleted = await WebDavService.DeleteItemAsync(remotePath);
         }
         return cloudDeleted;
+    }
+
+    // ==========================================
+    // 🌟 全局网络静默安全拦截器
+    // ==========================================
+    private async Task<bool> IsWebDavReadyAsync()
+    {
+        try
+        {
+            var settings = await SettingsService.GetSettingsAsync();
+            if (!settings.EnableWebDavSync) return false;
+            return await WebDavService.TestConnectionAsync();
+        }
+        catch
+        {
+            // 没配账号、断网、密码错... 统统安静地返回 false，让本地删除继续走墓碑机制
+            return false;
+        }
     }
 }

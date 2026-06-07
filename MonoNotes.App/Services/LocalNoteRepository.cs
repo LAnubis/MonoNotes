@@ -1,6 +1,7 @@
 ﻿using MonoNotes.Core;
 using MonoNotes.Core.Interfaces;
 using MonoNotes.Core.Models;
+using MonoNotes.Storage;
 using System.Text;
 using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
@@ -19,12 +20,9 @@ namespace MonoNotes.App.Services
 
         public LocalNoteRepository()
         {
-
-            // 提升到 MonoNotes 根目录
             _rootDirectory = PathHelper.GetBaseDirectory();
             if (!Directory.Exists(_rootDirectory)) Directory.CreateDirectory(_rootDirectory);
 
-            // 读取上次打开的库配置
             var configPath = Path.Combine(_rootDirectory, "workspace.txt");
             if (File.Exists(configPath))
             {
@@ -45,12 +43,10 @@ namespace MonoNotes.App.Services
                 .Build();
         }
 
-        // 🌟 辅助方法：确保系统目录存在，并执行平级架构的无感迁移！
         private void EnsureDirectories()
         {
             if (!Directory.Exists(_storageDirectory)) Directory.CreateDirectory(_storageDirectory);
 
-            // 确保系统的三大基础文件夹存在
             var notesPath = Path.Combine(_storageDirectory, "notes");
             if (!Directory.Exists(notesPath)) Directory.CreateDirectory(notesPath);
 
@@ -62,17 +58,14 @@ namespace MonoNotes.App.Services
 
             try
             {
-                // 🌟 核心修正：只将“无家可归”散落在根目录的 .md 笔记收容进 notes 文件夹
                 var rootFiles = Directory.GetFiles(_storageDirectory, "*.md", SearchOption.TopDirectoryOnly);
                 foreach (var file in rootFiles)
                 {
                     var dest = Path.Combine(notesPath, Path.GetFileName(file));
                     if (!File.Exists(dest)) File.Move(file, dest);
                 }
-
-                // 绝对不触碰用户的文件夹，让它们保持在根目录和 notes 平级！
             }
-            catch { /* 忽略迁移中可能的文件占用问题 */ }
+            catch { }
         }
 
         public async Task<List<string>> GetAllWorkspacesAsync()
@@ -99,12 +92,10 @@ namespace MonoNotes.App.Services
             await SwitchWorkspaceAsync(workspaceName);
         }
 
-        // 🌟 核心：扫描全域，但屏蔽系统隐藏文件夹
         public async Task<List<MonoNote>> GetAllNotesAsync()
         {
             var notes = new List<MonoNote>();
 
-            // 获取所有笔记，排除路径中包含 "/." 的隐藏文件夹（如 /.assets/ 和 /.templates/）
             var files = Directory.GetFiles(_storageDirectory, "*.md", SearchOption.AllDirectories)
                                  .Where(f => !f.Replace('\\', '/').Contains("/."))
                                  .ToList();
@@ -126,11 +117,9 @@ namespace MonoNotes.App.Services
 
                             var meta = _yamlDeserializer.Deserialize<NoteMetadata>(yaml);
 
-                            // 计算相对于当前知识库的物理相对路径
                             var fileDir = Path.GetDirectoryName(file) ?? _storageDirectory;
                             var relativePath = Path.GetRelativePath(_storageDirectory, fileDir).Replace("\\", "/");
 
-                            // 兜底保护：如果是根目录散落的（理论上已经被迁移了），强行划入 notes
                             if (relativePath == ".") relativePath = "notes";
 
                             notes.Add(new MonoNote
@@ -140,7 +129,7 @@ namespace MonoNotes.App.Services
                                 Tags = meta.Tags ?? new List<string>(),
                                 UpdatedAt = meta.UpdatedAt != default ? meta.UpdatedAt : File.GetLastWriteTime(file),
                                 Content = content,
-                                Folder = relativePath, // 天生就是 "notes" 或者 "C#学习/基础" 
+                                Folder = relativePath,
                                 IsPinned = meta.IsPinned,
                                 IsFavorite = meta.IsFavorite,
                                 IsArchived = meta.IsArchived,
@@ -149,12 +138,11 @@ namespace MonoNotes.App.Services
                         }
                     }
                 }
-                catch { /* 忽略损坏的文件 */ }
+                catch { }
             }
             return notes.OrderByDescending(n => n.UpdatedAt).ToList();
         }
 
-        // 🌟 保存逻辑：根据 Folder 相对路径直接保存，没有任何黑魔法
         public async Task SaveNoteAsync(MonoNote note)
         {
             note.UpdatedAt = DateTimeOffset.Now;
@@ -193,17 +181,15 @@ namespace MonoNotes.App.Services
             await File.WriteAllTextAsync(filePath, sb.ToString());
         }
 
-        // 🌟 扫描全域文件夹，但排除隐藏目录
         public async Task<List<string>> GetAllFoldersAsync()
         {
             var directories = Directory.GetDirectories(_storageDirectory, "*", SearchOption.AllDirectories);
-            var folderPaths = new List<string> { "notes" }; // 确保保底的未分类总是存在
+            var folderPaths = new List<string> { "notes" };
 
             foreach (var dir in directories)
             {
                 var relativePath = Path.GetRelativePath(_storageDirectory, dir).Replace("\\", "/");
 
-                // 屏蔽所有以 "." 开头的系统级隐藏文件夹
                 if (relativePath.StartsWith(".") || relativePath.Contains("/.")) continue;
 
                 if (!folderPaths.Contains(relativePath))
@@ -217,7 +203,6 @@ namespace MonoNotes.App.Services
 
         public async Task DeleteNoteAsync(string id)
         {
-            // 全域查找这个 md 文件，排除隐藏文件夹
             var files = Directory.GetFiles(_storageDirectory, $"{id}.md", SearchOption.AllDirectories)
                                  .Where(f => !f.Replace('\\', '/').Contains("/."))
                                  .ToList();
@@ -226,16 +211,18 @@ namespace MonoNotes.App.Services
 
             if (filePath != null)
             {
+                // 🌟 记录墓碑
+                var relativePath = Path.GetRelativePath(_rootDirectory, filePath).Replace("\\", "/");
+               TombstoneManager.Add(relativePath);
+
                 var content = await File.ReadAllTextAsync(filePath);
                 File.Delete(filePath);
 
-                // 🌟 孤儿图片清理逻辑
                 var matches = Regex.Matches(content, @"\.assets/([a-zA-Z0-9_-]+\.[a-zA-Z0-9]+)");
                 var assetNamesInDeletedNote = matches.Select(m => m.Groups[1].Value).Distinct().ToList();
 
                 if (assetNamesInDeletedNote.Any())
                 {
-                    // 扫描所有合法的业务笔记和模板，检查图片是否还在被使用
                     var allRemainingFiles = Directory.GetFiles(_storageDirectory, "*.md", SearchOption.AllDirectories)
                                                      .Where(f => !f.Replace('\\', '/').Contains("/.assets/"))
                                                      .ToList();
@@ -257,14 +244,19 @@ namespace MonoNotes.App.Services
                         if (!isUsedElsewhere)
                         {
                             var assetPath = Path.Combine(_storageDirectory, ".assets", assetName);
-                            if (File.Exists(assetPath)) File.Delete(assetPath);
+                            if (File.Exists(assetPath))
+                            {
+                                // 🌟 记录图片的墓碑
+                                var assetRelPath = Path.GetRelativePath(_rootDirectory, assetPath).Replace("\\", "/");
+                                TombstoneManager.Add(assetRelPath);
+                                File.Delete(assetPath);
+                            }
                         }
                     }
                 }
             }
         }
 
-        // 🌟 新建文件夹：如果 parent 传入的是空，就是在根目录创建顶层文件夹！
         public async Task CreateFolderAsync(string parentFolderPath, string newFolderName)
         {
             var basePath = string.IsNullOrWhiteSpace(parentFolderPath)
@@ -273,11 +265,7 @@ namespace MonoNotes.App.Services
 
             var newFolderPath = Path.Combine(basePath, newFolderName);
 
-            if (!Directory.Exists(newFolderPath))
-            {
-                Directory.CreateDirectory(newFolderPath);
-            }
-
+            if (!Directory.Exists(newFolderPath)) Directory.CreateDirectory(newFolderPath);
             await Task.CompletedTask;
         }
 
@@ -295,7 +283,6 @@ namespace MonoNotes.App.Services
             {
                 Directory.Move(oldFullPath, newFullPath);
             }
-
             await Task.CompletedTask;
         }
 
@@ -322,6 +309,10 @@ namespace MonoNotes.App.Services
             {
                 throw new InvalidOperationException("包含子文件夹，无法直接删除。");
             }
+
+            // 🌟 记录整个文件夹的墓碑
+            var relativePath = Path.GetRelativePath(_rootDirectory, fullPath).Replace("\\", "/");
+            TombstoneManager.Add(relativePath);
 
             var allNotes = await GetAllNotesAsync();
             var notesInFolder = allNotes.Where(n => n.Folder == folderPath).ToList();
@@ -365,10 +356,6 @@ namespace MonoNotes.App.Services
             }
         }
 
-        // ==========================================
-        // 🌟 模板专属管理方法
-        // ==========================================
-
         public async Task<List<MonoNote>> GetAllTemplatesAsync()
         {
             var templates = new List<MonoNote>();
@@ -407,7 +394,7 @@ namespace MonoNotes.App.Services
                         }
                     }
                 }
-                catch { /* 忽略损坏的模板 */ }
+                catch { }
             }
             return templates.OrderByDescending(n => n.UpdatedAt).ToList();
         }
@@ -445,7 +432,14 @@ namespace MonoNotes.App.Services
         public async Task DeleteTemplateAsync(string id)
         {
             var filePath = Path.Combine(_storageDirectory, ".templates", $"{id}.md");
-            if (File.Exists(filePath)) File.Delete(filePath);
+            if (File.Exists(filePath))
+            {
+                // 🌟 记录墓碑
+                var relativePath = Path.GetRelativePath(_rootDirectory, filePath).Replace("\\", "/");
+                TombstoneManager.Add(relativePath);
+
+                File.Delete(filePath);
+            }
         }
 
         private class NoteMetadata
