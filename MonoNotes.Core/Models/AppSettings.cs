@@ -50,5 +50,6 @@ namespace MonoNotes.Core.Models
         // === 🤖 新增：AI 大脑管理 ===
         public string ActiveAiProviderId { get; set; } = string.Empty;
         public List<AiProvider> AiProviders { get; set; } = new List<AiProvider>();
+        public bool EnableAiMaterialExtraction { get; set; } = false;
     }
 }

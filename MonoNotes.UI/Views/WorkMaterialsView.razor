@@ -1,10 +1,13 @@
-﻿@using MonoNotes.Core.Models
+﻿@using MonoNotes.Core.Interfaces
+@using MonoNotes.Core.Models
 @using MonoNotes.Storage
 @inject WriteSpaceRepository Repository
 
 @code {
     [Parameter] public string CurrentWorkId { get; set; } = string.Empty;
-
+    // 🌟 修复 CS0120：使用强类型的 [Inject] 属性注入，彻底杜绝静态类型冲突！
+    [Inject] private MonoNotes.Core.Interfaces.ISettingsService SettingsService { get; set; } = default!;
+    [Inject] private MonoNotes.Core.Interfaces.IAiService AiService { get; set; } = default!;
     private List<MaterialItem> AllMaterials = new();
     private MaterialType CurrentCategory = MaterialType.Character;
     private string ViewMode = "grid";
@@ -166,25 +169,99 @@
     // ==========================================
     // 🌟 触发 NLP 智能提取
     // ==========================================
+    // ==========================================
+    // 🌟 双引擎驱动：触发 NLP / AI 智能提取
+    // ==========================================
+    private bool _isUsingAiEngine = false; // 用于 UI 提示当前用的什么引擎
+
     private async Task StartNerExtraction()
     {
         ShowExtractModal = true;
         IsExtracting = true;
         ExtractedResults.Clear();
+
+        var settings = await SettingsService.GetSettingsAsync();
+        _isUsingAiEngine = settings.EnableAiMaterialExtraction;
         StateHasChanged();
 
-        await Task.Delay(500);
+        await Task.Delay(500); // UI 渲染缓冲
 
         string fullText = await NerEngine.ReadFullWorkTextAsync(Repository, CurrentWorkId);
 
-        await Task.Run(() =>
+        if (_isUsingAiEngine)
         {
-            // 默认出现频次设为5次，过滤掉路人甲
-            ExtractedResults = NerEngine.ExtractEntities(fullText, 5);
-        });
+            // 🚀 引擎 A：走大模型结构化提取
+            bool aiSuccess = await ExtractWithAiAsync(fullText);
+
+            // 如果 AI 接口炸了（没网或 Key 错误），静默降级到离线引擎
+            if (!aiSuccess)
+            {
+                _isUsingAiEngine = false;
+                StateHasChanged();
+                await Task.Run(() => { ExtractedResults = NerEngine.ExtractEntities(fullText, 5); });
+            }
+        }
+        else
+        {
+            // 🔌 引擎 B：纯本地隐私离线提取
+            await Task.Run(() => { ExtractedResults = NerEngine.ExtractEntities(fullText, 5); });
+        }
 
         IsExtracting = false;
         StateHasChanged();
+    }
+
+    // 🌟 核心：大模型结构化 Prompt 注入
+    private async Task<bool> ExtractWithAiAsync(string fullText)
+    {
+        // ⚠️ 防 Token 爆炸保护：网文动辄百万字，大模型吃不下。
+        // 策略：截取小说开头 8000 字（核心设定）和末尾 5000 字（最新出场人物）
+        string sampleText = fullText;
+        if (sampleText.Length > 13000)
+        {
+            sampleText = sampleText.Substring(0, 8000) + "\n\n...[中间部分省略]...\n\n" + sampleText.Substring(sampleText.Length - 5000);
+        }
+
+        string prompt = $@"你是一个专业的小说设定拆解专家。请阅读以下正文片段，提取出高频的核心设定元素。
+请严格以纯 JSON 数组格式返回，不要包含其他任何 Markdown 标记 (如 ```json) 或多余的说明文字。
+JSON 数组中的每个对象需严格包含以下属性：
+- Name: 实体名称 (字符串)
+- Type: 整数 (0=角色, 1=势力, 2=地理, 3=物品, 4=世界观)
+- Frequency: 整数 (估算重要程度，填 10 到 99 之间)
+
+【小说正文片段】：
+{sampleText}";
+
+        var messages = new List<MonoNotes.Core.Interfaces.AiChatMessage>
+        {
+            new MonoNotes.Core.Interfaces.AiChatMessage { Role = "user", Content = prompt }
+        };
+
+        string fullJson = "";
+        try
+        {
+            // 聚合流式输出的结果
+            await foreach (var chunk in AiService.StreamChatCompletionAsync(messages))
+            {
+                fullJson += chunk;
+            }
+
+            // 清洗大模型常见的 Markdown 代码块包裹
+            fullJson = fullJson.Replace("```json", "").Replace("```", "").Trim();
+
+            var aiResults = System.Text.Json.JsonSerializer.Deserialize<List<ExtractedEntity>>(fullJson);
+            if (aiResults != null && aiResults.Any())
+            {
+                ExtractedResults = aiResults;
+                return true;
+            }
+            return false;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"AI提取失败，将降级本地提取: {ex.Message}");
+            return false; // 返回失败，让上层触发降级
+        }
     }
 
     private void CloseExtractModal()
@@ -571,7 +648,16 @@
                 <div class="extracting-state">
                     <div class="scanner-box">
                         <div class="scanner-line"></div>
-                        <div class="scanner-text">正在扫描全书文本，进行命名实体识别 (NER)...</div>
+                        <div class="scanner-text">
+                            @if (_isUsingAiEngine)
+                            {
+                                <span>🤖 正在调用大模型进行上下文深度阅读与逻辑抽取...</span>
+                            }
+                            else
+                            {
+                                <span>🔌 正在本地安全离线扫描，进行结巴分词 (NER)...</span>
+                            }
+                        </div>
                     </div>
                 </div>
             }

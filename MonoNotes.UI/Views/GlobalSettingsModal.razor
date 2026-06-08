@@ -127,6 +127,14 @@
 
                 @if (_settingsActiveTab == "ai")
                 {
+                    <div class="setting-row" style="padding-bottom: 20px; border-bottom: 1px dashed var(--nt-border, #eaeaea); margin-bottom: 20px;">
+                        <div style="flex: 1; padding-right: 24px;">
+                            <div class="setting-label">开启 AI 智能设定提取 (需授权)</div>
+                            <div class="setting-desc">开启后，一键提取设定时会将部分小说正文发送至您配置的大模型，实现极高精度的角色/地点理解。关闭则仅使用本地结巴分词，绝对保护隐私。</div>
+                            <div class="setting-warning" style="margin-top: 8px;">🔒 隐私提示：开启即代表您明确同意将文本内容传输给选定的第三方模型服务商。</div>
+                        </div>
+                        <input type="checkbox" @bind="_appSettings.EnableAiMaterialExtraction" class="setting-checkbox" />
+                    </div>
                     <div class="setting-group" style="padding-bottom: 20px; border-bottom: 1px dashed var(--nt-border, #eaeaea);">
                         <div class="setting-label">当前默认模型 (Default AI)</div>
                         <select class="setting-select" @bind="_appSettings.ActiveAiProviderId" style="width: 100%;">
