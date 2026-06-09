@@ -39,7 +39,9 @@ namespace MonoNotes.App.Services
         public async Task SaveSettingsAsync(AppSettings settings)
         {
             var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(_settingsFilePath, json);
+            //await File.WriteAllTextAsync(_settingsFilePath, json);
+            await MonoNotes.Core.Utils.JsonSafeWriter.WriteAtomicallyAsync(_settingsFilePath, settings);
+        
         }
 
         // ==========================================

@@ -103,8 +103,13 @@ namespace MonoNotes.Sync
             foreach (var t in toRemove) TombstoneManager.Remove(t);
         }
 
-        private async Task SyncDirectoryRecursiveAsync(string relativePath, Core.Models.AppSettings settings)
+        private async Task SyncDirectoryRecursiveAsync(string relativePath, Core.Models.AppSettings settings, int depth = 0)
         {
+            if (depth > 20)
+            {
+                System.Diagnostics.Debug.WriteLine($"⚠️ [熔断] 目录嵌套过深，跳过同步: {relativePath}");
+                return;
+            }
             var localDir = Path.Combine(_baseStorageDir, relativePath);
             if (!Directory.Exists(localDir)) Directory.CreateDirectory(localDir);
 
@@ -208,6 +213,7 @@ namespace MonoNotes.Sync
 
                 var nextRelativePath = string.IsNullOrEmpty(relativePath) ? dirName : $"{relativePath}/{dirName}";
                 await SyncDirectoryRecursiveAsync(nextRelativePath, settings);
+                depth++;
             }
         }
     }

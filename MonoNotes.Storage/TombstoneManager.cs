@@ -7,12 +7,13 @@ namespace MonoNotes.Storage
 {
     public static class TombstoneManager
     {
+        private static readonly object _tombstoneLock = new();
         // 记录在根目录下的隐藏文件
         private static string TombstoneFile => Path.Combine(PathHelper.GetBaseDirectory(), ".tombstones.json");
 
         public static void Add(string relativePath)
         {
-            lock (TombstoneFile)
+            lock (_tombstoneLock)
             {
                 var list = GetAll();
                 if (!list.Contains(relativePath))
@@ -25,7 +26,7 @@ namespace MonoNotes.Storage
 
         public static void Remove(string relativePath)
         {
-            lock (TombstoneFile)
+            lock (_tombstoneLock)
             {
                 var list = GetAll();
                 if (list.Remove(relativePath))
