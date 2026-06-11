@@ -1,7 +1,6 @@
 ﻿using MonoNotes.Core;
 using MonoNotes.Core.Interfaces;
 using MonoNotes.Core.Models;
-using MonoNotes.Storage;
 using System.Text;
 using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
@@ -18,12 +17,16 @@ namespace MonoNotes.App.Services
         private readonly ISerializer _yamlSerializer;
         private readonly IDeserializer _yamlDeserializer;
 
-        // 🌟 新增：内存缓存核心组件 (解决 BUG-002 I/O 卡顿的杀手锏)
+        // 🌟 内存缓存核心组件
         private List<MonoNote>? _noteCache = null;
         private readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
 
-        public LocalNoteRepository()
+        // 🌟 注入离线变动账本引擎
+        private readonly ISyncLogService _syncLog;
+
+        public LocalNoteRepository(ISyncLogService syncLog)
         {
+            _syncLog = syncLog;
             _rootDirectory = PathHelper.GetBaseDirectory();
             if (!Directory.Exists(_rootDirectory)) Directory.CreateDirectory(_rootDirectory);
 
@@ -88,8 +91,7 @@ namespace MonoNotes.App.Services
             EnsureDirectories();
             await File.WriteAllTextAsync(Path.Combine(_rootDirectory, "workspace.txt"), CurrentWorkspace);
 
-            // 🌟 切换工作库时，必须清空旧缓存，强制重载
-            _noteCache = null;
+            _noteCache = null; // 清空旧缓存，强制重载
         }
 
         public async Task CreateWorkspaceAsync(string workspaceName)
@@ -101,7 +103,6 @@ namespace MonoNotes.App.Services
 
         public async Task<List<MonoNote>> GetAllNotesAsync()
         {
-            // 🌟 1. 极速返回内存缓存（无需等待锁）
             if (_noteCache != null)
             {
                 return _noteCache.OrderByDescending(n => n.UpdatedAt).ToList();
@@ -110,7 +111,6 @@ namespace MonoNotes.App.Services
             await _cacheLock.WaitAsync();
             try
             {
-                // 🌟 2. 双重检查锁定 (Double-Check Locking)
                 if (_noteCache != null)
                 {
                     return _noteCache.OrderByDescending(n => n.UpdatedAt).ToList();
@@ -133,11 +133,9 @@ namespace MonoNotes.App.Services
                             {
                                 var yaml = parts[1];
                                 var content = parts[2].TrimStart('\r', '\n');
-
                                 content = content.Replace("./.assets/", $"{AppConstants.ImageBaseUrl}/Workspaces/{CurrentWorkspace}/.assets/");
 
                                 var meta = _yamlDeserializer.Deserialize<NoteMetadata>(yaml);
-
                                 var fileDir = Path.GetDirectoryName(file) ?? _storageDirectory;
                                 var relativePath = Path.GetRelativePath(_storageDirectory, fileDir).Replace("\\", "/");
 
@@ -161,12 +159,10 @@ namespace MonoNotes.App.Services
                     }
                     catch (Exception ex)
                     {
-                        // 🌟 修复 BUG-003: 不再吞没异常，打印到控制台方便排查损坏文件
                         System.Diagnostics.Debug.WriteLine($"[加载笔记失败] 文件: {file}, 错误: {ex.Message}");
                     }
                 }
 
-                // 🌟 3. 初始化并写入缓存
                 _noteCache = notes;
                 return _noteCache.OrderByDescending(n => n.UpdatedAt).ToList();
             }
@@ -213,14 +209,17 @@ namespace MonoNotes.App.Services
 
             await File.WriteAllTextAsync(filePath, sb.ToString());
 
-            // 🌟 核心优化：只物理保存这单篇笔记，然后极速同步更新内存缓存
-            // 以后 UI 再去获取列表，直接命中内存，0 开销！
+            // 🌟 更新内存缓存
             if (_noteCache != null)
             {
                 var existing = _noteCache.FirstOrDefault(n => n.Id == note.Id);
                 if (existing != null) _noteCache.Remove(existing);
                 _noteCache.Add(note);
             }
+
+            // 🌟 变动账本埋点：记录笔记的新增或修改 (Upsert)
+            string relativePath = $"Workspaces/{CurrentWorkspace}/{targetFolder}/{note.Id}.md";
+            await _syncLog.LogChangeAsync(relativePath, SyncActionType.Upsert);
         }
 
         public async Task<List<string>> GetAllFoldersAsync()
@@ -231,7 +230,6 @@ namespace MonoNotes.App.Services
             foreach (var dir in directories)
             {
                 var relativePath = Path.GetRelativePath(_storageDirectory, dir).Replace("\\", "/");
-
                 if (relativePath.StartsWith(".") || relativePath.Contains("/.")) continue;
 
                 if (!folderPaths.Contains(relativePath))
@@ -253,13 +251,13 @@ namespace MonoNotes.App.Services
 
             if (filePath != null)
             {
-                var relativePath = Path.GetRelativePath(_rootDirectory, filePath).Replace("\\", "/");
-                TombstoneManager.Add(relativePath);
-
+                // 🌟 变动账本埋点：记录笔记彻底删除 (Delete)
+          
+                var relativePath = $"Workspaces/{CurrentWorkspace}/" + Path.GetRelativePath(_storageDirectory, filePath).Replace("\\", "/");
+                await _syncLog.LogChangeAsync(relativePath, SyncActionType.Delete);
                 var content = await File.ReadAllTextAsync(filePath);
                 File.Delete(filePath);
 
-                // 🌟 同步删除内存缓存
                 if (_noteCache != null)
                 {
                     _noteCache.RemoveAll(n => n.Id == id);
@@ -277,7 +275,6 @@ namespace MonoNotes.App.Services
                     foreach (var assetName in assetNamesInDeletedNote)
                     {
                         bool isUsedElsewhere = false;
-
                         foreach (var otherFile in allRemainingFiles)
                         {
                             var otherContent = await File.ReadAllTextAsync(otherFile);
@@ -293,8 +290,10 @@ namespace MonoNotes.App.Services
                             var assetPath = Path.Combine(_storageDirectory, ".assets", assetName);
                             if (File.Exists(assetPath))
                             {
-                                var assetRelPath = Path.GetRelativePath(_rootDirectory, assetPath).Replace("\\", "/");
-                                TombstoneManager.Add(assetRelPath);
+                                // 🌟 变动账本埋点：如果废弃图片被清理了，也通知云端删除
+                                var assetRelPath = $"Workspaces/{CurrentWorkspace}/.assets/{assetName}";
+                                await _syncLog.LogChangeAsync(assetRelPath, SyncActionType.Delete);
+
                                 File.Delete(assetPath);
                             }
                         }
@@ -310,7 +309,6 @@ namespace MonoNotes.App.Services
                 : Path.Combine(_storageDirectory, parentFolderPath);
 
             var newFolderPath = Path.Combine(basePath, newFolderName);
-
             if (!Directory.Exists(newFolderPath)) Directory.CreateDirectory(newFolderPath);
             await Task.CompletedTask;
         }
@@ -328,6 +326,9 @@ namespace MonoNotes.App.Services
             if (Directory.Exists(oldFullPath) && !Directory.Exists(newFullPath))
             {
                 Directory.Move(oldFullPath, newFullPath);
+                // 🌟 变动账本埋点：通知云端删除老文件夹 (新的文件夹由于内部没有触发修改，稍后需要在云端同步逻辑中特殊处理或触发全量扫描)
+          
+                await _syncLog.LogChangeAsync($"Workspaces/{CurrentWorkspace}/{oldFolderPath}", SyncActionType.Delete);
             }
             await Task.CompletedTask;
         }
@@ -341,6 +342,10 @@ namespace MonoNotes.App.Services
             var filePath = Path.Combine(assetsPath, fileName);
 
             await File.WriteAllBytesAsync(filePath, fileData);
+
+            // 🌟 变动账本埋点：上传图片附件时记录 Upsert
+            await _syncLog.LogChangeAsync($".assets/{fileName}", SyncActionType.Upsert);
+
             return fileName;
         }
 
@@ -356,8 +361,9 @@ namespace MonoNotes.App.Services
                 throw new InvalidOperationException("包含子文件夹，无法直接删除。");
             }
 
-            var relativePath = Path.GetRelativePath(_rootDirectory, fullPath).Replace("\\", "/");
-            TombstoneManager.Add(relativePath);
+            // 🌟 变动账本埋点：记录文件夹的彻底删除
+
+            await _syncLog.LogChangeAsync($"Workspaces/{CurrentWorkspace}/{folderPath}", SyncActionType.Delete);
 
             var allNotes = await GetAllNotesAsync();
             var notesInFolder = allNotes.Where(n => n.Folder == folderPath).ToList();
@@ -366,7 +372,7 @@ namespace MonoNotes.App.Services
             {
                 note.Folder = "notes";
                 if (moveNotesToTrash) note.IsDeleted = true;
-                // 这行会触发 SaveNoteAsync，自动更新内存缓存
+                // 这行会触发 SaveNoteAsync，内部自动触发笔记路径变更的日志埋点
                 await SaveNoteAsync(note);
             }
 
@@ -384,8 +390,8 @@ namespace MonoNotes.App.Services
             {
                 bookNote.Tags.Remove(oldTag);
                 if (!bookNote.Tags.Contains(newTag)) bookNote.Tags.Add(newTag);
-                // 自动更新缓存
-                await SaveNoteAsync(bookNote);
+
+                await SaveNoteAsync(bookNote); // 会自动触发埋点
             }
         }
 
@@ -399,8 +405,8 @@ namespace MonoNotes.App.Services
             foreach (var bookNote in affectedNotes)
             {
                 bookNote.Tags.Remove(targetTag);
-                // 自动更新缓存
-                await SaveNoteAsync(bookNote);
+
+                await SaveNoteAsync(bookNote); // 会自动触发埋点
             }
         }
 
@@ -475,6 +481,10 @@ namespace MonoNotes.App.Services
             sb.AppendLine(pureContent);
 
             await File.WriteAllTextAsync(filePath, sb.ToString());
+
+            // 🌟 变动账本埋点：新增模板 (Upsert)
+     
+            await _syncLog.LogChangeAsync($"Workspaces/{CurrentWorkspace}/.templates/{template.Id}.md", SyncActionType.Upsert);
         }
 
         public async Task DeleteTemplateAsync(string id)
@@ -482,8 +492,8 @@ namespace MonoNotes.App.Services
             var filePath = Path.Combine(_storageDirectory, ".templates", $"{id}.md");
             if (File.Exists(filePath))
             {
-                var relativePath = Path.GetRelativePath(_rootDirectory, filePath).Replace("\\", "/");
-                TombstoneManager.Add(relativePath);
+                // 🌟 变动账本埋点：删除模板 (Delete)
+                await _syncLog.LogChangeAsync($"Workspaces/{CurrentWorkspace}/.templates/{id}.md", SyncActionType.Delete);
                 File.Delete(filePath);
             }
         }

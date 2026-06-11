@@ -60,6 +60,9 @@ namespace MonoNotes.App
             builder.Services.AddSingleton<LocalBackupService>();
 
             builder.Services.AddSingleton<IAiService, AiRoutingService>();
+
+            // 注册变动账本引擎
+            builder.Services.AddSingleton<ISyncLogService, SyncLogService>();
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();

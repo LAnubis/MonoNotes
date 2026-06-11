@@ -1153,6 +1153,58 @@
             </div>
         </div>
     }
+
+    @if (_showSyncModal)
+    {
+        <div class="modal-overlay" style="z-index: 10005;" @onclick="CloseSyncModal">
+            <div class="modal-content sync-modal" @onclick:stopPropagation="true">
+                @if (_syncState == 0)
+                {
+                    <div class="modal-header">
+                        <span style="font-weight: 600;">☁️ 数据同步</span>
+                        <button class="icon-btn" @onclick="CloseSyncModal">×</button>
+                    </div>
+                    <div class="modal-body" style="padding: 24px; text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📦</div>
+                        <h3 style="margin: 0 0 8px 0; color: var(--nt-text-main);">发现本地修改</h3>
+                        <p style="margin: 0; color: var(--nt-text-gray); font-size: 14px;">
+                            您的账本中记录了 <strong>@_pendingSyncCount</strong> 项未推送到云端的变动。是否立即同步？
+                        </p>
+                    </div>
+                    <div class="modal-footer" style="justify-content: center; background: transparent; border-top: none; padding-bottom: 24px;">
+                        <button class="btn-cancel" @onclick="CloseSyncModal">稍后再说</button>
+                        <button class="btn-primary" style="padding: 8px 24px;" @onclick="StartPushSyncAsync">立即同步</button>
+                    </div>
+                }
+                else if (_syncState == 1)
+                {
+                    <div class="modal-body" style="padding: 32px 24px; text-align: center;">
+                        <h3 style="margin: 0 0 16px 0; color: var(--nt-text-main);">正在同步至云端...</h3>
+
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" style="width: @(_syncTotal == 0 ? 0 : (_syncCurrent * 100 / _syncTotal))%;"></div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--nt-text-gray);">
+                            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">@_syncMessage</span>
+                            <span style="font-variant-numeric: tabular-nums; font-weight: 600;">@_syncCurrent / @_syncTotal</span>
+                        </div>
+                    </div>
+                }
+                else if (_syncState == 2)
+                {
+                    <div class="modal-body" style="padding: 32px 24px; text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+                        <h3 style="margin: 0 0 8px 0; color: var(--nt-text-main);">同步完成</h3>
+                        <p style="margin: 0; color: var(--nt-text-gray); font-size: 14px;">@_syncMessage</p>
+                    </div>
+                    <div class="modal-footer" style="justify-content: center; background: transparent; border-top: none; padding-bottom: 24px;">
+                        <button class="btn-primary" style="padding: 8px 32px;" @onclick="CloseSyncModal">完成</button>
+                    </div>
+                }
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -1229,7 +1281,6 @@
 
 
     // === 🌟 后台同步与冲突处理 ===
-    private Timer _bgSyncTimer = new Timer(30000);
     private bool _isSyncingUI = false;
     private bool _showConflictCenter = false;
     private List<string> _conflictFiles = new();
@@ -1290,85 +1341,40 @@
 
         // 5. 启动后台服务
         _autoSaveTimer.Elapsed += async (sender, e) => await PerformSaveAsync();
-        _bgSyncTimer.Elapsed += async (sender, e) => await TriggerBackgroundSync();
-        _bgSyncTimer.Start();
 
         ScanForConflicts();
+
+        _pendingSyncCount = await SyncService.GetPendingSyncCountAsync(NoteRepository.CurrentWorkspace);
+        if (_pendingSyncCount > 0)
+        {
+            // 本地有上次没传完的修改，直接弹出同步确认框！
+            _syncState = 0;
+            _showSyncModal = true;
+        }
+        else
+        {
+            // 本地没修改，为了防止别的电脑改了内容，我们开一个后台静默线程去云端拉取
+            _ = Task.Run(async () =>
+            {
+                await SyncService.SyncAsync(isLocalChanged: false);
+                if (SyncService.HasConflictsInLastSync)
+                {
+                    // 如果拉取发现了变动，刷新 UI
+                    await InvokeAsync(() =>
+                    {
+                        var rawFolders = NoteRepository.GetAllFoldersAsync().Result;
+                        BuildFolderTree(rawFolders);
+                        StateHasChanged();
+                    });
+                }
+            });
+        }
     }
 
     public void Dispose()
     {
         _autoSaveTimer.Dispose();
-        _bgSyncTimer.Dispose();
     }
-
-    private async Task TriggerBackgroundSync(bool isManual = false)
-    {
-        if (_isSyncingUI) return;
-        var settings = await SettingsService.GetSettingsAsync();
-        if(!isManual)
-        {
-            if (!settings.EnableWebDavSync)
-            {
-                return;
-            }
-        }
-     
-
-        _isSyncingUI = true;
-        await InvokeAsync(StateHasChanged);
-        // 1. 执行 WebDAV 同步（下载云端新文件到本地磁盘）
-        await SyncService.SyncAsync();
-        // 2. 🌟 核心修复：执行“全量索引自愈”
-        // 同步完成后，无论索引有没有，强制扫描硬盘中所有的 .md 文件
-        var allRealFiles = await NoteRepository.GetAllNotesAsync();
-        bool hasNewFiles = false;
-
-        foreach (var file in allRealFiles)
-        {
-            // 如果内存索引里找不到这个文件的 Id，说明它是云端刚刚同步下来的“陌生人”
-            if (!IndexItems.Any(idx => idx.Id == file.Id))
-            {
-                var newIdx = new NoteIndexItem
-                {
-                    Id = file.Id,
-                    Title = string.IsNullOrWhiteSpace(file.Title) ? "无标题" : file.Title,
-                    Folder = string.IsNullOrWhiteSpace(file.Folder) ? "notes" : file.Folder,
-                    UpdatedAt = file.UpdatedAt,
-                    CreatedAt = file.UpdatedAt,
-                    IsPinned = file.IsPinned,
-                    IsFavorite = file.IsFavorite,
-                    IsDeleted = file.IsDeleted,
-                    IsArchived = file.IsArchived,
-                    Tags = file.Tags ?? new List<string>()
-                };
-
-                IndexItems.Insert(0, newIdx);
-                IndexService.UpsertItem(newIdx); // 写入 JSON 缓存
-                hasNewFiles = true;
-            }
-        }
-
-        // 3. 刷新 UI 状态
-        if (!SyncService.HasConflictsInLastSync)
-        {
-            _saveStatus = hasNewFiles ? "已同步并发现新笔记" : "云端同步完成";
-        }
-
-        // 4. 重建文件夹树和冲突检查
-        var rawFolders = await NoteRepository.GetAllFoldersAsync();
-        BuildFolderTree(rawFolders);
-        ScanForConflicts();
-
-        _isSyncingUI = false;
-        await InvokeAsync(StateHasChanged);
-
-        // 提示信息平滑消失
-        await Task.Delay(3000);
-        if (_saveStatus.Contains("同步")) _saveStatus = "已保存";
-        await InvokeAsync(StateHasChanged);
-    }
-
     private void ScanForConflicts()
     {
         try
@@ -1874,6 +1880,8 @@
 
             _saveStatus = "已保存";
             await InvokeAsync(StateHasChanged);
+            // 🌟 本地文件刚刚发生了修改，不等定时器了，立刻触发后台即时推送！
+            _ = Task.Run(async () => await SyncService.SyncAsync(isLocalChanged: true));
         }
     }
 
@@ -3230,5 +3238,129 @@
             // 没配账号、断网、密码错... 统统安静地返回 false，让本地删除继续走墓碑机制
             return false;
         }
+    }
+
+    // === 🌟 离线优先：全新精准同步系统状态 ===
+    private bool _showSyncModal = false;
+    private int _syncState = 0; // 0: 询问确认, 1: 进度条中, 2: 结果展示
+    private int _pendingSyncCount = 0;
+    private int _syncCurrent = 0;
+    private int _syncTotal = 0;
+    private string _syncMessage = string.Empty;
+
+    // 当用户点击侧边栏的同步按钮时，调用此方法
+    private async Task TriggerBackgroundSync(bool isManual = false)
+    {
+        if (_isSyncingUI) return;
+
+        var settings = await SettingsService.GetSettingsAsync();
+        if (!isManual && !settings.EnableWebDavSync) return;
+
+        try
+        {
+            // 1. 瞬间探测本地账本
+            _pendingSyncCount = await SyncService.GetPendingSyncCountAsync(NoteRepository.CurrentWorkspace);
+
+            if (_pendingSyncCount > 0)
+            {
+                if (isManual)
+                {
+                    _syncState = 0;
+                    _showSyncModal = true;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            else if (isManual)
+            {
+                _syncState = 1;
+                _syncTotal = 1;
+                _syncCurrent = 0;
+                _syncMessage = "本地已是最新，正在检查云端变动...";
+                _showSyncModal = true;
+                await InvokeAsync(StateHasChanged);
+
+                await SyncService.SyncAsync(isLocalChanged: false);
+
+                _syncState = 2;
+                _syncMessage = SyncService.HasConflictsInLastSync ? "已拉取云端数据，并生成了冲突副本。" : "云端与本地均已是最新状态。";
+            }
+        }
+        catch (Exception ex)
+        {
+            // 🌟 拦截探测期间的网络异常
+            _syncState = 2;
+            _showSyncModal = true;
+            _syncMessage = ex.Message.Contains("ServiceUnavailable") || ex.Message.Contains("503")
+                ? "❌ 网盘接口防刷限流已触发，请等待 3-5 分钟后再试。"
+                : $"❌ 连接失败: {ex.Message}";
+        }
+        finally
+        {
+            var rawFolders = await NoteRepository.GetAllFoldersAsync();
+            BuildFolderTree(rawFolders);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // 用户在弹窗点击“立即同步”后触发
+    private async Task StartPushSyncAsync()
+    {
+        _syncState = 1; // 切换到进度条视图
+        _isSyncingUI = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            // 🌟 呼叫底层引擎：精确推送，并接收实时进度回调！
+            await SyncService.PushLocalChangesAsync(NoteRepository.CurrentWorkspace, (current, total, msg) =>
+            {
+                _syncCurrent = current;
+                _syncTotal = total;
+                _syncMessage = msg;
+                InvokeAsync(StateHasChanged);
+            });
+
+            _syncMessage = "本地推送完成，正在拉取云端变动...";
+            await InvokeAsync(StateHasChanged);
+
+            await SyncService.SyncAsync(isLocalChanged: true);
+
+            if (SyncService.HasConflictsInLastSync)
+            {
+                _syncMessage = "同步完成，但发现多端修改了同一文件，已为您生成冲突副本。";
+            }
+            else
+            {
+                _syncMessage = "所有数据已成功与云端保持同步！";
+            }
+            _syncState = 2; // 切换到完成视图
+        }
+        catch (Exception ex)
+        {
+            // 🌟 拦截同步期间的崩溃，把 503 变成优雅的错误提示
+            _syncState = 2;
+            if (ex.Message.Contains("ServiceUnavailable") || ex.Message.Contains("503"))
+            {
+                _syncMessage = "❌ 网盘接口防刷限流已触发，请等待 3-5 分钟后账号解封再试。";
+            }
+            else
+            {
+                _syncMessage = $"❌ 同步中止: {ex.Message}";
+            }
+        }
+        finally
+        {
+            _isSyncingUI = false;
+            var rawFolders = await NoteRepository.GetAllFoldersAsync();
+            BuildFolderTree(rawFolders);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void CloseSyncModal()
+    {
+        if (_syncState == 1) return; // 进度条读条中，禁止乱点关闭！
+        _showSyncModal = false;
+        StateHasChanged();
     }
 }

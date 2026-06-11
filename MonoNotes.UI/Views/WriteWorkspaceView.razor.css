@@ -1,8 +1,13 @@
-﻿.write-workspace-layout {
+﻿/* =========================================
+   写作模式全局框架 (完全对齐 Notion 极简风)
+========================================= */
+.write-workspace-layout {
     display: flex;
     height: 100vh;
     width: 100vw;
-    background-color: #f8f9fa; /* 护眼背景色 */
+    background-color: var(--nt-bg); /* 统一为主背景色 */
+    font-family: var(--nt-font); /* 统一字体 */
+    color: var(--nt-text-main); /* 统一主字色 */
     overflow: hidden;
 }
 
@@ -10,18 +15,19 @@
     width: 260px;
     min-width: 260px;
     height: 100%;
-    background-color: #ffffff;
-    border-right: 1px solid #e0e0e0;
+    background-color: var(--nt-sidebar); /* 统一左侧边栏底色为浅灰 */
+    border-right: 1px solid var(--nt-border); /* 统一微透明极简边框 */
     display: flex;
     flex-direction: column;
-    transition: all 0.2s ease-in-out; /* 切换时的微小过渡动画 */
+    transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .main-content-region {
-    flex: 1; /* 占据剩余全部空间 */
+    flex: 1;
+    min-width: 0; /* 防止内容撑破布局 */
     height: 100%;
     display: flex;
     flex-direction: column;
     position: relative;
-    background-color: #ffffff;
+    background-color: var(--nt-bg);
 }
